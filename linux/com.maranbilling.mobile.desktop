@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Maran Billing
+Comment=Pet shop billing and EMR
+Exec=mobile
+Icon=com.maranbilling.mobile
+Terminal=false
+Type=Application
+Categories=Office;Finance;
+StartupWMClass=mobile

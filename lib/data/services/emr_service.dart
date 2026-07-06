@@ -1,0 +1,421 @@
+import 'package:dio/dio.dart';
+
+import '../../core/app_config.dart';
+import '../../core/network/api_client.dart';
+import '../json_helpers.dart';
+import '../models/emr.dart';
+import '../models/invoice.dart';
+
+class EmrService {
+  EmrService(this._client);
+
+  final ApiClient _client;
+
+  // ── Pets ──────────────────────────────────────────────────────────
+
+  Future<List<PetSearchResult>> searchPets(String query) async {
+    try {
+      final res = await _client.get(
+        '/pets',
+        queryParameters: {'search': query, 'per_page': 20},
+      );
+      return parseEnvelopeData(res, (data) => listFromData(data, PetSearchResult.fromJson));
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetSummary> getPetSummary(int petId) async {
+    try {
+      final res = await _client.get('/pets/$petId/summary');
+      return parseEnvelopeData(
+        res,
+        (data) => PetSummary.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<DoctorLite>> listDoctors() async {
+    try {
+      final res = await _client.get('/doctors', queryParameters: {'available': true});
+      return parseEnvelopeData(res, (data) => listFromData(data, DoctorLite.fromJson));
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<PetSearchResult>> listPets({Map<String, dynamic>? query}) async {
+    try {
+      final res = await _client.get('/pets', queryParameters: query);
+      return parseEnvelopeData(res, (data) => listFromData(data, PetSearchResult.fromJson));
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> addPetNote(int petId, Map<String, dynamic> body) async {
+    try {
+      await _client.post('/pets/$petId/notes', data: body);
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  // ── Patient appointments ──────────────────────────────────────────
+
+  Future<List<PatientAppointment>> todayAppointments() async {
+    try {
+      final res = await _client.get('/patient-appointments/today');
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, PatientAppointment.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<PatientAppointment>> listAppointments({
+    Map<String, dynamic>? query,
+  }) async {
+    try {
+      final res = await _client.get('/patient-appointments', queryParameters: query);
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, PatientAppointment.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PatientAppointment> getAppointment(int id) async {
+    try {
+      final res = await _client.get('/patient-appointments/$id');
+      return parseEnvelopeData(
+        res,
+        (data) => PatientAppointment.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PatientAppointment> createAppointment(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/patient-appointments', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => PatientAppointment.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PatientAppointment> updateAppointment(
+    int id,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final res = await _client.put('/patient-appointments/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => PatientAppointment.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> confirmAppointment(int id) async {
+    try {
+      await _client.post('/patient-appointments/$id/confirm');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> cancelAppointment(int id) async {
+    try {
+      await _client.post('/patient-appointments/$id/cancel');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  // ── Visits ────────────────────────────────────────────────────────
+
+  Future<List<PetVisit>> listVisits({Map<String, dynamic>? query}) async {
+    try {
+      final res = await _client.get('/visits', queryParameters: query);
+      return parseEnvelopeData(res, (data) => listFromData(data, PetVisit.fromJson));
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetVisit> getVisit(int id) async {
+    try {
+      final res = await _client.get('/visits/$id');
+      return parseEnvelopeData(
+        res,
+        (data) => PetVisit.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetVisit> createVisit(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/visits', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => PetVisit.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetVisit> updateVisit(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/visits/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => PetVisit.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deleteVisit(int id) async {
+    try {
+      await _client.delete('/visits/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Invoice> billVisit(int id) async {
+    try {
+      final res = await _client.post('/visits/$id/bill');
+      return parseEnvelopeData(
+        res,
+        (data) => Invoice.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<String>> getComplaints({String? q}) async {
+    try {
+      final res = await _client.get(
+        '/visits/complaints',
+        queryParameters: q != null && q.isNotEmpty ? {'q': q} : null,
+      );
+      return parseEnvelopeData(res, (data) {
+        if (data is List) return data.map((e) => e.toString()).toList();
+        return <String>[];
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<VisitDiagnosis>> getDiagnosisSuggestions({String? q}) async {
+    try {
+      final res = await _client.get(
+        '/visits/diagnoses',
+        queryParameters: q != null && q.isNotEmpty ? {'q': q} : null,
+      );
+      return parseEnvelopeData(res, (data) {
+        if (data is! List) return <VisitDiagnosis>[];
+        return data
+            .whereType<Map>()
+            .map((e) => VisitDiagnosis(
+                  diagnosisName: e['name']?.toString() ?? '',
+                  icdCode: e['icd_code']?.toString(),
+                  severity: 'mild',
+                  isPrimary: false,
+                ))
+            .toList();
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  // ── Timeline & pet records ────────────────────────────────────────
+
+  Future<TimelineResponse> getTimeline(int petId, {Map<String, dynamic>? query}) async {
+    try {
+      final res = await _client.get('/pets/$petId/timeline', queryParameters: query);
+      return parseEnvelopeData(
+        res,
+        (data) => TimelineResponse.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<PetDeworming>> listDeworming(int petId) async {
+    try {
+      final res = await _client.get('/pets/$petId/deworming');
+      return parseEnvelopeData(res, (data) => listFromData(data, PetDeworming.fromJson));
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetDeworming> addDeworming(int petId, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/pets/$petId/deworming', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => PetDeworming.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deleteDeworming(int petId, int id) async {
+    try {
+      await _client.delete('/pets/$petId/deworming/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<PetSurgery>> listSurgeries(int petId) async {
+    try {
+      final res = await _client.get('/pets/$petId/surgeries');
+      return parseEnvelopeData(res, (data) => listFromData(data, PetSurgery.fromJson));
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetSurgery> addSurgery(int petId, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/pets/$petId/surgeries', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => PetSurgery.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<PetLabReport>> listLabReports(int petId) async {
+    try {
+      final res = await _client.get('/pets/$petId/lab-reports');
+      return parseEnvelopeData(res, (data) => listFromData(data, PetLabReport.fromJson));
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetLabReport> uploadLabReport(int petId, FormData formData) async {
+    try {
+      final res = await _client.post('/pets/$petId/lab-reports', data: formData);
+      return parseEnvelopeData(
+        res,
+        (data) => PetLabReport.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deleteLabReport(int petId, int id) async {
+    try {
+      await _client.delete('/pets/$petId/lab-reports/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  String labReportDownloadUrl(int id) => '${AppConfig.apiBaseUrl}/lab-reports/$id/download';
+
+  Future<List<PetDocument>> listDocuments(int petId) async {
+    try {
+      final res = await _client.get('/pets/$petId/documents');
+      return parseEnvelopeData(res, (data) => listFromData(data, PetDocument.fromJson));
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetDocument> uploadDocument(int petId, FormData formData) async {
+    try {
+      final res = await _client.post('/pets/$petId/documents', data: formData);
+      return parseEnvelopeData(
+        res,
+        (data) => PetDocument.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deleteDocument(int petId, int id) async {
+    try {
+      await _client.delete('/pets/$petId/documents/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  String documentDownloadUrl(int id) => '${AppConfig.apiBaseUrl}/documents/$id/download';
+
+  // ── Reminders ───────────────────────────────────────────────────
+
+  Future<ReminderSummary> reminderDashboard() async {
+    try {
+      final res = await _client.get('/reminders/dashboard');
+      return parseEnvelopeData(
+        res,
+        (data) => ReminderSummary.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<PetReminder>> dueReminders({Map<String, dynamic>? query}) async {
+    try {
+      final res = await _client.get('/reminders/due', queryParameters: query);
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, PetReminder.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> dismissReminder(int id) async {
+    try {
+      await _client.post('/reminders/$id/dismiss');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> sendReminderNow(int id) async {
+    try {
+      await _client.post('/reminders/$id/send-now');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+}
