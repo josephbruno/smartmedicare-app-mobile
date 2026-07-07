@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/models/user.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../app_config.dart';
+import '../services/permission_service.dart';
 
 const _kTokenKey = 'auth_token';
 const _kUserJsonKey = 'auth_user_json';
@@ -45,7 +47,7 @@ class AuthSession extends ChangeNotifier {
 
   bool get isSuperAdmin => _user?.roles.contains('super_admin') ?? false;
 
-  bool get isShopOwner => _user?.roles.contains('shop_owner') ?? false;
+  bool get isShopOwner => isSuperAdmin;
 
   BranchLite? get currentBranch => _user?.branch;
 
@@ -57,6 +59,37 @@ class AuthSession extends ChangeNotifier {
   }
 
   bool hasRole(String role) => _user?.roles.contains(role) ?? false;
+
+  /// Cashier role is allowed only on Windows/Linux desktop app.
+  bool get cashierPlatformAllowed =>
+      !hasRole(AppRoles.cashier) || AppConfig.isCashierPlatform;
+
+  /// Default landing route after login or when access is denied.
+  String get homeRoute {
+    if (hasRole(AppRoles.cashier)) {
+      if (hasPermission(AppPermissions.invoicesCreate)) return '/pos';
+      if (hasPermission(AppPermissions.invoicesView)) return '/invoices';
+      if (hasPermission(AppPermissions.customersView)) return '/customers';
+    }
+    if (hasRole(AppRoles.doctor)) {
+      if (hasPermission(AppPermissions.emrVisitsView)) return '/emr/visits';
+      if (hasPermission(AppPermissions.patientAppointmentsView)) {
+        return '/emr/appointments';
+      }
+    }
+    return '/dashboard';
+  }
+
+  bool get canAccessSettings => settingsRoute != null;
+
+  /// First settings screen the user is allowed to open.
+  String? get settingsRoute {
+    if (hasPermission(AppPermissions.shopManage)) return '/settings';
+    if (hasPermission(AppPermissions.usersView)) return '/settings/users';
+    if (hasPermission(AppPermissions.doctorsManage)) return '/settings/doctors';
+    if (hasPermission(AppPermissions.branchManage)) return '/settings/branches';
+    return null;
+  }
 
   Future<void> restore() async {
     _token = await _secure.read(key: _kTokenKey);

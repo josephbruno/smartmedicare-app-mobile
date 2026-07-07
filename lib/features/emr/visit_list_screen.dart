@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../app_services.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/paginated_data_table.dart';
+import '../../core/widgets/table_column_def.dart';
 import '../../data/models/emr.dart';
 import 'quick_visit_sheet.dart';
 
@@ -16,32 +18,22 @@ class VisitListScreen extends StatefulWidget {
 }
 
 class _VisitListScreenState extends State<VisitListScreen> {
-  late Future<List<PetVisit>> _future;
-  late Future<List<PatientAppointment>> _todayFuture;
   String _statusFilter = 'all';
   final _search = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  void dispose() {
+    _search.dispose();
+    super.dispose();
   }
-
-  void _load() {
-    final query = <String, dynamic>{'per_page': 50};
-    if (_statusFilter != 'all') query['status'] = _statusFilter;
-    if (_search.text.trim().length >= 2) query['search'] = _search.text.trim();
-    _future = context.read<AppServices>().emr.listVisits(query: query);
-    _todayFuture = context.read<AppServices>().emr.todayAppointments();
-  }
-
-  void _refresh() => setState(_load);
 
   Color _statusColor(String status) {
     switch (status) {
       case 'billed':
       case 'completed':
         return AppTheme.accent;
+      case 'bill_on_hold':
+        return Colors.orange;
       case 'open':
         return AppTheme.primary;
       case 'cancelled':
@@ -54,6 +46,8 @@ class _VisitListScreenState extends State<VisitListScreen> {
   @override
   Widget build(BuildContext context) {
     final canCreate = context.watch<AuthSession>().hasPermission('emr.visits.create');
+    final services = context.read<AppServices>();
+    final search = _search.text.trim();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -65,7 +59,7 @@ class _VisitListScreenState extends State<VisitListScreen> {
             )
           : null,
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -81,7 +75,7 @@ class _VisitListScreenState extends State<VisitListScreen> {
                 ),
                 if (canCreate)
                   OutlinedButton.icon(
-                    onPressed: () => showQuickVisitSheet(context, onSaved: _refresh),
+                    onPressed: () => showQuickVisitSheet(context),
                     icon: const Icon(Icons.bolt, size: 18),
                     label: const Text('Quick visit'),
                   ),
@@ -89,7 +83,7 @@ class _VisitListScreenState extends State<VisitListScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: TextField(
               controller: _search,
               decoration: const InputDecoration(
@@ -97,143 +91,89 @@ class _VisitListScreenState extends State<VisitListScreen> {
                 prefixIcon: Icon(Icons.search),
                 isDense: true,
               ),
-              onSubmitted: (_) => setState(_load),
-              onChanged: (v) {
-                if (v.isEmpty || v.length >= 2) setState(_load);
-              },
+              onSubmitted: (_) => setState(() {}),
             ),
           ),
-          FutureBuilder<List<PatientAppointment>>(
-            future: _todayFuture,
-            builder: (context, snap) {
-              if (!snap.hasData || snap.data!.isEmpty) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Today's appointments",
-                        style: Theme.of(context).textTheme.titleSmall),
-                    const SizedBox(height: 8),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: snap.data!.map((a) {
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ActionChip(
-                              avatar: const Icon(Icons.pets, size: 16),
-                              label: Text('${a.pet?.name ?? 'Pet'} ${a.displayTime}'),
-                              onPressed: canCreate
-                                  ? () => context.push(
-                                        '/emr/visits/new?appointment_id=${a.id}',
-                                      )
-                                  : null,
-                            ),
-                          );
-                        }).toList(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: ['all', 'open', 'bill_on_hold', 'completed', 'billed', 'cancelled']
+                    .map(
+                      (s) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          label: Text(
+                            s == 'all'
+                                ? 'All'
+                                : s == 'bill_on_hold'
+                                    ? 'On hold'
+                                    : s[0].toUpperCase() + s.substring(1),
+                          ),
+                          selected: _statusFilter == s,
+                          onSelected: (_) => setState(() => _statusFilter = s),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                for (final s in ['all', 'open', 'billed', 'completed', 'cancelled'])
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(s == 'all' ? 'All' : s),
-                      selected: _statusFilter == s,
-                      onSelected: (_) {
-                        setState(() {
-                          _statusFilter = s;
-                          _load();
-                        });
-                      },
-                    ),
-                  ),
-              ],
+                    )
+                    .toList(),
+              ),
             ),
           ),
+          const SizedBox(height: 8),
           Expanded(
-            child: RefreshIndicator(
-              onRefresh: () async => _refresh(),
-              child: FutureBuilder<List<PetVisit>>(
-                future: _future,
-                builder: (context, snap) {
-                  if (snap.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snap.hasError) {
-                    return ListView(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Center(child: Text('${snap.error}')),
-                        ),
-                      ],
+            child: AppPaginatedTable<PetVisit>(
+              key: ValueKey('$_statusFilter-$search'),
+              loadPage: ({required page, required perPage}) =>
+                  services.emr.listVisitsPaginated(
+                    page: page,
+                    perPage: perPage,
+                    status: _statusFilter,
+                    search: search.length >= 2 ? search : null,
+                  ),
+              onRowTap: (v) => context.push('/emr/visits/${v.id}'),
+              columns: [
+                TableColumnDef(
+                  label: 'Visit #',
+                  flex: 1,
+                  cellBuilder: (c, v) => Text(
+                    v.visitNumber,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                TableColumnDef(
+                  label: 'Pet',
+                  flex: 1.2,
+                  cellBuilder: (c, v) => Text(v.pet?.name ?? '—'),
+                ),
+                TableColumnDef(
+                  label: 'Doctor',
+                  flex: 1.2,
+                  cellBuilder: (c, v) => Text(v.doctor?.name ?? '—'),
+                ),
+                TableColumnDef(
+                  label: 'Date',
+                  flex: 1,
+                  cellBuilder: (c, v) => Text(v.visitDate),
+                ),
+                TableColumnDef(
+                  label: 'Type',
+                  flex: 0.9,
+                  cellBuilder: (c, v) => Text(v.visitType),
+                ),
+                TableColumnDef(
+                  label: 'Status',
+                  flex: 0.9,
+                  align: TextAlign.center,
+                  cellBuilder: (c, v) {
+                    final color = _statusColor(v.status);
+                    return Text(
+                      v.status,
+                      style: TextStyle(color: color, fontWeight: FontWeight.w600),
                     );
-                  }
-                  final visits = snap.data ?? [];
-                  if (visits.isEmpty) {
-                    return ListView(
-                      children: const [
-                        SizedBox(height: 80),
-                        Center(child: Text('No visits found')),
-                      ],
-                    );
-                  }
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: visits.length,
-                    itemBuilder: (context, i) {
-                      final v = visits[i];
-                      final diag = v.diagnoses?.isNotEmpty == true
-                          ? v.diagnoses!.first.diagnosisName
-                          : null;
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        child: ListTile(
-                          onTap: () => context.push('/emr/visits/${v.id}'),
-                          title: Text(
-                            v.pet?.name ?? 'Pet #${v.petId}',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: Text(
-                            [
-                              v.visitNumber,
-                              v.visitDate,
-                              v.visitType,
-                              if (diag != null) diag,
-                            ].join(' · '),
-                          ),
-                          trailing: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _statusColor(v.status).withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              v.status,
-                              style: TextStyle(
-                                color: _statusColor(v.status),
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
+                  },
+                ),
+              ],
             ),
           ),
         ],

@@ -3,6 +3,8 @@ import 'package:mobile/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/services/permission_service.dart';
+import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
 
@@ -119,12 +121,17 @@ class _DewormingManagementScreenState extends State<DewormingManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canCreate =
+        context.watch<AuthSession>().hasPermission(AppPermissions.emrDewormingCreate);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Deworming')),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddForm,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: canCreate
+          ? FloatingActionButton(
+              onPressed: _showAddForm,
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: RefreshIndicator(
         onRefresh: () async => setState(_reload),
         child: FutureBuilder<List<PetDeworming>>(

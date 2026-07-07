@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/app_config.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
@@ -33,17 +34,54 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
     _future = context.read<AppServices>().emr.getVisit(widget.visitId);
   }
 
-  Future<void> _billVisit() async {
+  Future<void> _completeVisit() async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Bill this visit?'),
+        title: const Text('Complete visit?'),
         content: const Text(
-          'Creates an invoice from billable treatments and medicines with linked products.',
+          'Marks clinical work done and holds the bill so you can add or edit items before sending to the cashier.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Bill')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Complete')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _billing = true);
+    final services = context.read<AppServices>();
+    try {
+      final visit = await services.emr.completeVisit(widget.visitId);
+      if (!mounted) return;
+      await VisitPdf.printVisit(visit);
+      if (!mounted) return;
+      AppMessenger.show(
+        context,
+        const SnackBar(content: Text('Visit completed. Bill is on hold.')),
+      );
+      setState(_reload);
+    } catch (e) {
+      if (mounted) {
+        AppMessenger.show(context, SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _billing = false);
+    }
+  }
+
+  Future<void> _releaseForBilling() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Send to cashier?'),
+        content: const Text(
+          'Releases the bill for cashier billing. Cashiers at this branch will be notified.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Send')),
         ],
       ),
     );
@@ -51,22 +89,25 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
 
     setState(() => _billing = true);
     try {
-      final invoice =
-          await context.read<AppServices>().emr.billVisit(widget.visitId);
+      await context.read<AppServices>().emr.releaseVisitForBilling(widget.visitId);
       if (mounted) {
-        AppMessenger.show(context,
-          SnackBar(content: Text('Invoice ${invoice.invoiceNumber} created')),
+        AppMessenger.show(
+          context,
+          const SnackBar(content: Text('Visit sent to cashier for billing.')),
         );
-        context.push('/invoices/${invoice.id}');
         setState(_reload);
       }
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context,SnackBar(content: Text('$e')));
+        AppMessenger.show(context, SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _billing = false);
     }
+  }
+
+  void _billAtPos() {
+    context.push('/pos?visit_id=${widget.visitId}');
   }
 
   Future<void> _deleteVisit() async {
@@ -102,6 +143,8 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
       case 'billed':
       case 'completed':
         return AppTheme.accent;
+      case 'bill_on_hold':
+        return Colors.orange;
       case 'open':
         return AppTheme.primary;
       case 'cancelled':
@@ -116,6 +159,7 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
     final auth = context.watch<AuthSession>();
     final canEdit = auth.hasPermission('emr.visits.edit');
     final canBill = auth.hasPermission('emr.visits.bill');
+    final canComplete = canEdit;
 
     return Scaffold(
       body: FutureBuilder<PetVisit>(
@@ -145,22 +189,38 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
                     tooltip: 'Download PDF',
                     onPressed: () => VisitPdf.downloadVisit(v),
                   ),
-                  if (canEdit && v.status == 'open')
+                  if (canEdit && (v.status == 'open' || v.status == 'bill_on_hold'))
                     IconButton(
                       icon: const Icon(Icons.edit_outlined),
                       onPressed: () =>
                           context.push('/emr/visits/${v.id}/edit'),
                     ),
-                  if (canBill && v.status == 'open')
+                  if (canComplete && v.status == 'open')
                     TextButton(
-                      onPressed: _billing ? null : _billVisit,
+                      onPressed: _billing ? null : _completeVisit,
                       child: _billing
                           ? const SizedBox(
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Bill'),
+                          : const Text('Complete'),
+                    ),
+                  if (canComplete && v.status == 'bill_on_hold')
+                    TextButton(
+                      onPressed: _billing ? null : _releaseForBilling,
+                      child: _billing
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Send to cashier'),
+                    ),
+                  if (canBill && v.status == 'completed' && AppConfig.isCashierPlatform)
+                    TextButton(
+                      onPressed: _billing ? null : _billAtPos,
+                      child: const Text('Bill at POS'),
                     ),
                 ],
               ),
@@ -213,6 +273,12 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
                         _section(
                           'Diagnoses',
                           v.diagnoses!.map((d) => d.diagnosisName).join(', '),
+                        ),
+                      if (v.serviceCharge > 0)
+                        _section(
+                          'Service charge',
+                          '₹${v.serviceCharge.toStringAsFixed(2)}'
+                              '${v.serviceChargeProduct != null ? ' (${v.serviceChargeProduct!.name})' : ''}',
                         ),
                       if (v.treatments != null && v.treatments!.isNotEmpty)
                         _section(

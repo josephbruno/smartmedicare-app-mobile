@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_services.dart';
+import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
@@ -154,7 +155,7 @@ class _LabReportsScreenState extends State<LabReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canUpload = context.watch<AuthSession>().hasPermission('emr.lab_reports.view');
+    final canUpload = context.watch<AuthSession>().hasPermission(AppPermissions.emrLabReportsUpload);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Lab reports')),

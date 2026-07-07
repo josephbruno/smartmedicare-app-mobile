@@ -4,6 +4,18 @@ import 'package:sqflite/sqflite.dart';
 
 import 'app_database.dart';
 
+class OfflineQueueEntry {
+  OfflineQueueEntry({
+    required this.offlineId,
+    required this.payload,
+    required this.createdAt,
+  });
+
+  final String offlineId;
+  final Map<String, dynamic> payload;
+  final String createdAt;
+}
+
 class OfflineInvoiceQueue {
   OfflineInvoiceQueue();
 
@@ -25,6 +37,20 @@ class OfflineInvoiceQueue {
     final rows = await db.query('offline_invoices', orderBy: 'id ASC');
     return rows
         .map((r) => jsonDecode(r['payload'] as String) as Map<String, dynamic>)
+        .toList();
+  }
+
+  Future<List<OfflineQueueEntry>> pendingEntries() async {
+    final db = await AppDatabase.instance();
+    final rows = await db.query('offline_invoices', orderBy: 'id ASC');
+    return rows
+        .map(
+          (r) => OfflineQueueEntry(
+            offlineId: r['offline_id'] as String,
+            payload: jsonDecode(r['payload'] as String) as Map<String, dynamic>,
+            createdAt: r['created_at'] as String? ?? '',
+          ),
+        )
         .toList();
   }
 

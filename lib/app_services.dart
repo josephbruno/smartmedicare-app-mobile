@@ -1,4 +1,5 @@
 import 'core/network/api_client.dart';
+import 'data/services/device_token_service.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/billing_service.dart';
 import 'data/services/customer_service.dart';
@@ -27,7 +28,8 @@ class AppServices {
         reports = ReportsService(api),
         shop = ShopService(api),
         branches = BranchService(api),
-        users = UsersService(api);
+        users = UsersService(api),
+        deviceTokens = DeviceTokenService(api);
 
   final ApiClient api;
   final AuthService auth;
@@ -44,4 +46,5 @@ class AppServices {
   final ShopService shop;
   final BranchService branches;
   final UsersService users;
+  final DeviceTokenService deviceTokens;
 }

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
+import '../models/api_response.dart';
 import '../models/invoice.dart';
 
 class BillingService {
@@ -33,9 +34,73 @@ class BillingService {
     }
   }
 
+  Future<({List<Invoice> items, PaginationMeta? meta})> listPaginated({
+    int page = 1,
+    int perPage = 20,
+    String? status,
+    String? search,
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    final query = <String, dynamic>{
+      'page': page,
+      'per_page': perPage,
+      if (search != null && search.isNotEmpty) 'search': search,
+      if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
+      if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
+    };
+    if (status != null && status.isNotEmpty && status != 'all') {
+      if (status == 'unpaid') {
+        query['payment_status'] = 'unpaid';
+      } else {
+        query['status'] = status;
+      }
+    }
+    final result = await list(query: query);
+    return (items: result.items, meta: result.pagination);
+  }
+
   Future<List<Invoice>> listSimple({Map<String, dynamic>? query}) async {
     final result = await list(query: query);
     return result.items;
+  }
+
+  /// Loads all invoice pages for reporting (date range, items, payments).
+  Future<InvoiceListResult> listForReport({
+    String? dateFrom,
+    String? dateTo,
+    bool withItems = false,
+    bool withPayments = false,
+    int perPage = 200,
+  }) async {
+    final all = <Invoice>[];
+    InvoiceListSummary? summary;
+    PaginationMeta? meta;
+    var page = 1;
+
+    while (true) {
+      final query = <String, dynamic>{
+        'page': page,
+        'per_page': perPage,
+        if (dateFrom != null) 'date_from': dateFrom,
+        if (dateTo != null) 'date_to': dateTo,
+        if (withItems) 'with_items': true,
+        if (withPayments) 'with_payments': true,
+      };
+      final result = await list(query: query);
+      all.addAll(result.items);
+      summary = result.summary;
+      meta = result.pagination;
+      final lastPage = meta?.lastPage ?? page;
+      if (page >= lastPage) break;
+      page++;
+    }
+
+    return InvoiceListResult(
+      items: all,
+      pagination: meta,
+      summary: summary,
+    );
   }
 
   Future<Invoice> get(int id) async {

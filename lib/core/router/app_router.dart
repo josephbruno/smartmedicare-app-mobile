@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../session/auth_session.dart';
+import '../services/permission_service.dart';
+import '../widgets/permission_guard.dart';
+import '../../features/auth/cashier_desktop_only_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
 import '../../features/auth/landing_screen.dart';
 import '../../features/auth/login_screen.dart';
@@ -54,89 +57,108 @@ GoRouter createAppRouter({
   required GlobalKey<NavigatorState> rootNavigatorKey,
 }) {
   String? permissionRedirect(String path) {
+    final denied = auth.homeRoute;
     bool need(String perm) => !auth.hasPermission(perm);
 
     if (path.startsWith('/pos')) {
-      if (need('invoices.create')) return '/dashboard';
+      if (need(AppPermissions.invoicesCreate)) return denied;
     }
     if (path.startsWith('/invoices')) {
-      if (need('invoices.view')) return '/dashboard';
+      if (need(AppPermissions.invoicesView)) return denied;
     }
     if (path.startsWith('/products')) {
-      if (need('products.view')) return '/dashboard';
+      if (path.endsWith('/new')) {
+        if (need(AppPermissions.productsCreate)) return denied;
+      } else if (path.contains('/edit')) {
+        if (need(AppPermissions.productsEdit)) return denied;
+      } else if (need(AppPermissions.productsView)) {
+        return denied;
+      }
     }
     if (path.startsWith('/stock-transfers')) {
-      if (need('inventory.transfer')) return '/dashboard';
+      if (path.endsWith('/new')) {
+        if (need(AppPermissions.inventoryTransfer)) return denied;
+      } else if (need(AppPermissions.inventoryTransfer)) {
+        return denied;
+      }
     }
     if (path.startsWith('/inventory') || path.startsWith('/stock-ageing')) {
-      if (need('inventory.view')) return '/dashboard';
+      if (need(AppPermissions.inventoryView)) return denied;
     }
     if (path.startsWith('/purchases')) {
-      if (need('purchases.view')) return '/dashboard';
+      if (path.endsWith('/new')) {
+        if (need(AppPermissions.purchasesCreate)) return denied;
+      } else if (need(AppPermissions.purchasesView)) {
+        return denied;
+      }
     }
     if (path.startsWith('/suppliers')) {
-      if (need('suppliers.view')) return '/dashboard';
+      if (need(AppPermissions.suppliersView)) return denied;
     }
     if (path.startsWith('/customers')) {
-      if (need('customers.view')) return '/dashboard';
+      if (path.endsWith('/new')) {
+        if (need(AppPermissions.customersCreate)) return denied;
+      } else if (need(AppPermissions.customersView)) {
+        return denied;
+      }
     }
     if (path.startsWith('/patients')) {
-      if (need('customers.view')) return '/dashboard';
+      if (need(AppPermissions.customersView)) return denied;
     }
     if (path.startsWith('/emr/appointments')) {
       if (path.endsWith('/new')) {
-        if (need('patient_appointments.create')) return '/dashboard';
+        if (need(AppPermissions.patientAppointmentsCreate)) return denied;
       } else if (path.contains('/edit')) {
-        if (need('patient_appointments.edit')) return '/dashboard';
-      } else if (need('patient_appointments.view')) {
-        return '/dashboard';
+        if (need(AppPermissions.patientAppointmentsEdit)) return denied;
+      } else if (need(AppPermissions.patientAppointmentsView)) {
+        return denied;
       }
     }
     if (path.startsWith('/emr/pets/')) {
-      if (path.contains('/deworming') && need('emr.deworming.view')) {
-        return '/dashboard';
+      if (path.contains('/deworming') && need(AppPermissions.emrDewormingView)) {
+        return denied;
       }
-      if (path.contains('/surgeries') && need('emr.surgeries.view')) {
-        return '/dashboard';
+      if (path.contains('/surgeries') && need(AppPermissions.emrSurgeriesView)) {
+        return denied;
       }
-      if (path.contains('/lab-reports') && need('emr.lab_reports.view')) {
-        return '/dashboard';
+      if (path.contains('/lab-reports') && need(AppPermissions.emrLabReportsView)) {
+        return denied;
       }
-      if (path.contains('/documents') && need('emr.documents.view')) {
-        return '/dashboard';
+      if (path.contains('/documents') && need(AppPermissions.emrDocumentsView)) {
+        return denied;
       }
-      if (path.contains('/timeline') && need('emr.visits.view')) {
-        return '/dashboard';
+      if (path.contains('/timeline') && need(AppPermissions.emrVisitsView)) {
+        return denied;
       }
     }
     if (path.startsWith('/emr/visits')) {
       if (path.endsWith('/new')) {
-        if (need('emr.visits.create')) return '/dashboard';
+        if (need(AppPermissions.emrVisitsCreate)) return denied;
       } else if (path.contains('/edit')) {
-        if (need('emr.visits.edit')) return '/dashboard';
-      } else if (need('emr.visits.view')) {
-        return '/dashboard';
+        if (need(AppPermissions.emrVisitsEdit)) return denied;
+      } else if (need(AppPermissions.emrVisitsView)) {
+        return denied;
       }
     }
     if (path.startsWith('/emr/reminders')) {
-      if (need('emr.reminders.view')) return '/dashboard';
+      if (need(AppPermissions.emrRemindersView)) return denied;
     }
     if (path.startsWith('/expenses')) {
-      if (need('expenses.view')) return '/dashboard';
+      if (need(AppPermissions.expensesView)) return denied;
     }
     if (path.startsWith('/reports')) {
-      if (need('reports.view')) return '/dashboard';
+      if (need(AppPermissions.reportsView)) return denied;
     }
     if (path.startsWith('/settings/doctors')) {
-      if (need('doctors.manage')) return '/dashboard';
+      if (need(AppPermissions.doctorsManage)) return denied;
     }
     if (path == '/settings' || path.startsWith('/settings/')) {
-      if (path == '/settings' && need('shop.manage')) return '/dashboard';
-      if (path.startsWith('/settings/users') && need('users.view')) {
-        return '/dashboard';
+      if (path == '/settings' && need(AppPermissions.shopManage)) return denied;
+      if (path.startsWith('/settings/users') && need(AppPermissions.usersView)) {
+        return denied;
       }
-      if (path.startsWith('/settings/branches') && need('branch.manage')) {
-        return '/dashboard';
+      if (path.startsWith('/settings/branches') && need(AppPermissions.branchManage)) {
+        return denied;
       }
     }
     return null;
@@ -149,6 +171,7 @@ GoRouter createAppRouter({
     '/forgot-password',
     '/pin',
     '/set-pin',
+    '/cashier-desktop-only',
   };
 
   return GoRouter(
@@ -178,7 +201,15 @@ GoRouter createAppRouter({
       }
 
       if (session && unlocked && publicAuthRoutes.contains(loc)) {
-        return '/dashboard';
+        if (!auth.cashierPlatformAllowed && loc != '/cashier-desktop-only') {
+          return '/cashier-desktop-only';
+        }
+        return auth.homeRoute;
+      }
+
+      if (session && unlocked && !auth.cashierPlatformAllowed) {
+        if (loc != '/cashier-desktop-only') return '/cashier-desktop-only';
+        return null;
       }
 
       if (session && unlocked) {
@@ -217,6 +248,11 @@ GoRouter createAppRouter({
         path: '/forgot-password',
         name: 'ForgotPassword',
         builder: (c, s) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/cashier-desktop-only',
+        name: 'CashierDesktopOnly',
+        builder: (c, s) => const CashierDesktopOnlyScreen(),
       ),
       GoRoute(
         path: '/subscription-expired',
@@ -443,32 +479,50 @@ GoRouter createAppRouter({
           GoRoute(
             path: '/reports/sales',
             name: 'SalesReport',
-            builder: (c, s) => const SalesReportScreen(),
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.reportsView,
+              child: SalesReportScreen(),
+            ),
           ),
           GoRoute(
             path: '/reports/gst',
             name: 'GSTReport',
-            builder: (c, s) => const GstReportScreen(),
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.reportsView,
+              child: GstReportScreen(),
+            ),
           ),
           GoRoute(
             path: '/settings',
             name: 'Settings',
-            builder: (c, s) => const SettingsScreen(),
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.shopManage,
+              child: SettingsScreen(),
+            ),
           ),
           GoRoute(
             path: '/settings/users',
             name: 'Users',
-            builder: (c, s) => const UsersScreen(),
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.usersView,
+              child: UsersScreen(),
+            ),
           ),
           GoRoute(
             path: '/settings/doctors',
             name: 'Doctors',
-            builder: (c, s) => const DoctorsScreen(),
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.doctorsManage,
+              child: DoctorsScreen(),
+            ),
           ),
           GoRoute(
             path: '/settings/branches',
             name: 'Branches',
-            builder: (c, s) => const BranchesScreen(),
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.branchManage,
+              child: BranchesScreen(),
+            ),
           ),
         ],
       ),

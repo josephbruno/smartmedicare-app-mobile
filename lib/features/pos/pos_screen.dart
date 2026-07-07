@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile/core/messaging/app_messenger.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -12,6 +13,7 @@ import '../../core/connectivity/connectivity_notifier.dart';
 import '../../core/responsive/breakpoints.dart';
 import '../../core/responsive/desktop_layout_helper.dart';
 import '../../core/session/auth_session.dart';
+import '../emr/widgets/visit_billing_queue_panel.dart';
 import '../../data/local/offline_invoice_queue.dart';
 import '../../data/local/product_local_dao.dart';
 import '../../data/local/sync_coordinator.dart';
@@ -39,6 +41,9 @@ class _PosScreenState extends State<PosScreen> {
   Timer? _searchDebounce;
   int _localCatalogCount = 0;
   SyncCoordinator? _syncCoordinator;
+  bool _loadingVisit = false;
+  String? _loadedVisitNumber;
+  int? _lastLoadedVisitId;
 
   Future<void> _runSearch(String q, {bool immediate = false}) async {
     _searchDebounce?.cancel();
@@ -87,6 +92,13 @@ class _PosScreenState extends State<PosScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _syncCoordinator ??= context.read<SyncCoordinator>();
+    final visitIdStr = GoRouterState.of(context).uri.queryParameters['visit_id'];
+    final visitId = int.tryParse(visitIdStr ?? '');
+    if (visitId != null && visitId != _lastLoadedVisitId && !_loadingVisit) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_loadVisitFromQuery());
+      });
+    }
   }
 
   @override
@@ -105,12 +117,214 @@ class _PosScreenState extends State<PosScreen> {
       if (useWebLikeShell(context)) {
         _searchFocus.requestFocus();
       }
+      unawaited(_loadVisitFromQuery());
     });
+  }
+
+  Future<void> _loadVisitFromQuery() async {
+    final visitIdStr = GoRouterState.of(context).uri.queryParameters['visit_id'];
+    final visitId = int.tryParse(visitIdStr ?? '');
+    if (visitId == null) return;
+    if (_loadingVisit || visitId == _lastLoadedVisitId) return;
+
+    setState(() => _loadingVisit = true);
+    final services = context.read<AppServices>();
+    final cart = context.read<PosCartNotifier>();
+    final auth = context.read<AuthSession>();
+    final branchId = auth.currentBranchId;
+    final online = context.read<ConnectivityNotifier>().isOnline;
+    final productRepo = context.read<PosProductRepository>();
+
+    try {
+      final visit = await services.emr.getVisit(visitId);
+      if (!mounted) return;
+
+      if (visit.status != 'completed') {
+        AppMessenger.show(
+          context,
+          SnackBar(
+            content: Text(
+              visit.status == 'bill_on_hold'
+                  ? 'Visit ${visit.visitNumber} is still on hold — doctor must send to cashier first.'
+                  : 'Visit ${visit.visitNumber} is not ready for billing (${visit.status}).',
+            ),
+          ),
+        );
+        return;
+      }
+
+      Future<Product?> fetchProduct(int productId) async {
+        if (productId <= 0) return null;
+        try {
+          return await services.products.get(productId);
+        } catch (_) {
+          if (branchId == null) return null;
+          final local = await productRepo.search(branchId, '', online: online);
+          for (final p in local) {
+            if (p.id == productId) return p;
+          }
+          try {
+            final bySku = await services.products.findByBarcode('SVC-CONSULT');
+            if (bySku?.id == productId) return bySku;
+          } catch (_) {}
+          return null;
+        }
+      }
+
+      Future<Product?> fetchDefaultServiceProduct() async {
+        if (visit.serviceChargeProduct != null) return visit.serviceChargeProduct;
+        if (visit.serviceChargeProductId != null && visit.serviceChargeProductId! > 0) {
+          final p = await fetchProduct(visit.serviceChargeProductId!);
+          if (p != null) return p;
+        }
+        try {
+          final byBarcode = await services.products.findByBarcode('SVC-CONSULT');
+          if (byBarcode != null) return byBarcode;
+        } catch (_) {}
+        try {
+          final list = await services.products.list(
+            query: {'type': 'service', 'per_page': 10, 'search': 'consult'},
+          );
+          if (list.isNotEmpty) return list.first;
+        } catch (_) {}
+        try {
+          final list = await services.products.list(
+            query: {'type': 'service', 'per_page': 5},
+          );
+          return list.isNotEmpty ? list.first : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      final result = await cart.loadFromVisit(
+        visit,
+        fetchProduct,
+        fetchDefaultServiceProduct: fetchDefaultServiceProduct,
+      );
+      if (!mounted) return;
+      _lastLoadedVisitId = visitId;
+
+      if (visit.customerId > 0) {
+        try {
+          final customer = await services.customers.get(visit.customerId);
+          if (mounted) cart.setCustomer(customer);
+        } catch (_) {}
+      }
+
+      if (!result.success) {
+        AppMessenger.show(
+          context,
+          SnackBar(
+            content: Text(
+              result.skipped.isEmpty
+                  ? 'No billable items with products on visit ${visit.visitNumber}.'
+                  : 'Could not load items: ${result.skipped.join(', ')}',
+            ),
+          ),
+        );
+        return;
+      }
+
+      setState(() => _loadedVisitNumber = visit.visitNumber);
+      if (result.skipped.isNotEmpty) {
+        AppMessenger.show(
+          context,
+          SnackBar(
+            content: Text(
+              'Loaded ${result.linesAdded} item(s) from ${visit.visitNumber}. Skipped: ${result.skipped.join(', ')}',
+            ),
+          ),
+        );
+      } else {
+        AppMessenger.show(
+          context,
+          SnackBar(
+            content: Text('Loaded ${result.linesAdded} item(s) from visit ${visit.visitNumber}.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        AppMessenger.show(context, SnackBar(content: Text('Failed to load visit: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingVisit = false);
+    }
+  }
+
+  Future<void> _onSearchSubmitted(String raw) async {
+    final q = raw.trim();
+    if (q.isEmpty) return;
+
+    final auth = context.read<AuthSession>();
+    final branchId = auth.currentBranchId;
+    final online = context.read<ConnectivityNotifier>().isOnline;
+    final repo = context.read<PosProductRepository>();
+    final cart = context.read<PosCartNotifier>();
+
+    if (!q.contains(' ') && q.length >= 4 && branchId != null) {
+      final product = await repo.findByBarcode(branchId, q, online: online);
+      if (product != null && mounted) {
+        final msg = cart.addProduct(product);
+        _search.clear();
+        if (msg != 'added' && msg != 'incremented') {
+          AppMessenger.show(
+            context,
+            SnackBar(
+              content: Text(
+                msg == 'out_of_stock' ? 'Out of stock!' : 'Maximum stock capacity reached.',
+              ),
+              backgroundColor: AppTheme.danger,
+            ),
+          );
+        }
+        _searchFocus.requestFocus();
+        return;
+      }
+    }
+
+    await _runSearch(q, immediate: true);
   }
 
   Future<void> _refreshLocalCatalogCount(int branchId) async {
     final count = await context.read<PosProductRepository>().localCount(branchId);
     if (mounted) setState(() => _localCatalogCount = count);
+  }
+
+  Future<void> _editCartLinePrice(PosCartNotifier cart, int index) async {
+    final item = cart.items[index];
+    final controller = TextEditingController(text: item.unitPrice.toStringAsFixed(2));
+    final updated = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(item.isServiceCharge ? 'Edit service charge' : 'Edit price'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Amount (₹)',
+            prefixText: '₹ ',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              final v = double.tryParse(controller.text.trim());
+              if (v == null || v < 0) return;
+              Navigator.pop(ctx, v);
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (updated != null && mounted) {
+      cart.updateUnitPrice(index, updated);
+    }
   }
 
   Future<void> _checkout() async {
@@ -150,6 +364,10 @@ class _PosScreenState extends State<PosScreen> {
 
     if (!completed || !mounted) return;
     cart.clear();
+    setState(() {
+      _loadedVisitNumber = null;
+      _lastLoadedVisitId = null;
+    });
     final term = _search.text.trim();
     if (term.isNotEmpty) {
       await _runSearch(term, immediate: true);
@@ -317,6 +535,7 @@ class _PosScreenState extends State<PosScreen> {
     final auth = context.watch<AuthSession>();
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final desktopShortcuts = useWebLikeShell(context);
+    final showBillingQueue = desktopShortcuts && auth.hasPermission('emr.visits.bill');
 
     final cartPanel = Card(
       elevation: 0,
@@ -381,6 +600,8 @@ class _PosScreenState extends State<PosScreen> {
                       itemCount: cart.items.length,
                       itemBuilder: (c, i) {
                         final it = cart.items[i];
+                        final billingVisit = cart.pendingVisitId != null;
+                        final canEditPrice = billingVisit && it.isServiceCharge;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Container(
@@ -405,17 +626,45 @@ class _PosScreenState extends State<PosScreen> {
                                         ),
                                       ),
                                       const SizedBox(height: 4),
-                                      Text(
-                                        '₹${it.unitPrice.toStringAsFixed(2)} × ${it.quantity}',
-                                        style: TextStyle(
-                                          fontSize: _fs(12),
-                                          color: AppTheme.textSecondary,
+                                      InkWell(
+                                        onTap: canEditPrice
+                                            ? () => _editCartLinePrice(cart, i)
+                                            : null,
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 2),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                '₹${it.unitPrice.toStringAsFixed(2)} × ${it.quantity}',
+                                                style: TextStyle(
+                                                  fontSize: _fs(12),
+                                                  color: canEditPrice
+                                                      ? AppTheme.primary
+                                                      : AppTheme.textSecondary,
+                                                  decoration: canEditPrice
+                                                      ? TextDecoration.underline
+                                                      : null,
+                                                ),
+                                              ),
+                                              if (canEditPrice) ...[
+                                                const SizedBox(width: 4),
+                                                Icon(
+                                                  Icons.edit_outlined,
+                                                  size: _ic(14),
+                                                  color: AppTheme.primary,
+                                                ),
+                                              ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                // Quantity Counter
+                                // Quantity counter (service charge stays qty 1)
+                                if (!it.isServiceCharge)
                                 Row(
                                   children: [
                                     GestureDetector(
@@ -473,7 +722,19 @@ class _PosScreenState extends State<PosScreen> {
                                       ),
                                     ),
                                   ],
-                                ),
+                                )
+                                else
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: _desktop ? 12 : 8),
+                                    child: Text(
+                                      'Qty 1',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: _fs(_desktop ? 14 : 12),
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    ),
+                                  ),
                                 SizedBox(width: _desktop ? 14 : 12),
                                 // Total
                                 Text(
@@ -592,6 +853,39 @@ class _PosScreenState extends State<PosScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_loadingVisit)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: LinearProgressIndicator(minHeight: 3),
+            ),
+          if (_loadedVisitNumber != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Material(
+                color: AppTheme.accent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.medical_services_outlined, size: 18, color: AppTheme.accent),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Billing visit $_loadedVisitNumber',
+                          style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.accent),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (showBillingQueue && !wide)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: VisitBillingQueuePanel(compact: true, maxHeight: 200),
+            ),
           TextField(
             controller: _search,
             focusNode: _searchFocus,
@@ -613,6 +907,7 @@ class _PosScreenState extends State<PosScreen> {
                   : null,
             ),
             onChanged: (v) => _runSearch(v),
+            onSubmitted: _onSearchSubmitted,
             onTap: () => _runSearch(_search.text, immediate: true),
           ),
           const SizedBox(height: 8),
@@ -804,6 +1099,7 @@ class _PosScreenState extends State<PosScreen> {
               runSpacing: 8,
               children: [
                 _shortcutHint('Ctrl+B', 'Search'),
+                _shortcutHint('Enter', 'Scan / search'),
                 _shortcutHint('Ctrl+↵', 'Checkout'),
                 _shortcutHint('Ctrl+H', 'Hold bill'),
                 _shortcutHint('Ctrl+E', 'Clear cart'),
@@ -822,7 +1118,17 @@ class _PosScreenState extends State<PosScreen> {
             sessionBar,
             Expanded(
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (showBillingQueue) ...[
+                    SizedBox(
+                      width: 280,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 0, 8),
+                        child: VisitBillingQueuePanel(compact: true),
+                      ),
+                    ),
+                  ],
                   Expanded(flex: 3, child: searchPanel),
                   Expanded(flex: 2, child: cartPanel),
                 ],

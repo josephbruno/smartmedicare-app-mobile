@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:mobile/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
 
-import '../services/permission_service.dart';
 import '../session/auth_session.dart';
 
 /// Extension on BuildContext to easily check permissions.
@@ -10,56 +9,29 @@ extension PermissionContextExtension on BuildContext {
   /// Get the current user from auth session.
   AuthSession get authSession => read<AuthSession>();
 
-  /// Check if user has a specific permission.
-  bool hasPermission(String permission) {
-    final auth = read<AuthSession>();
-    return PermissionService.hasPermission(
-      auth.user?.permissions ?? [],
-      permission,
-    );
-  }
+  /// Check if user has a specific permission (respects super_admin bypass).
+  bool hasPermission(String permission) => authSession.hasPermission(permission);
 
   /// Check if user has ANY of the permissions.
   bool hasAnyPermission(List<String> permissions) {
-    final auth = read<AuthSession>();
-    return PermissionService.hasAnyPermission(
-      auth.user?.permissions ?? [],
-      permissions,
-    );
+    return permissions.any(authSession.hasPermission);
   }
 
   /// Check if user has ALL of the permissions.
   bool hasAllPermissions(List<String> permissions) {
-    final auth = read<AuthSession>();
-    return PermissionService.hasAllPermissions(
-      auth.user?.permissions ?? [],
-      permissions,
-    );
+    return permissions.every(authSession.hasPermission);
   }
 
   /// Check if user has a specific role.
-  bool hasRole(String role) {
-    final auth = read<AuthSession>();
-    return PermissionService.hasRole(
-      auth.user?.roles ?? [],
-      role,
-    );
-  }
+  bool hasRole(String role) => authSession.hasRole(role);
 
   /// Check if user has ANY of the roles.
   bool hasAnyRole(List<String> roles) {
-    final auth = read<AuthSession>();
-    return PermissionService.hasAnyRole(
-      auth.user?.roles ?? [],
-      roles,
-    );
+    return roles.any(authSession.hasRole);
   }
 
   /// Check if user is super admin.
-  bool get isSuperAdmin {
-    final auth = read<AuthSession>();
-    return PermissionService.isSuperAdmin(auth.user?.roles ?? []);
-  }
+  bool get isSuperAdmin => authSession.isSuperAdmin;
 
   /// Show a permission denied snackbar.
   void showPermissionDenied({String? message}) {

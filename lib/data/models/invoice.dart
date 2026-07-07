@@ -276,6 +276,7 @@ class CartItem {
     required this.totalAmount,
     required this.availableStock,
     required this.trackInventory,
+    this.isServiceCharge = false,
   });
 
   final int productId;
@@ -298,6 +299,7 @@ class CartItem {
   double totalAmount;
   double availableStock;
   bool trackInventory;
+  final bool isServiceCharge;
 
   Map<String, dynamic> toJson() => {
         'product_id': productId,
@@ -317,6 +319,7 @@ class CartItem {
         'cgst_amount': cgstAmount,
         'sgst_amount': sgstAmount,
         'total_amount': totalAmount,
+        if (isServiceCharge) 'is_service_charge': true,
       };
 }
 

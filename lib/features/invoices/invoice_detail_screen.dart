@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/services/thermal_printer_service.dart';
+import '../../core/session/auth_session.dart';
 import '../../data/models/invoice.dart';
 
 class InvoiceDetailScreen extends StatefulWidget {
@@ -147,6 +149,36 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: inv.items == null || inv.items!.isEmpty
+                        ? null
+                        : () async {
+                            final auth = context.read<AuthSession>();
+                            final ok = await ThermalPrinterService.printReceipt(
+                              invoice: inv,
+                              items: inv.items!,
+                              shopName: auth.currentShop?.name ?? auth.currentBranch?.name,
+                            );
+                            if (context.mounted) {
+                              AppMessenger.show(
+                                context,
+                                SnackBar(
+                                  content: Text(ok ? 'Print dialog opened' : 'Print failed'),
+                                  backgroundColor: ok ? Colors.green : Colors.red,
+                                ),
+                              );
+                            }
+                          },
+                    icon: const Icon(Icons.print_rounded, size: 16),
+                    label: const Text('Print'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () async {

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/app_config.dart';
 import '../../data/models/shop.dart';
+import 'widgets/pos_desktop_settings_section.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -26,6 +28,8 @@ class SettingsScreen extends StatelessWidget {
             ListTile(title: const Text('Currency'), trailing: Text(s.currency)),
             ListTile(title: const Text('Timezone'), trailing: Text(s.timezone)),
             ListTile(title: const Text('GSTIN'), subtitle: Text(s.gstin ?? '-')),
+            if (AppConfig.isCashierPlatform || AppConfig.usesLargeUiScale)
+              const PosDesktopSettingsSection(),
           ],
         );
       },

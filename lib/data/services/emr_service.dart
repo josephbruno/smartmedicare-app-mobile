@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../core/app_config.dart';
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
+import '../models/api_response.dart';
 import '../models/emr.dart';
 import '../models/invoice.dart';
 
@@ -47,9 +48,26 @@ class EmrService {
   }
 
   Future<List<PetSearchResult>> listPets({Map<String, dynamic>? query}) async {
+    final result = await listPetsPaginated(
+      page: int.tryParse(query?['page']?.toString() ?? '') ?? 1,
+      perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
+      search: query?['search']?.toString(),
+    );
+    return result.items;
+  }
+
+  Future<({List<PetSearchResult> items, PaginationMeta? meta})> listPetsPaginated({
+    int page = 1,
+    int perPage = 20,
+    String? search,
+  }) async {
     try {
-      final res = await _client.get('/pets', queryParameters: query);
-      return parseEnvelopeData(res, (data) => listFromData(data, PetSearchResult.fromJson));
+      final res = await _client.get('/pets', queryParameters: {
+        'page': page,
+        'per_page': perPage,
+        if (search != null && search.isNotEmpty) 'search': search,
+      });
+      return parseEnvelopeList(res, PetSearchResult.fromJson);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -80,12 +98,34 @@ class EmrService {
   Future<List<PatientAppointment>> listAppointments({
     Map<String, dynamic>? query,
   }) async {
+    final result = await listAppointmentsPaginated(
+      page: int.tryParse(query?['page']?.toString() ?? '') ?? 1,
+      perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
+      status: query?['status']?.toString(),
+      search: query?['search']?.toString(),
+    );
+    return result.items;
+  }
+
+  Future<({List<PatientAppointment> items, PaginationMeta? meta})>
+      listAppointmentsPaginated({
+    int page = 1,
+    int perPage = 20,
+    String? status,
+    String? search,
+    String? dateFrom,
+    String? dateTo,
+  }) async {
     try {
-      final res = await _client.get('/patient-appointments', queryParameters: query);
-      return parseEnvelopeData(
-        res,
-        (data) => listFromData(data, PatientAppointment.fromJson),
-      );
+      final res = await _client.get('/patient-appointments', queryParameters: {
+        'page': page,
+        'per_page': perPage,
+        if (status != null && status.isNotEmpty) 'status': status,
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
+        if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
+      });
+      return parseEnvelopeList(res, PatientAppointment.fromJson);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -149,9 +189,29 @@ class EmrService {
   // ── Visits ────────────────────────────────────────────────────────
 
   Future<List<PetVisit>> listVisits({Map<String, dynamic>? query}) async {
+    final result = await listVisitsPaginated(
+      page: int.tryParse(query?['page']?.toString() ?? '') ?? 1,
+      perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
+      status: query?['status']?.toString(),
+      search: query?['search']?.toString(),
+    );
+    return result.items;
+  }
+
+  Future<({List<PetVisit> items, PaginationMeta? meta})> listVisitsPaginated({
+    int page = 1,
+    int perPage = 20,
+    String? status,
+    String? search,
+  }) async {
     try {
-      final res = await _client.get('/visits', queryParameters: query);
-      return parseEnvelopeData(res, (data) => listFromData(data, PetVisit.fromJson));
+      final res = await _client.get('/visits', queryParameters: {
+        'page': page,
+        'per_page': perPage,
+        if (status != null && status.isNotEmpty && status != 'all') 'status': status,
+        if (search != null && search.isNotEmpty) 'search': search,
+      });
+      return parseEnvelopeList(res, PetVisit.fromJson);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -207,6 +267,30 @@ class EmrService {
       return parseEnvelopeData(
         res,
         (data) => Invoice.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetVisit> completeVisit(int id) async {
+    try {
+      final res = await _client.post('/visits/$id/complete');
+      return parseEnvelopeData(
+        res,
+        (data) => PetVisit.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetVisit> releaseVisitForBilling(int id) async {
+    try {
+      final res = await _client.post('/visits/$id/release-billing');
+      return parseEnvelopeData(
+        res,
+        (data) => PetVisit.fromJson(Map<String, dynamic>.from(data as Map)),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);

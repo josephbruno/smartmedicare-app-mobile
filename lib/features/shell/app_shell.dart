@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile/core/messaging/app_messenger.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -7,12 +8,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../app_services.dart';
 import '../../core/app_config.dart';
 import '../../core/responsive/breakpoints.dart';
+import '../../core/responsive/desktop_layout_helper.dart';
+import '../../core/desktop/command_palette.dart';
+import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../data/local/sync_coordinator.dart';
 import '../../core/connectivity/connectivity_notifier.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_logo.dart';
+import '../../data/local/offline_invoice_queue.dart';
 import '../../data/models/shop.dart';
+import 'widgets/offline_queue_sheet.dart';
 
 /// Web-like shell (sidebar + header) on tablet/desktop; mobile uses drawer + optional bottom nav.
 class AppShell extends StatefulWidget {
@@ -37,7 +43,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   static List<_NavDest> _mobileDestinations(AuthSession auth) {
-    if (auth.hasRole('doctor')) {
+    if (auth.hasRole(AppRoles.doctor)) {
       return [
         const _NavDest(
           label: 'Home',
@@ -45,21 +51,21 @@ class _AppShellState extends State<AppShell> {
           activeIcon: Icons.dashboard_rounded,
           location: '/dashboard',
         ),
-        if (auth.hasPermission('patient_appointments.view'))
+        if (auth.hasPermission(AppPermissions.patientAppointmentsView))
           const _NavDest(
             label: 'Appts',
             icon: Icons.event_outlined,
             activeIcon: Icons.event_rounded,
             location: '/emr/appointments',
           ),
-        if (auth.hasPermission('emr.visits.view'))
+        if (auth.hasPermission(AppPermissions.emrVisitsView))
           const _NavDest(
             label: 'Visits',
             icon: Icons.medical_services_outlined,
             activeIcon: Icons.medical_services_rounded,
             location: '/emr/visits',
           ),
-        if (auth.hasPermission('emr.reminders.view'))
+        if (auth.hasPermission(AppPermissions.emrRemindersView))
           const _NavDest(
             label: 'Reminders',
             icon: Icons.notifications_outlined,
@@ -68,12 +74,49 @@ class _AppShellState extends State<AppShell> {
           ),
       ];
     }
-    return const [
-      _NavDest(label: 'Home', icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, location: '/dashboard'),
-      _NavDest(label: 'POS', icon: Icons.point_of_sale_outlined, activeIcon: Icons.point_of_sale_rounded, location: '/pos'),
-      _NavDest(label: 'Customers', icon: Icons.people_outline_rounded, activeIcon: Icons.people_rounded, location: '/customers'),
-      _NavDest(label: 'Invoices', icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded, location: '/invoices'),
-    ];
+
+    final items = <_NavDest>[];
+    if (!auth.hasRole(AppRoles.cashier)) {
+      items.add(const _NavDest(
+        label: 'Home',
+        icon: Icons.dashboard_outlined,
+        activeIcon: Icons.dashboard_rounded,
+        location: '/dashboard',
+      ));
+    }
+    if (auth.hasPermission(AppPermissions.invoicesCreate)) {
+      items.add(const _NavDest(
+        label: 'POS',
+        icon: Icons.point_of_sale_outlined,
+        activeIcon: Icons.point_of_sale_rounded,
+        location: '/pos',
+      ));
+    }
+    if (auth.hasPermission(AppPermissions.customersView)) {
+      items.add(const _NavDest(
+        label: 'Customers',
+        icon: Icons.people_outline_rounded,
+        activeIcon: Icons.people_rounded,
+        location: '/customers',
+      ));
+    }
+    if (auth.hasPermission(AppPermissions.invoicesView)) {
+      items.add(const _NavDest(
+        label: 'Invoices',
+        icon: Icons.receipt_long_outlined,
+        activeIcon: Icons.receipt_long_rounded,
+        location: '/invoices',
+      ));
+    }
+    if (items.isEmpty) {
+      items.add(_NavDest(
+        label: 'Home',
+        icon: Icons.dashboard_outlined,
+        activeIcon: Icons.dashboard_rounded,
+        location: auth.homeRoute,
+      ));
+    }
+    return items;
   }
 
   @override
@@ -240,12 +283,26 @@ class _DesktopShellState extends State<_DesktopShell> {
   bool _collapsed = false;
   List<Branch> _branches = [];
   bool _loadingBranches = false;
+  int _offlinePending = 0;
 
   @override
   void initState() {
     super.initState();
     _loadSidebarPref();
     _loadBranches();
+    _refreshOfflineCount();
+  }
+
+  Future<void> _refreshOfflineCount() async {
+    try {
+      final count = await context.read<OfflineInvoiceQueue>().pendingCount();
+      if (mounted) setState(() => _offlinePending = count);
+    } catch (_) {}
+  }
+
+  Future<void> _handleSync() async {
+    await widget.onSync();
+    await _refreshOfflineCount();
   }
 
   Future<void> _loadSidebarPref() async {
@@ -307,7 +364,12 @@ class _DesktopShellState extends State<_DesktopShell> {
     final showSubtitle = subtitle.isNotEmpty && width >= 900;
     final showSearch = width >= 1000;
 
-    return Scaffold(
+    return KeyboardShortcutHandler(
+      shortcuts: {
+        ShortcutKey.ctrl(LogicalKeyboardKey.keyK): () =>
+            showCommandPalette(context, widget.auth),
+      },
+      child: Scaffold(
       body: Row(
         children: [
           AnimatedContainer(
@@ -540,8 +602,20 @@ class _DesktopShellState extends State<_DesktopShell> {
                       ],
                       _OnlineChip(connectivity: widget.connectivity),
                       const SizedBox(width: 8),
+                      if (_offlinePending > 0)
+                        Badge(
+                          label: Text('$_offlinePending'),
+                          child: IconButton(
+                            tooltip: 'Pending offline invoices',
+                            icon: const Icon(Icons.cloud_queue_outlined, color: AppTheme.textSecondary),
+                            onPressed: () async {
+                              await OfflineQueueSheet.show(context);
+                              await _refreshOfflineCount();
+                            },
+                          ),
+                        ),
                       TextButton.icon(
-                        onPressed: widget.onSync,
+                        onPressed: _handleSync,
                         icon: Icon(Icons.cloud_upload_outlined, size: ic(18)),
                         label: const Text('Sync'),
                       ),
@@ -560,9 +634,16 @@ class _DesktopShellState extends State<_DesktopShell> {
                         },
                       ),
                       IconButton(
+                        tooltip: 'Command palette (Ctrl+K)',
+                        icon: const Icon(Icons.manage_search_rounded),
+                        onPressed: () => showCommandPalette(context, widget.auth),
+                      ),
+                      IconButton(
                         tooltip: 'Settings',
                         icon: const Icon(Icons.settings_outlined, color: AppTheme.textSecondary),
-                        onPressed: () => context.go('/settings'),
+                        onPressed: widget.auth.settingsRoute != null
+                            ? () => context.go(widget.auth.settingsRoute!)
+                            : null,
                       ),
                     ],
                   ),
@@ -573,6 +654,7 @@ class _DesktopShellState extends State<_DesktopShell> {
           ),
         ],
       ),
+    ),
     );
   }
 }
@@ -624,92 +706,59 @@ class _OnlineChip extends StatelessWidget {
 }
 
 
-/// Global command-style search in the desktop top bar. Submitting jumps to the
-/// first navigation item whose label matches the query.
-class _TopSearchBox extends StatefulWidget {
+/// Global search in the desktop top bar — opens the command palette (Ctrl+K).
+class _TopSearchBox extends StatelessWidget {
   const _TopSearchBox({required this.auth});
 
   final AuthSession auth;
-
-  @override
-  State<_TopSearchBox> createState() => _TopSearchBoxState();
-}
-
-class _TopSearchBoxState extends State<_TopSearchBox> {
-  final _controller = TextEditingController();
-  final _focus = FocusNode();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  void _submit(String value) {
-    final q = value.trim().toLowerCase();
-    if (q.isEmpty) return;
-    for (final m in _menuItems(widget.auth)) {
-      if (!m.isHeader && m.path != null && m.label.toLowerCase().contains(q)) {
-        _controller.clear();
-        _focus.unfocus();
-        context.go(m.path!);
-        return;
-      }
-    }
-    AppMessenger.show(context,
-      SnackBar(content: Text('No match for "$value"'), behavior: SnackBarBehavior.floating),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final showShortcut = constraints.maxWidth > 220;
-        return Container(
-          height: 42,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: AppTheme.background,
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.search_rounded, size: 20, color: AppTheme.textSecondary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focus,
-                  textInputAction: TextInputAction.search,
-                  onSubmitted: _submit,
-                  decoration: const InputDecoration(
-                    isCollapsed: true,
-                    border: InputBorder.none,
-                    hintText: 'Search anything...',
-                    hintStyle: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
-                  ),
-                  style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
-                ),
+            onTap: () => showCommandPalette(context, auth),
+            child: Container(
+              height: 42,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.background,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-              if (showShortcut) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+              child: Row(
+                children: [
+                  const Icon(Icons.search_rounded, size: 20, color: AppTheme.textSecondary),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Search customers, invoices, visits…',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  child: const Text(
-                    'Ctrl + K',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
-                  ),
-                ),
-              ],
-            ],
+                  if (showShortcut) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: const Text(
+                        'Ctrl + K',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         );
       },

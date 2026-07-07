@@ -1,319 +1,183 @@
 import 'package:flutter/material.dart';
-import 'package:mobile/core/messaging/app_messenger.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/responsive/breakpoints.dart';
+import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/paginated_data_table.dart';
+import '../../core/widgets/table_column_def.dart';
 import '../../data/models/emr.dart';
+import 'widgets/appointment_week_calendar.dart';
 
 class PatientAppointmentListScreen extends StatefulWidget {
   const PatientAppointmentListScreen({super.key});
 
   @override
-  State<PatientAppointmentListScreen> createState() =>
-      _PatientAppointmentListScreenState();
+  State<PatientAppointmentListScreen> createState() => _PatientAppointmentListScreenState();
 }
 
-class _PatientAppointmentListScreenState
-    extends State<PatientAppointmentListScreen> {
-  late Future<List<PatientAppointment>> _todayFuture;
-  late Future<List<PatientAppointment>> _listFuture;
+class _PatientAppointmentListScreenState extends State<PatientAppointmentListScreen> {
+  bool _calendarView = false;
+  String _statusFilter = 'all';
+  final _search = TextEditingController();
+  DateTime _weekStartDate = DateTime(
+    mondayOfWeek(DateTime.now()).year,
+    mondayOfWeek(DateTime.now()).month,
+    mondayOfWeek(DateTime.now()).day,
+  );
 
   @override
-  void initState() {
-    super.initState();
-    _reload();
+  void dispose() {
+    _search.dispose();
+    super.dispose();
   }
 
-  void _reload() {
-    final emr = context.read<AppServices>().emr;
-    _todayFuture = emr.todayAppointments();
-    _listFuture = emr.listAppointments(query: {'per_page': 30});
-  }
-
-  void _refresh() => setState(_reload);
-
-  Future<void> _confirm(PatientAppointment a) async {
-    try {
-      await context.read<AppServices>().emr.confirmAppointment(a.id);
-      if (mounted) {
-        AppMessenger.show(context,
-          const SnackBar(content: Text('Appointment confirmed')),
-        );
-        _refresh();
-      }
-    } catch (e) {
-      if (mounted) {
-        AppMessenger.show(context,SnackBar(content: Text('$e')));
-      }
-    }
-  }
-
-  Future<void> _cancel(PatientAppointment a) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Cancel appointment?'),
-        content: Text('Cancel ${a.pet?.name ?? 'this patient'}?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('No')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Yes')),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    try {
-      await context.read<AppServices>().emr.cancelAppointment(a.id);
-      if (mounted) {
-        AppMessenger.show(context,
-          const SnackBar(content: Text('Appointment cancelled')),
-        );
-        _refresh();
-      }
-    } catch (e) {
-      if (mounted) {
-        AppMessenger.show(context,SnackBar(content: Text('$e')));
-      }
-    }
-  }
-
-  void _startVisit(PatientAppointment a) {
-    context.push('/emr/visits/new?appointment_id=${a.id}');
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'confirmed':
-        return AppTheme.accent;
-      case 'in_progress':
-        return AppTheme.primary;
-      case 'completed':
-        return AppTheme.textSecondary;
-      case 'cancelled':
-      case 'no_show':
-        return AppTheme.danger;
-      default:
-        return AppTheme.warning;
+  void _openAppointment(PatientAppointment a) {
+    if (a.visitId != null) {
+      context.push('/emr/visits/${a.visitId}');
+    } else {
+      context.push('/emr/appointments/${a.id}/edit');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthSession>();
-    final canCreate = auth.hasPermission('emr.visits.create');
-    final canCreateAppt = auth.hasPermission('patient_appointments.create');
-    final canEdit = auth.hasPermission('patient_appointments.edit');
-    final canCancel = auth.hasPermission('patient_appointments.cancel');
+    final services = context.read<AppServices>();
+    final canCreate =
+        context.watch<AuthSession>().hasPermission(AppPermissions.patientAppointmentsCreate);
+    final desktop = useWebLikeShell(context);
+    final search = _search.text.trim();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      floatingActionButton: canCreateAppt
+      floatingActionButton: canCreate && !_calendarView
           ? FloatingActionButton.extended(
               onPressed: () => context.push('/emr/appointments/new'),
               icon: const Icon(Icons.add),
               label: const Text('New appointment'),
             )
-          : canCreate
-              ? FloatingActionButton.extended(
-                  onPressed: () => context.push('/emr/visits/new'),
-                  icon: const Icon(Icons.add),
-                  label: const Text('New visit'),
-                )
-              : null,
-      body: RefreshIndicator(
-        onRefresh: () async => _refresh(),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              'Patient Appointments',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            FutureBuilder<List<PatientAppointment>>(
-              future: _todayFuture,
-              builder: (context, snap) {
-                if (!snap.hasData || snap.data!.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Today's schedule",
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    ...snap.data!.map((a) => _AppointmentCard(
-                          appointment: a,
-                          statusColor: _statusColor(a.status),
-                          onStartVisit: canCreate ? () => _startVisit(a) : null,
-                          onConfirm: canEdit && a.status == 'scheduled'
-                              ? () => _confirm(a)
-                              : null,
-                          onCancel: canCancel &&
-                                  !['completed', 'cancelled'].contains(a.status)
-                              ? () => _cancel(a)
-                              : null,
-                          onEdit: canEdit ? () => context.push('/emr/appointments/${a.id}/edit') : null,
-                        )),
-                    const SizedBox(height: 16),
-                  ],
-                );
-              },
-            ),
-            Text('Upcoming & recent',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            FutureBuilder<List<PatientAppointment>>(
-              future: _listFuture,
-              builder: (context, snap) {
-                if (snap.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snap.hasError) {
-                  return Text('${snap.error}');
-                }
-                final items = snap.data ?? [];
-                if (items.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: Text('No appointments found')),
-                  );
-                }
-                return Column(
-                  children: items
-                      .map((a) => _AppointmentCard(
-                            appointment: a,
-                            statusColor: _statusColor(a.status),
-                            onStartVisit: canCreate && a.visitId == null
-                                ? () => _startVisit(a)
-                                : null,
-                            onConfirm: canEdit && a.status == 'scheduled'
-                                ? () => _confirm(a)
-                                : null,
-                            onCancel: canCancel &&
-                                    !['completed', 'cancelled'].contains(a.status)
-                                ? () => _cancel(a)
-                                : null,
-                            onEdit: canEdit ? () => context.push('/emr/appointments/${a.id}/edit') : null,
-                          ))
-                      .toList(),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AppointmentCard extends StatelessWidget {
-  const _AppointmentCard({
-    required this.appointment,
-    required this.statusColor,
-    this.onStartVisit,
-    this.onConfirm,
-    this.onCancel,
-    this.onEdit,
-  });
-
-  final PatientAppointment appointment;
-  final Color statusColor;
-  final VoidCallback? onStartVisit;
-  final VoidCallback? onConfirm;
-  final VoidCallback? onCancel;
-  final VoidCallback? onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    final time = appointment.displayTime;
-    final owner = appointment.customer?.name ??
-        appointment.pet?.customerName;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+          : null,
+      body: Column(
+        children: [
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Column(
               children: [
-                Expanded(
-                  child: Text(
-                    appointment.pet?.name ?? 'Pet #${appointment.petId}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+                Row(
+                  children: [
+                    if (desktop)
+                      SegmentedButton<bool>(
+                        segments: const [
+                          ButtonSegment(value: false, label: Text('List'), icon: Icon(Icons.list)),
+                          ButtonSegment(value: true, label: Text('Week'), icon: Icon(Icons.calendar_view_week)),
+                        ],
+                        selected: {_calendarView},
+                        onSelectionChanged: (s) => setState(() => _calendarView = s.first),
+                      ),
+                    const Spacer(),
+                    if (!_calendarView)
+                      SizedBox(
+                        width: 220,
+                        child: TextField(
+                          controller: _search,
+                          decoration: const InputDecoration(
+                            hintText: 'Search…',
+                            isDense: true,
+                            prefixIcon: Icon(Icons.search, size: 20),
+                          ),
+                          onSubmitted: (_) => setState(() {}),
+                        ),
+                      ),
+                  ],
+                ),
+                if (!_calendarView) ...[
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: ['all', 'scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled']
+                          .map(
+                            (s) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: FilterChip(
+                                label: Text(s == 'all' ? 'All' : s.replaceAll('_', ' ')),
+                                selected: _statusFilter == s,
+                                onSelected: (_) => setState(() => _statusFilter = s),
+                              ),
+                            ),
+                          )
+                          .toList(),
                     ),
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    appointment.status,
-                    style: TextStyle(color: statusColor, fontSize: 12),
-                  ),
-                ),
+                ],
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              '$time · ${appointment.displayDate} · ${appointment.appointmentType}',
-              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-            ),
-            if (owner != null && owner.isNotEmpty)
-              Text('Owner: $owner',
-                  style: const TextStyle(fontSize: 13)),
-            if (appointment.doctor != null)
-              Text('Dr. ${appointment.doctor!.name}',
-                  style: const TextStyle(fontSize: 13)),
-            if (appointment.chiefComplaint != null &&
-                appointment.chiefComplaint!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(appointment.chiefComplaint!,
-                    style: const TextStyle(fontSize: 13)),
-              ),
-            if (onStartVisit != null || onConfirm != null || onCancel != null || onEdit != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Wrap(
-                  spacing: 8,
-                  children: [
-                    if (onStartVisit != null)
-                      FilledButton.tonal(
-                        onPressed: onStartVisit,
-                        child: const Text('Start visit'),
-                      ),
-                    if (onEdit != null)
-                      OutlinedButton(
-                        onPressed: onEdit,
-                        child: const Text('Edit'),
-                      ),
-                    if (onConfirm != null)
-                      OutlinedButton(
-                        onPressed: onConfirm,
-                        child: const Text('Confirm'),
-                      ),
-                    if (onCancel != null)
-                      TextButton(
-                        onPressed: onCancel,
-                        child: const Text('Cancel'),
-                      ),
-                  ],
-                ),
-              ),
-          ],
-        ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: _calendarView
+                ? Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: AppointmentWeekCalendar(
+                      weekStart: _weekStartDate,
+                      onWeekChanged: (d) => setState(() {
+                        _weekStartDate = DateTime(d.year, d.month, d.day);
+                      }),
+                      onAppointmentTap: _openAppointment,
+                    ),
+                  )
+                : AppPaginatedTable<PatientAppointment>(
+                    key: ValueKey('$_statusFilter-$search'),
+                    loadPage: ({required page, required perPage}) =>
+                        services.emr.listAppointmentsPaginated(
+                          page: page,
+                          perPage: perPage,
+                          status: _statusFilter == 'all' ? null : _statusFilter,
+                          search: search.length >= 2 ? search : null,
+                        ),
+                    onRowTap: _openAppointment,
+                    columns: const [
+                      TableColumnDef(label: 'Appt #', flex: 1, cellBuilder: _numberCell),
+                      TableColumnDef(label: 'Pet', flex: 1.2, cellBuilder: _petCell),
+                      TableColumnDef(label: 'Owner', flex: 1.3, cellBuilder: _ownerCell),
+                      TableColumnDef(label: 'Doctor', flex: 1.2, cellBuilder: _doctorCell),
+                      TableColumnDef(label: 'Date', flex: 1, cellBuilder: _dateCell),
+                      TableColumnDef(label: 'Time', flex: 0.8, cellBuilder: _timeCell),
+                      TableColumnDef(label: 'Status', flex: 0.9, align: TextAlign.center, cellBuilder: _statusCell),
+                    ],
+                  ),
+          ),
+        ],
       ),
     );
   }
+
+  static Widget _numberCell(BuildContext context, PatientAppointment a) => Text(
+        a.appointmentNumber ?? '#${a.id}',
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      );
+
+  static Widget _petCell(BuildContext context, PatientAppointment a) =>
+      Text(a.pet?.name ?? '—');
+
+  static Widget _ownerCell(BuildContext context, PatientAppointment a) =>
+      Text(a.customer?.name ?? '—');
+
+  static Widget _doctorCell(BuildContext context, PatientAppointment a) =>
+      Text(a.doctor?.name ?? '—');
+
+  static Widget _dateCell(BuildContext context, PatientAppointment a) =>
+      Text(a.displayDate);
+
+  static Widget _timeCell(BuildContext context, PatientAppointment a) =>
+      Text(a.displayTime);
+
+  static Widget _statusCell(BuildContext context, PatientAppointment a) => Text(
+        a.status,
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+      );
 }

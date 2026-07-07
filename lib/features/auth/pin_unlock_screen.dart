@@ -28,7 +28,13 @@ class _PinUnlockScreenState extends State<PinUnlockScreen> {
     });
     try {
       await context.read<AuthSession>().verifyPin(pin);
-      if (mounted) context.go('/dashboard');
+      if (!mounted) return;
+      final auth = context.read<AuthSession>();
+      if (!auth.cashierPlatformAllowed) {
+        context.go('/cashier-desktop-only');
+        return;
+      }
+      context.go(auth.homeRoute);
     } on ApiException catch (e) {
       _pinKey.currentState?.clear();
       setState(() {

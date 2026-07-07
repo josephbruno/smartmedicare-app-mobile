@@ -11,9 +11,29 @@ class ProductService {
   final ApiClient _client;
 
   Future<List<Product>> list({Map<String, dynamic>? query}) async {
+    final result = await listPaginated(
+      page: int.tryParse(query?['page']?.toString() ?? '') ?? 1,
+      perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
+      search: query?['search']?.toString(),
+      type: query?['type']?.toString(),
+    );
+    return result.items;
+  }
+
+  Future<({List<Product> items, PaginationMeta? meta})> listPaginated({
+    int page = 1,
+    int perPage = 20,
+    String? search,
+    String? type,
+  }) async {
     try {
-      final res = await _client.get('/products', queryParameters: query);
-      return parseEnvelopeData(res, (data) => listFromData(data, Product.fromJson));
+      final res = await _client.get('/products', queryParameters: {
+        'page': page,
+        'per_page': perPage,
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (type != null && type.isNotEmpty) 'type': type,
+      });
+      return parseEnvelopeList(res, Product.fromJson);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }

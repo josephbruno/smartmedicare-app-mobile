@@ -1,241 +1,162 @@
 /// Permission constants for the entire app.
-/// These match the backend Spatie Permissions.
+/// These match the backend Spatie permission names exactly.
 abstract class AppPermissions {
-  // Auth & Shop
-  static const String shopManage = 'shop.manage';
-  static const String usersManage = 'users.manage';
-  static const String rolesManage = 'roles.manage';
-
-  // POS & Billing
-  static const String posManage = 'pos.manage';
-  static const String billingCreate = 'billing.create';
-  static const String billingView = 'billing.view';
-  static const String billingDelete = 'billing.delete';
+  // Products & catalog
+  static const String productsView = 'products.view';
+  static const String productsCreate = 'products.create';
+  static const String productsEdit = 'products.edit';
+  static const String productsDelete = 'products.delete';
 
   // Inventory
-  static const String inventoryManage = 'inventory.manage';
-  static const String productsManage = 'products.manage';
-  static const String purchasesManage = 'purchases.manage';
+  static const String inventoryView = 'inventory.view';
+  static const String inventoryAdjust = 'inventory.adjust';
+  static const String inventoryTransfer = 'inventory.transfer';
+
+  // Purchases & suppliers
   static const String purchasesView = 'purchases.view';
+  static const String purchasesCreate = 'purchases.create';
+  static const String purchasesEdit = 'purchases.edit';
+  static const String purchasesDelete = 'purchases.delete';
+  static const String suppliersView = 'suppliers.view';
+  static const String suppliersCreate = 'suppliers.create';
+  static const String suppliersEdit = 'suppliers.edit';
+  static const String suppliersDelete = 'suppliers.delete';
 
-  // Customers
-  static const String customersManage = 'customers.manage';
+  // Billing
+  static const String invoicesView = 'invoices.view';
+  static const String invoicesCreate = 'invoices.create';
+  static const String invoicesCancel = 'invoices.cancel';
+  static const String paymentsView = 'payments.view';
+  static const String paymentsCreate = 'payments.create';
+  static const String discountsApply = 'discounts.apply';
+
+  // Customers & pets
   static const String customersView = 'customers.view';
+  static const String customersCreate = 'customers.create';
+  static const String customersEdit = 'customers.edit';
+  static const String customersDelete = 'customers.delete';
+  static const String petsView = 'pets.view';
+  static const String petsCreate = 'pets.create';
+  static const String petsEdit = 'pets.edit';
 
-  // EMR & Appointments
-  static const String emrManage = 'emr.manage';
-  static const String appointmentsManage = 'appointments.manage';
-  static const String appointmentsView = 'appointments.view';
-
-  // Expenses
-  static const String expensesManage = 'expenses.manage';
+  // Expenses & reports
   static const String expensesView = 'expenses.view';
-
-  // Reports
+  static const String expensesCreate = 'expenses.create';
+  static const String expensesEdit = 'expenses.edit';
+  static const String expensesDelete = 'expenses.delete';
   static const String reportsView = 'reports.view';
   static const String reportsExport = 'reports.export';
+  static const String analyticsView = 'analytics.view';
 
-  // Settings
-  static const String settingsView = 'settings.view';
-  static const String settingsEdit = 'settings.edit';
+  // Users, roles & shop
+  static const String usersView = 'users.view';
+  static const String usersCreate = 'users.create';
+  static const String usersEdit = 'users.edit';
+  static const String usersDelete = 'users.delete';
+  static const String rolesManage = 'roles.manage';
+  static const String shopManage = 'shop.manage';
+  static const String branchManage = 'branch.manage';
+  static const String doctorsManage = 'doctors.manage';
 
-  // All permission keys for reference
-  static const List<String> allPermissions = [
-    shopManage,
-    usersManage,
-    rolesManage,
-    posManage,
-    billingCreate,
-    billingView,
-    billingDelete,
-    inventoryManage,
-    productsManage,
-    purchasesManage,
-    purchasesView,
-    customersManage,
-    customersView,
-    emrManage,
-    appointmentsManage,
-    appointmentsView,
-    expensesManage,
-    expensesView,
-    reportsView,
-    reportsExport,
-    settingsView,
-    settingsEdit,
-  ];
+  // EMR
+  static const String emrVisitsView = 'emr.visits.view';
+  static const String emrVisitsCreate = 'emr.visits.create';
+  static const String emrVisitsEdit = 'emr.visits.edit';
+  static const String emrVisitsBill = 'emr.visits.bill';
+  static const String emrDewormingView = 'emr.deworming.view';
+  static const String emrDewormingCreate = 'emr.deworming.create';
+  static const String emrSurgeriesView = 'emr.surgeries.view';
+  static const String emrSurgeriesCreate = 'emr.surgeries.create';
+  static const String emrLabReportsView = 'emr.lab_reports.view';
+  static const String emrLabReportsUpload = 'emr.lab_reports.upload';
+  static const String emrDocumentsView = 'emr.documents.view';
+  static const String emrDocumentsUpload = 'emr.documents.upload';
+  static const String emrRemindersView = 'emr.reminders.view';
+
+  // Appointments
+  static const String patientAppointmentsView = 'patient_appointments.view';
+  static const String patientAppointmentsCreate = 'patient_appointments.create';
+  static const String patientAppointmentsEdit = 'patient_appointments.edit';
+  static const String patientAppointmentsCancel = 'patient_appointments.cancel';
 }
 
-/// Role constants that match backend roles.
+/// Role constants that match backend roles (single-clinic model).
 abstract class AppRoles {
   static const String superAdmin = 'super_admin';
-  static const String shopOwner = 'shop_owner';
   static const String branchManager = 'branch_manager';
+  static const String doctor = 'doctor';
   static const String cashier = 'cashier';
-  static const String inventoryStaff = 'inventory_staff';
-  static const String accountant = 'accountant';
 
   static const List<String> allRoles = [
     superAdmin,
-    shopOwner,
     branchManager,
+    doctor,
     cashier,
-    inventoryStaff,
-    accountant,
+  ];
+
+  /// Roles assignable by clinic owner when creating staff.
+  static const List<String> staffRoles = [
+    branchManager,
+    doctor,
+    cashier,
   ];
 }
 
 /// Permission service for checking user permissions and roles.
-/// This should be used wherever permission checks are needed.
 class PermissionService {
-  /// Map of role to default permissions.
-  /// These are baseline permissions; backend may return more.
-  static const Map<String, List<String>> rolePermissionMap = {
-    AppRoles.superAdmin: ['*'], // All permissions
-    AppRoles.shopOwner: [
-      AppPermissions.shopManage,
-      AppPermissions.usersManage,
-      AppPermissions.rolesManage,
-      AppPermissions.posManage,
-      AppPermissions.billingView,
-      AppPermissions.billingCreate,
-      AppPermissions.inventoryManage,
-      AppPermissions.customersManage,
-      AppPermissions.emrManage,
-      AppPermissions.appointmentsManage,
-      AppPermissions.expensesView,
-      AppPermissions.reportsView,
-      AppPermissions.settingsView,
-      AppPermissions.settingsEdit,
-    ],
-    AppRoles.branchManager: [
-      AppPermissions.posManage,
-      AppPermissions.billingCreate,
-      AppPermissions.billingView,
-      AppPermissions.inventoryManage,
-      AppPermissions.customersManage,
-      AppPermissions.customersView,
-      AppPermissions.emrManage,
-      AppPermissions.appointmentsManage,
-      AppPermissions.reportsView,
-      AppPermissions.expensesManage,
-    ],
-    AppRoles.cashier: [
-      AppPermissions.posManage,
-      AppPermissions.billingCreate,
-      AppPermissions.customersView,
-    ],
-    AppRoles.inventoryStaff: [
-      AppPermissions.inventoryManage,
-      AppPermissions.productsManage,
-      AppPermissions.purchasesManage,
-      AppPermissions.customersView,
-    ],
-    AppRoles.accountant: [
-      AppPermissions.billingView,
-      AppPermissions.expensesManage,
-      AppPermissions.expensesView,
-      AppPermissions.reportsView,
-      AppPermissions.reportsExport,
-      AppPermissions.settingsView,
-    ],
-  };
-
-  /// Check if a user has a specific permission.
-  /// Super admins always return true.
-  static bool hasPermission(List<String> userPermissions, String permission) {
+  static bool hasPermission(
+    List<String> userPermissions,
+    String permission, {
+    List<String> userRoles = const [],
+  }) {
+    if (isSuperAdmin(userRoles)) return true;
     if (userPermissions.contains('*')) return true;
     return userPermissions.contains(permission);
   }
 
-  /// Check if a user has ANY of the provided permissions.
   static bool hasAnyPermission(
     List<String> userPermissions,
-    List<String> permissions,
-  ) {
+    List<String> permissions, {
+    List<String> userRoles = const [],
+  }) {
+    if (isSuperAdmin(userRoles)) return true;
     if (userPermissions.contains('*')) return true;
     return permissions.any((p) => userPermissions.contains(p));
   }
 
-  /// Check if a user has ALL of the provided permissions.
   static bool hasAllPermissions(
     List<String> userPermissions,
-    List<String> permissions,
-  ) {
+    List<String> permissions, {
+    List<String> userRoles = const [],
+  }) {
+    if (isSuperAdmin(userRoles)) return true;
     if (userPermissions.contains('*')) return true;
     return permissions.every((p) => userPermissions.contains(p));
   }
 
-  /// Check if a user has a specific role.
   static bool hasRole(List<String> userRoles, String role) {
     return userRoles.contains(role);
   }
 
-  /// Check if a user has ANY of the provided roles.
   static bool hasAnyRole(List<String> userRoles, List<String> roles) {
     return roles.any((r) => userRoles.contains(r));
   }
 
-  /// Check if a user is a super admin.
   static bool isSuperAdmin(List<String> userRoles) {
     return userRoles.contains(AppRoles.superAdmin);
   }
 
-  /// Get all permissions for a role (from the map, not backend).
-  static List<String> getDefaultPermissionsForRole(String role) {
-    return rolePermissionMap[role] ?? [];
-  }
-
-  /// Get all roles that have a specific permission.
-  static List<String> getRolesWithPermission(String permission) {
-    final roles = <String>[];
-    rolePermissionMap.forEach((role, permissions) {
-      if (permissions.contains('*') || permissions.contains(permission)) {
-        roles.add(role);
-      }
-    });
-    return roles;
-  }
-
-  /// Get a human-readable role name.
   static String getRoleDisplayName(String role) {
     const roleNames = {
-      AppRoles.superAdmin: 'Super Admin',
-      AppRoles.shopOwner: 'Shop Owner',
+      AppRoles.superAdmin: 'Clinic Owner',
       AppRoles.branchManager: 'Branch Manager',
+      AppRoles.doctor: 'Doctor',
       AppRoles.cashier: 'Cashier',
-      AppRoles.inventoryStaff: 'Inventory Staff',
-      AppRoles.accountant: 'Accountant',
     };
     return roleNames[role] ?? role;
   }
 
-  /// Get a human-readable permission name.
   static String getPermissionDisplayName(String permission) {
-    const permissionNames = {
-      AppPermissions.shopManage: 'Manage Shop Settings',
-      AppPermissions.usersManage: 'Manage Users',
-      AppPermissions.rolesManage: 'Manage Roles',
-      AppPermissions.posManage: 'Manage POS',
-      AppPermissions.billingCreate: 'Create Invoices',
-      AppPermissions.billingView: 'View Invoices',
-      AppPermissions.billingDelete: 'Delete Invoices',
-      AppPermissions.inventoryManage: 'Manage Inventory',
-      AppPermissions.productsManage: 'Manage Products',
-      AppPermissions.purchasesManage: 'Manage Purchases',
-      AppPermissions.purchasesView: 'View Purchases',
-      AppPermissions.customersManage: 'Manage Customers',
-      AppPermissions.customersView: 'View Customers',
-      AppPermissions.emrManage: 'Manage Medical Records',
-      AppPermissions.appointmentsManage: 'Manage Appointments',
-      AppPermissions.appointmentsView: 'View Appointments',
-      AppPermissions.expensesManage: 'Manage Expenses',
-      AppPermissions.expensesView: 'View Expenses',
-      AppPermissions.reportsView: 'View Reports',
-      AppPermissions.reportsExport: 'Export Reports',
-      AppPermissions.settingsView: 'View Settings',
-      AppPermissions.settingsEdit: 'Edit Settings',
-    };
-    return permissionNames[permission] ?? permission;
+    return permission.replaceAll('.', ' ').replaceAll('_', ' ');
   }
 }

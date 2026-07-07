@@ -4,17 +4,47 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
+import '../../core/app_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/dashboard_data.dart';
 import 'dashboard_view_model.dart';
 import 'widgets/dashboard_widgets.dart';
+import 'widgets/branch_manager_dashboard.dart';
+import 'widgets/role_dashboard_sections.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthSession>();
+
+    if (auth.hasRole(AppRoles.cashier) && AppConfig.isCashierPlatform) {
+      return const SingleChildScrollView(
+        physics: AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 36),
+        child: CashierDashboardSection(),
+      );
+    }
+
+    if (auth.hasRole(AppRoles.doctor)) {
+      return const SingleChildScrollView(
+        physics: AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 36),
+        child: DoctorDashboardSection(),
+      );
+    }
+
+    if (auth.hasRole(AppRoles.branchManager) && !auth.hasRole(AppRoles.superAdmin)) {
+      return const SingleChildScrollView(
+        physics: AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(24, 24, 24, 36),
+        child: BranchManagerDashboardSection(),
+      );
+    }
+
     return ChangeNotifierProvider(
       create: (c) => DashboardViewModel(c.read<AppServices>())..load(),
       child: Consumer<DashboardViewModel>(
@@ -96,12 +126,24 @@ class _DashboardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.read<AuthSession>();
-
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
-      child: LayoutBuilder(
+      child: _ManagerDashboardContent(d: d),
+    );
+  }
+}
+
+class _ManagerDashboardContent extends StatelessWidget {
+  const _ManagerDashboardContent({required this.d});
+
+  final DashboardData d;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.read<AuthSession>();
+
+    return LayoutBuilder(
         builder: (context, constraints) {
           final w = constraints.maxWidth;
           const spacing = 16.0;
@@ -131,7 +173,6 @@ class _DashboardBody extends StatelessWidget {
             ],
           );
         },
-      ),
     );
   }
 
@@ -214,6 +255,8 @@ class _DashboardBody extends StatelessWidget {
   }
 
   Widget _branchAndSummary(BuildContext context, {required bool wide, required double width, required double spacing}) {
+    final auth = context.read<AuthSession>();
+    final canViewReports = auth.hasPermission(AppPermissions.reportsView);
     final header = DashboardSectionHeader(
       icon: Icons.apartment_rounded,
       title: 'Performance by Branch',
@@ -221,13 +264,14 @@ class _DashboardBody extends StatelessWidget {
         spacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          _dateRangeChip(context),
-          OutlinedButton.icon(
-            onPressed: () => context.go('/reports/sales'),
-            icon: const Icon(Icons.assessment_outlined, size: 18),
-            label: const Text('View Report'),
-            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
-          ),
+          if (canViewReports) _dateRangeChip(context),
+          if (canViewReports)
+            OutlinedButton.icon(
+              onPressed: () => context.go('/reports/sales'),
+              icon: const Icon(Icons.assessment_outlined, size: 18),
+              label: const Text('View Report'),
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
+            ),
         ],
       ),
     );
@@ -296,24 +340,27 @@ class _DashboardBody extends StatelessWidget {
   }
 
   List<Widget> _branchCards(BuildContext context) {
+    final canViewReports = context.read<AuthSession>().hasPermission(AppPermissions.reportsView);
     final branches = d.branches ?? const <BranchDashboardStat>[];
     return [
       for (var i = 0; i < branches.length; i++)
         BranchPerformanceCard(
           branch: branches[i],
           color: kChartPalette[i % kChartPalette.length],
-          onView: () => context.go('/reports/sales'),
+          onView: canViewReports ? () => context.go('/reports/sales') : null,
         ),
     ];
   }
 
   Widget _salesSummary(BuildContext context) {
+    final auth = context.read<AuthSession>();
+    final canViewReports = auth.hasPermission(AppPermissions.reportsView);
     final data = _donutData();
     final total = data.fold<double>(0, (s, e) => s + e.value);
     return SalesSummaryCard(
       data: data,
       centerValue: '₹${total.toStringAsFixed(0)}',
-      onViewReport: () => context.go('/reports/sales'),
+      onViewReport: canViewReports ? () => context.go('/reports/sales') : null,
     );
   }
 
@@ -348,7 +395,7 @@ class _DashboardBody extends StatelessWidget {
 
   List<Widget> _quickActions(BuildContext context, AuthSession auth) {
     final actions = <Widget>[];
-    if (auth.hasPermission('invoices.create')) {
+    if (auth.hasPermission(AppPermissions.invoicesCreate)) {
       actions.add(QuickActionCard(
         icon: Icons.point_of_sale_rounded,
         label: 'New Sale',
@@ -357,7 +404,7 @@ class _DashboardBody extends StatelessWidget {
         onTap: () => context.go('/pos'),
       ));
     }
-    if (auth.hasPermission('products.view')) {
+    if (auth.hasPermission(AppPermissions.productsCreate)) {
       actions.add(QuickActionCard(
         icon: Icons.add_box_rounded,
         label: 'Add Product',
@@ -366,7 +413,7 @@ class _DashboardBody extends StatelessWidget {
         onTap: () => context.go('/products/new'),
       ));
     }
-    if (auth.hasPermission('patient_appointments.create')) {
+    if (auth.hasPermission(AppPermissions.patientAppointmentsCreate)) {
       actions.add(QuickActionCard(
         icon: Icons.event_available_rounded,
         label: 'New Appointment',
@@ -375,7 +422,7 @@ class _DashboardBody extends StatelessWidget {
         onTap: () => context.go('/emr/appointments/new'),
       ));
     }
-    if (auth.hasPermission('inventory.transfer')) {
+    if (auth.hasPermission(AppPermissions.inventoryTransfer)) {
       actions.add(QuickActionCard(
         icon: Icons.swap_horiz_rounded,
         label: 'Stock Transfer',

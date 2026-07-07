@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
+import '../models/api_response.dart';
 import '../models/shop.dart';
 import '../models/user.dart';
 
@@ -56,9 +57,23 @@ class UsersService {
   final ApiClient _client;
 
   Future<List<User>> list({Map<String, dynamic>? query}) async {
+    final result = await listPaginated(
+      page: int.tryParse(query?['page']?.toString() ?? '') ?? 1,
+      perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
+    );
+    return result.items;
+  }
+
+  Future<({List<User> items, PaginationMeta? meta})> listPaginated({
+    int page = 1,
+    int perPage = 20,
+  }) async {
     try {
-      final res = await _client.get('/users', queryParameters: query);
-      return parseEnvelopeData(res, (data) => listFromData(data, User.fromJson));
+      final res = await _client.get('/users', queryParameters: {
+        'page': page,
+        'per_page': perPage,
+      });
+      return parseEnvelopeList(res, User.fromJson);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }

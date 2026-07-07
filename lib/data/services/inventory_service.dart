@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
 import '../models/inventory.dart';
+import '../models/api_response.dart';
 import '../models/stock_transfer.dart';
 
 class InventoryService {
@@ -64,6 +65,19 @@ class InventoryService {
     }
   }
 
+  Future<({List<InventoryItem> items, PaginationMeta? meta})> listPaginated({
+    int page = 1,
+    int perPage = 20,
+    bool includeSummary = true,
+  }) async {
+    final result = await list(query: {
+      'page': page,
+      'per_page': perPage,
+      if (includeSummary) 'include_summary': true,
+    });
+    return (items: result.items, meta: result.pagination);
+  }
+
   Future<void> adjust(Map<String, dynamic> body) async {
     try {
       await _client.post('/inventory/adjust', data: body);
@@ -73,13 +87,26 @@ class InventoryService {
   }
 
   Future<List<StockTransfer>> listTransfers({Map<String, dynamic>? query}) async {
+    final result = await listTransfersPaginated(
+      page: int.tryParse(query?['page']?.toString() ?? '') ?? 1,
+      perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
+      direction: query?['direction']?.toString(),
+    );
+    return result.items;
+  }
+
+  Future<({List<StockTransfer> items, PaginationMeta? meta})> listTransfersPaginated({
+    int page = 1,
+    int perPage = 20,
+    String? direction,
+  }) async {
     try {
-      final res =
-          await _client.get('/inventory/transfers', queryParameters: query);
-      return parseEnvelopeData(
-        res,
-        (data) => listFromData(data, StockTransfer.fromJson),
-      );
+      final res = await _client.get('/inventory/transfers', queryParameters: {
+        'page': page,
+        'per_page': perPage,
+        if (direction != null && direction.isNotEmpty) 'direction': direction,
+      });
+      return parseEnvelopeList(res, StockTransfer.fromJson);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }

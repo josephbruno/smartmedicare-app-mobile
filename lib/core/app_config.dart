@@ -25,6 +25,10 @@ class AppConfig {
   static bool get isDesktopPlatform =>
       !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
+  /// Cashier POS is supported only on Windows and Linux desktop builds.
+  static bool get isCashierPlatform =>
+      !kIsWeb && (Platform.isWindows || Platform.isLinux);
+
   /// True on web and native desktop — used for larger fonts, icons, and dialogs.
   /// Native mobile (Android/iOS) is excluded.
   static bool get usesLargeUiScale => kIsWeb || isDesktopPlatform;

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/responsive/desktop_layout_helper.dart';
+import '../../core/widgets/paginated_data_table.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/inventory.dart';
 
@@ -148,9 +149,25 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: _dataTable(items),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final metrics = ResponsiveTableMetrics.fromFlexWidths(
+          context,
+          flexes: const [3, 1, 1, 1],
+          maxWidth: constraints.maxWidth,
+        );
+
+        return SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.horizontalPadding,
+            vertical: 16,
+          ),
+          child: ResponsiveTableContainer(
+            metrics: metrics,
+            child: _dataTable(items, metrics.tableWidth),
+          ),
+        );
+      },
     );
   }
 
@@ -172,65 +189,68 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
     );
   }
 
-  Widget _dataTable(List<StockAgeingItem> items) {
-    return Table(
-      columnWidths: const {
-        0: FlexColumnWidth(3),
-        1: FlexColumnWidth(1),
-        2: FlexColumnWidth(1),
-        3: FlexColumnWidth(1),
-      },
-      border: TableBorder.all(color: const Color(0xFFE2E8F0)),
-      children: [
-        TableRow(
-          decoration: BoxDecoration(color: Colors.grey.shade100),
-          children: [
-            _headerCell('Product'),
-            _headerCell('Stock', align: TextAlign.center),
-            _headerCell('Days idle', align: TextAlign.center),
-            _headerCell('Value', align: TextAlign.right),
-          ],
-        ),
-        ...items.map((item) {
-          final color = _urgencyColor(item);
-          return TableRow(
+  Widget _dataTable(List<StockAgeingItem> items, double tableWidth) {
+    return SizedBox(
+      width: tableWidth,
+      child: Table(
+        columnWidths: const {
+          0: FlexColumnWidth(3),
+          1: FlexColumnWidth(1),
+          2: FlexColumnWidth(1),
+          3: FlexColumnWidth(1),
+        },
+        border: TableBorder.all(color: const Color(0xFFE2E8F0)),
+        children: [
+          TableRow(
+            decoration: BoxDecoration(color: Colors.grey.shade100),
             children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    if (item.sku != null)
-                      Text(item.sku!, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Center(child: Text(item.currentStock.toStringAsFixed(0))),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Center(
-                  child: Text(
-                    '${item.daysSinceLastSale ?? 0}',
-                    style: TextStyle(color: color, fontWeight: FontWeight.w700),
+              _headerCell('Product'),
+              _headerCell('Stock', align: TextAlign.center),
+              _headerCell('Days idle', align: TextAlign.center),
+              _headerCell('Value', align: TextAlign.right),
+            ],
+          ),
+          ...items.map((item) {
+            final color = _urgencyColor(item);
+            return TableRow(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      if (item.sku != null)
+                        Text(item.sku!, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                    ],
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  '₹${item.stockValue.toStringAsFixed(0)}',
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Center(child: Text(item.currentStock.toStringAsFixed(0))),
                 ),
-              ),
-            ],
-          );
-        }),
-      ],
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Center(
+                    child: Text(
+                      '${item.daysSinceLastSale ?? 0}',
+                      style: TextStyle(color: color, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    '₹${item.stockValue.toStringAsFixed(0)}',
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          }),
+        ],
+      ),
     );
   }
 

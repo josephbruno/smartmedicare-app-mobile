@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../services/permission_service.dart';
 import '../session/auth_session.dart';
 
 /// Widget that shows content only if user has required permission.
@@ -13,29 +13,25 @@ class PermissionGuard extends StatelessWidget {
   final bool Function()? additionalCheck;
 
   const PermissionGuard({
-    Key? key,
+    super.key,
     required this.permission,
     required this.child,
     this.fallback,
     this.additionalCheck,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthSession>(
       builder: (context, auth, _) {
-        final hasPermission = PermissionService.hasPermission(
-          auth.user?.permissions ?? [],
-          permission,
-        );
-
+        final allowed = auth.hasPermission(permission);
         final additionalCheckPassed = additionalCheck?.call() ?? true;
 
-        if (hasPermission && additionalCheckPassed) {
+        if (allowed && additionalCheckPassed) {
           return child;
         }
 
-        return fallback ?? const _PermissionDeniedWidget();
+        return fallback ?? _PermissionDeniedWidget(homeRoute: auth.homeRoute);
       },
     );
   }
@@ -49,32 +45,26 @@ class MultiPermissionGuard extends StatelessWidget {
   final bool requireAll;
 
   const MultiPermissionGuard({
-    Key? key,
+    super.key,
     required this.permissions,
     required this.child,
     this.fallback,
     this.requireAll = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthSession>(
       builder: (context, auth, _) {
-        final hasPermission = requireAll
-            ? PermissionService.hasAllPermissions(
-                auth.user?.permissions ?? [],
-                permissions,
-              )
-            : PermissionService.hasAnyPermission(
-                auth.user?.permissions ?? [],
-                permissions,
-              );
+        final allowed = requireAll
+            ? permissions.every(auth.hasPermission)
+            : permissions.any(auth.hasPermission);
 
-        if (hasPermission) {
+        if (allowed) {
           return child;
         }
 
-        return fallback ?? const _PermissionDeniedWidget();
+        return fallback ?? _PermissionDeniedWidget(homeRoute: auth.homeRoute);
       },
     );
   }
@@ -87,26 +77,21 @@ class RoleGuard extends StatelessWidget {
   final Widget? fallback;
 
   const RoleGuard({
-    Key? key,
+    super.key,
     required this.role,
     required this.child,
     this.fallback,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthSession>(
       builder: (context, auth, _) {
-        final hasRole = PermissionService.hasRole(
-          auth.user?.roles ?? [],
-          role,
-        );
-
-        if (hasRole) {
+        if (auth.hasRole(role)) {
           return child;
         }
 
-        return fallback ?? const _PermissionDeniedWidget();
+        return fallback ?? _PermissionDeniedWidget(homeRoute: auth.homeRoute);
       },
     );
   }
@@ -120,32 +105,26 @@ class MultiRoleGuard extends StatelessWidget {
   final bool requireAll;
 
   const MultiRoleGuard({
-    Key? key,
+    super.key,
     required this.roles,
     required this.child,
     this.fallback,
     this.requireAll = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthSession>(
       builder: (context, auth, _) {
-        final hasRole = requireAll
-            ? PermissionService.hasAllPermissions(
-                auth.user?.roles ?? [],
-                roles,
-              )
-            : PermissionService.hasAnyRole(
-                auth.user?.roles ?? [],
-                roles,
-              );
+        final allowed = requireAll
+            ? roles.every(auth.hasRole)
+            : roles.any(auth.hasRole);
 
-        if (hasRole) {
+        if (allowed) {
           return child;
         }
 
-        return fallback ?? const _PermissionDeniedWidget();
+        return fallback ?? _PermissionDeniedWidget(homeRoute: auth.homeRoute);
       },
     );
   }
@@ -153,7 +132,9 @@ class MultiRoleGuard extends StatelessWidget {
 
 /// Default permission denied widget.
 class _PermissionDeniedWidget extends StatelessWidget {
-  const _PermissionDeniedWidget();
+  const _PermissionDeniedWidget({required this.homeRoute});
+
+  final String homeRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -185,8 +166,8 @@ class _PermissionDeniedWidget extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Go Back'),
+              onPressed: () => context.go(homeRoute),
+              child: const Text('Go Home'),
             ),
           ],
         ),

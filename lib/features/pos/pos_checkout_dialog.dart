@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../app_services.dart';
 import '../../core/app_config.dart';
+import '../../core/desktop/desktop_prefs.dart';
 import '../../core/services/thermal_printer_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
@@ -95,6 +96,19 @@ Future<bool> showPosCheckoutDialog({
               return tendered < due ? due - tendered : 0;
             }
 
+            Future<void> maybeAutoPrintReceipt() async {
+              if (!paymentSaved || activeInvoice == null || printItems.isEmpty) {
+                return;
+              }
+              final autoPrint = await DesktopPrefs.getAutoPrintReceipt();
+              if (!autoPrint) return;
+              await ThermalPrinterService.printReceipt(
+                invoice: activeInvoice!,
+                items: printItems,
+                shopName: auth.currentShop?.name ?? auth.currentBranch?.name,
+              );
+            }
+
             Future<void> confirmCheckout() async {
               if (recordingPayment || paymentSaved) return;
               final amount = paymentAmount();
@@ -155,6 +169,8 @@ Future<bool> showPosCheckoutDialog({
 
                 if (!context.mounted) return;
                 setState(() {});
+                await maybeAutoPrintReceipt();
+                if (!context.mounted) return;
                 AppMessenger.show(context,
                   SnackBar(
                     content: Text(
@@ -479,6 +495,14 @@ Future<bool> showPosCheckoutDialog({
                       payModeTile('upi', 'UPI', Icons.qr_code_2_rounded),
                     ],
                   ),
+                  if (largeUi)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'F2 Cash · F3 UPI · Ctrl+Enter confirm',
+                        style: TextStyle(fontSize: alertFs(11), color: AppTheme.textSecondary),
+                      ),
+                    ),
                   SizedBox(height: largeUi ? 18 : 14),
                   if (paymentMode == 'cash') ...[
                     TextField(
@@ -992,6 +1016,19 @@ Future<bool> showPosCheckoutDialog({
                   const SingleActivator(LogicalKeyboardKey.enter, control: true): () {
                     if (!paymentSaved && !recordingPayment) {
                       confirmCheckout();
+                    }
+                  },
+                  const SingleActivator(LogicalKeyboardKey.f2): () {
+                    if (!paymentSaved) {
+                      setState(() {
+                        paymentMode = 'cash';
+                        paidController.text = billDue().toStringAsFixed(2);
+                      });
+                    }
+                  },
+                  const SingleActivator(LogicalKeyboardKey.f3): () {
+                    if (!paymentSaved) {
+                      setState(() => paymentMode = 'upi');
                     }
                   },
                 },

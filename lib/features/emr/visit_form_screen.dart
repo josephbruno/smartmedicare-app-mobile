@@ -29,6 +29,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   final _heartRate = TextEditingController();
   final _respiratoryRate = TextEditingController();
   final _diagnosisInput = TextEditingController();
+  final _serviceCharge = TextEditingController();
 
   PetSearchResult? _selectedPet;
   DoctorLite? _selectedDoctor;
@@ -40,6 +41,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   List<String> _complaintSuggestions = [];
   List<VisitDiagnosis> _diagnosisSuggestions = [];
   PetSummary? _petSummary;
+  int? _serviceChargeProductId;
+  String? _serviceChargeProductName;
 
   String _visitType = 'consultation';
   DateTime _visitDate = DateTime.now();
@@ -91,6 +94,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       } else if (widget.petId != null) {
         await _prefillFromPetId(widget.petId!);
       }
+
+      if (!_isEdit) {
+        _applyDoctorServiceChargeDefaults();
+      }
     } catch (e) {
       if (mounted) {
         AppMessenger.show(context,SnackBar(content: Text('$e')));
@@ -136,6 +143,24 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _medicines
       ..clear()
       ..addAll((visit.medicines ?? []).map(_MedicineRow.fromModel));
+    if (visit.serviceCharge > 0) {
+      _serviceCharge.text = visit.serviceCharge.toString();
+    } else {
+      _serviceCharge.clear();
+    }
+    _serviceChargeProductId = visit.serviceChargeProductId;
+    _serviceChargeProductName = visit.serviceChargeProduct?.name;
+  }
+
+  void _applyDoctorServiceChargeDefaults() {
+    final doctor = _selectedDoctor;
+    if (doctor == null || _serviceCharge.text.trim().isNotEmpty) return;
+    final fee = doctor.consultationFee;
+    if (fee != null && fee > 0) {
+      _serviceCharge.text = fee == fee.roundToDouble()
+          ? fee.toInt().toString()
+          : fee.toString();
+    }
   }
 
   Future<void> _prefillFromPetId(int petId) async {
@@ -249,13 +274,17 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     });
   }
 
-  Future<Product?> _pickProduct({String? initial}) async {
+  Future<Product?> _pickProduct({String? initial, bool servicesOnly = false}) async {
     final search = TextEditingController(text: initial ?? '');
     List<Product> results = [];
     if ((initial ?? '').length >= 2) {
       try {
         results = await context.read<AppServices>().products.list(
-              query: {'search': initial, 'per_page': 20},
+              query: {
+                'search': initial,
+                'per_page': 20,
+                if (servicesOnly) 'type': 'service',
+              },
             );
       } catch (_) {}
     }
@@ -272,14 +301,18 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             }
             try {
               final list = await context.read<AppServices>().products.list(
-                    query: {'search': q, 'per_page': 20},
+                    query: {
+                      'search': q,
+                      'per_page': 20,
+                      if (servicesOnly) 'type': 'service',
+                    },
                   );
               setDialog(() => results = list);
             } catch (_) {}
           }
 
           return AlertDialog(
-            title: const Text('Link product'),
+            title: Text(servicesOnly ? 'Link service product' : 'Link product'),
             content: SizedBox(
               width: double.maxFinite,
               child: Column(
@@ -343,12 +376,29 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     final timeStr =
         '${_visitTime.hour.toString().padLeft(2, '0')}:${_visitTime.minute.toString().padLeft(2, '0')}';
 
+    final serviceCharge = double.tryParse(_serviceCharge.text.trim()) ?? 0;
+
+    if (serviceCharge > 0 && _serviceChargeProductId == null) {
+      try {
+        final products = await context.read<AppServices>().products.list(
+          query: {'type': 'service', 'per_page': 5, 'search': 'consult'},
+        );
+        if (products.isNotEmpty) {
+          _serviceChargeProductId = products.first.id;
+          _serviceChargeProductName ??= products.first.name;
+        }
+      } catch (_) {}
+    }
+
     final body = <String, dynamic>{
       'pet_id': _selectedPet!.id,
       if (_selectedDoctor != null) 'doctor_id': _selectedDoctor!.id,
       'visit_type': _visitType,
       'visit_date': _visitDate.toIso8601String().substring(0, 10),
       'visit_time': timeStr,
+      'service_charge': serviceCharge,
+      if (serviceCharge > 0 && _serviceChargeProductId != null)
+        'service_charge_product_id': _serviceChargeProductId,
       if (_complaint.text.trim().isNotEmpty) 'chief_complaint': _complaint.text.trim(),
       if (_clinicalNotes.text.trim().isNotEmpty) 'clinical_notes': _clinicalNotes.text.trim(),
       if (_followUpNotes.text.trim().isNotEmpty) 'follow_up_notes': _followUpNotes.text.trim(),
@@ -403,6 +453,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _heartRate.dispose();
     _respiratoryRate.dispose();
     _diagnosisInput.dispose();
+    _serviceCharge.dispose();
     for (final t in _treatments) {
       t.dispose();
     }
@@ -534,7 +585,67 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 _selectedDoctor = id == null
                     ? null
                     : _doctors.firstWhere((d) => d.id == id);
+                _applyDoctorServiceChargeDefaults();
               }),
+            ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Text('Service charge',
+                  style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('Billable', style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _serviceCharge,
+                  decoration: const InputDecoration(
+                    labelText: 'Amount (₹)',
+                    isDense: true,
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.inventory_2_outlined, size: 22),
+                tooltip: 'Link service product (for GST)',
+                onPressed: () async {
+                  final p = await _pickProduct(
+                    servicesOnly: true,
+                    initial: _serviceChargeProductName ?? 'consultation',
+                  );
+                  if (p != null) {
+                    setState(() {
+                      _serviceChargeProductId = p.id;
+                      _serviceChargeProductName = p.name;
+                      if (_serviceCharge.text.trim().isEmpty) {
+                        _serviceCharge.text = p.sellingPrice.toString();
+                      }
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+          if (_serviceChargeProductName != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'Service product: $_serviceChargeProductName',
+                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+              ),
             ),
           const SizedBox(height: 12),
           Row(

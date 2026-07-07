@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/models/customer.dart';
+import '../../data/models/emr.dart';
 import '../../data/models/invoice.dart';
 import '../../data/models/product.dart';
 import '../../core/utils/gst_utils.dart';
@@ -25,6 +26,7 @@ class PosCartNotifier extends ChangeNotifier {
   final List<CartPayment> payments = [];
   String notes = '';
   final List<HeldBill> heldBills = [];
+  int? pendingVisitId;
 
   double get subtotal =>
       items.fold(0.0, (s, i) => s + i.taxableAmount);
@@ -128,16 +130,26 @@ class PosCartNotifier extends ChangeNotifier {
   }
 
   /// Returns added | incremented | stock_exceeded | out_of_stock
-  String addProduct(Product product, {int quantity = 1, int? batchId}) {
+  String addProduct(
+    Product product, {
+    int quantity = 1,
+    int? batchId,
+    double? unitPriceOverride,
+    String? nameOverride,
+    bool mergeExisting = true,
+    bool isServiceCharge = false,
+  }) {
     final availableStock = product.currentStock ?? 0;
-    final trackInventory = product.trackInventory;
+    final trackInventory = product.trackInventory && !product.isService;
     if (trackInventory && availableStock <= 0) return 'out_of_stock';
 
     CartItem? existing;
-    for (final i in items) {
-      if (i.productId == product.id && i.batchId == batchId) {
-        existing = i;
-        break;
+    if (mergeExisting) {
+      for (final i in items) {
+        if (i.productId == product.id && i.batchId == batchId) {
+          existing = i;
+          break;
+        }
       }
     }
 
@@ -163,7 +175,7 @@ class PosCartNotifier extends ChangeNotifier {
             ? availableStock.floor()
             : quantity)
         : quantity;
-    final unitPrice = product.sellingPrice;
+    final unitPrice = unitPriceOverride ?? product.sellingPrice;
     final gstRate = product.gstRate;
     final gstType = product.gstType;
     final unitPriceTaxable = gstType == 'inclusive'
@@ -177,7 +189,7 @@ class PosCartNotifier extends ChangeNotifier {
 
     items.add(CartItem(
       productId: product.id,
-      productName: product.name,
+      productName: nameOverride ?? product.name,
       barcode: product.barcode,
       hsnCode: product.hsnCode,
       batchId: batchId,
@@ -196,10 +208,23 @@ class PosCartNotifier extends ChangeNotifier {
       totalAmount: lineTotal,
       availableStock: trackInventory ? availableStock : 99999,
       trackInventory: trackInventory,
+      isServiceCharge: isServiceCharge,
     ));
     notifyListeners();
     _persist();
     return 'added';
+  }
+
+  void updateUnitPrice(int index, double newPrice) {
+    if (index < 0 || index >= items.length) return;
+    final item = items[index];
+    if (newPrice < 0) return;
+    item.unitPrice = newPrice;
+    final unitPriceTaxable = item.gstType == 'inclusive'
+        ? GstUtils.getTaxableFromInclusive(newPrice, item.gstRate)
+        : newPrice;
+    item.unitPriceTaxable = unitPriceTaxable;
+    updateQuantity(index, item.quantity);
   }
 
   void updateQuantity(int index, int newQty) {
@@ -267,10 +292,110 @@ class PosCartNotifier extends ChangeNotifier {
     loyaltyPointsToRedeem = 0;
     payments.clear();
     notes = '';
+    pendingVisitId = null;
     notifyListeners();
     if (wipeDraft) {
       SharedPreferences.getInstance().then((p) => p.remove(_kCartDraft));
     }
+  }
+
+  /// Loads billable treatments/medicines from a visit record into the cart.
+  Future<VisitCartLoadResult> loadFromVisit(
+    PetVisit visit,
+    Future<Product?> Function(int productId) fetchProduct, {
+    Future<Product?> Function()? fetchDefaultServiceProduct,
+  }) async {
+    clear(wipeDraft: true);
+    pendingVisitId = visit.id;
+    notes = 'Visit ${visit.visitNumber}';
+
+    final skipped = <String>[];
+    var linesAdded = 0;
+
+    Future<void> addLine({
+      required int? productId,
+      Product? embedded,
+      required String label,
+      required double quantity,
+      required double unitPrice,
+      bool isServiceCharge = false,
+      bool mergeExisting = true,
+    }) async {
+      Product? product = embedded;
+      final resolvedId = productId ?? product?.id;
+      if (product == null && resolvedId != null && resolvedId > 0) {
+        product = await fetchProduct(resolvedId);
+      }
+      if (product == null) {
+        skipped.add(label);
+        return;
+      }
+      if (resolvedId == null || resolvedId <= 0) {
+        skipped.add(label);
+        return;
+      }
+      final qty = quantity.abs() < 1 ? 1 : quantity.round();
+      final price = unitPrice > 0 ? unitPrice : product.sellingPrice;
+      final result = addProduct(
+        product,
+        quantity: qty,
+        unitPriceOverride: price,
+        nameOverride: label,
+        mergeExisting: mergeExisting,
+        isServiceCharge: isServiceCharge,
+        batchId: isServiceCharge ? -visit.id : null,
+      );
+      if (result == 'out_of_stock') {
+        skipped.add('$label (out of stock)');
+        return;
+      }
+      linesAdded++;
+    }
+
+    if (visit.serviceCharge > 0) {
+      Product? serviceProduct = visit.serviceChargeProduct;
+      if (serviceProduct == null &&
+          visit.serviceChargeProductId != null &&
+          visit.serviceChargeProductId! > 0) {
+        serviceProduct = await fetchProduct(visit.serviceChargeProductId!);
+      }
+      if (serviceProduct == null && fetchDefaultServiceProduct != null) {
+        serviceProduct = await fetchDefaultServiceProduct();
+      }
+      await addLine(
+        productId: visit.serviceChargeProductId ?? serviceProduct?.id,
+        embedded: serviceProduct,
+        label: serviceProduct?.name ?? 'Service charge',
+        quantity: 1,
+        unitPrice: visit.serviceCharge,
+        isServiceCharge: true,
+        mergeExisting: false,
+      );
+    }
+
+    for (final t in visit.treatments ?? const <VisitTreatment>[]) {
+      await addLine(
+        productId: t.productId,
+        embedded: t.product,
+        label: t.treatmentName,
+        quantity: t.quantity,
+        unitPrice: t.unitPrice,
+      );
+    }
+
+    for (final m in visit.medicines ?? const <VisitMedicine>[]) {
+      await addLine(
+        productId: m.productId,
+        embedded: m.product,
+        label: m.medicineName,
+        quantity: m.quantity,
+        unitPrice: m.unitPrice,
+      );
+    }
+
+    notifyListeners();
+    _persist();
+    return VisitCartLoadResult(linesAdded: linesAdded, skipped: skipped);
   }
 
   String holdBill() {
@@ -315,6 +440,7 @@ class PosCartNotifier extends ChangeNotifier {
   }) {
     return {
       if (customer != null) 'customer_id': customer!.id,
+      if (pendingVisitId != null) 'pet_visit_id': pendingVisitId,
       'type': type,
       'invoice_date': invoiceDate,
       'discount_type': discountType,
@@ -326,6 +452,15 @@ class PosCartNotifier extends ChangeNotifier {
       'payments': payments.map((e) => e.toJson()).toList(),
     };
   }
+}
+
+class VisitCartLoadResult {
+  const VisitCartLoadResult({required this.linesAdded, required this.skipped});
+
+  final int linesAdded;
+  final List<String> skipped;
+
+  bool get success => linesAdded > 0;
 }
 
 class HeldBill {
@@ -401,6 +536,7 @@ CartItem _cartItemFromJson(Map<String, dynamic> j) => CartItem(
       totalAmount: (j['total_amount'] as num?)?.toDouble() ?? 0,
       availableStock: (j['available_stock'] as num?)?.toDouble() ?? 99999,
       trackInventory: j['track_inventory'] as bool? ?? false,
+      isServiceCharge: j['is_service_charge'] as bool? ?? false,
     );
 
 CartItem _cartItemClone(CartItem e) => _cartItemFromJson(_cartItemToJson(e));

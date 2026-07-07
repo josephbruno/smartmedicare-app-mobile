@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 
-import '../../data/models/user.dart';
 import '../services/permission_service.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
@@ -154,65 +153,60 @@ class PermissionAwareApiService {
 /// API endpoint permission mapping.
 /// Define which endpoints require which permissions.
 class ApiEndpointPermissions {
-  // POS endpoints
-  static const String posList = 'pos.manage';
-  static const String posCreate = 'pos.manage';
-  static const String posUpdate = 'pos.manage';
-  static const String posDelete = 'pos.manage';
+  // Billing / POS
+  static const String invoicesList = AppPermissions.invoicesView;
+  static const String invoicesCreate = AppPermissions.invoicesCreate;
+  static const String invoicesUpdate = AppPermissions.invoicesCreate;
+  static const String invoicesCancel = AppPermissions.invoicesCancel;
 
-  // Billing endpoints
-  static const String invoicesList = 'billing.view';
-  static const String invoicesCreate = 'billing.create';
-  static const String invoicesUpdate = 'billing.create';
-  static const String invoicesDelete = 'billing.delete';
+  // Inventory
+  static const String inventoryList = AppPermissions.inventoryView;
+  static const String inventoryAdjust = AppPermissions.inventoryAdjust;
+  static const String inventoryTransfer = AppPermissions.inventoryTransfer;
 
-  // Inventory endpoints
-  static const String inventoryList = 'inventory.manage';
-  static const String inventoryCreate = 'inventory.manage';
-  static const String inventoryUpdate = 'inventory.manage';
-  static const String inventoryDelete = 'inventory.manage';
+  // Products
+  static const String productsList = AppPermissions.productsView;
+  static const String productsCreate = AppPermissions.productsCreate;
+  static const String productsUpdate = AppPermissions.productsEdit;
+  static const String productsDelete = AppPermissions.productsDelete;
 
-  // Product endpoints
-  static const String productsList = 'products.manage';
-  static const String productsCreate = 'products.manage';
-  static const String productsUpdate = 'products.manage';
-  static const String productsDelete = 'products.manage';
+  // Purchases
+  static const String purchasesList = AppPermissions.purchasesView;
+  static const String purchasesCreate = AppPermissions.purchasesCreate;
+  static const String purchasesUpdate = AppPermissions.purchasesEdit;
+  static const String purchasesDelete = AppPermissions.purchasesDelete;
 
-  // Purchase order endpoints
-  static const String purchasesList = 'purchases.view';
-  static const String purchasesCreate = 'purchases.manage';
-  static const String purchasesUpdate = 'purchases.manage';
-  static const String purchasesDelete = 'purchases.manage';
+  // Customers
+  static const String customersList = AppPermissions.customersView;
+  static const String customersCreate = AppPermissions.customersCreate;
+  static const String customersUpdate = AppPermissions.customersEdit;
+  static const String customersDelete = AppPermissions.customersDelete;
 
-  // Customer endpoints
-  static const String customersList = 'customers.view';
-  static const String customersCreate = 'customers.manage';
-  static const String customersUpdate = 'customers.manage';
-  static const String customersDelete = 'customers.manage';
+  // EMR
+  static const String emrVisitsList = AppPermissions.emrVisitsView;
+  static const String emrVisitsCreate = AppPermissions.emrVisitsCreate;
+  static const String emrVisitsUpdate = AppPermissions.emrVisitsEdit;
 
-  // EMR endpoints
-  static const String emrList = 'emr.manage';
-  static const String emrCreate = 'emr.manage';
-  static const String emrUpdate = 'emr.manage';
-  static const String emrDelete = 'emr.manage';
+  // Appointments
+  static const String appointmentsList = AppPermissions.patientAppointmentsView;
+  static const String appointmentsCreate = AppPermissions.patientAppointmentsCreate;
+  static const String appointmentsUpdate = AppPermissions.patientAppointmentsEdit;
 
-  // Appointment endpoints
-  static const String appointmentsList = 'appointments.view';
-  static const String appointmentsCreate = 'appointments.manage';
-  static const String appointmentsUpdate = 'appointments.manage';
-  static const String appointmentsDelete = 'appointments.manage';
+  // Expenses
+  static const String expensesList = AppPermissions.expensesView;
+  static const String expensesCreate = AppPermissions.expensesCreate;
+  static const String expensesUpdate = AppPermissions.expensesEdit;
+  static const String expensesDelete = AppPermissions.expensesDelete;
 
-  // Expense endpoints
-  static const String expensesList = 'expenses.view';
-  static const String expensesCreate = 'expenses.manage';
-  static const String expensesUpdate = 'expenses.manage';
-  static const String expensesDelete = 'expenses.manage';
+  // Reports
+  static const String reportsList = AppPermissions.reportsView;
+  static const String reportsExport = AppPermissions.reportsExport;
 
-  // Report endpoints
-  static const String reportsList = 'reports.view';
-  static const String reportsExport = 'reports.export';
-
-  // Settings endpoints
-  static const String settingsView = 'settings.view';
-  static const String settingsEdit = 'settings.edit';
+  // Settings / admin
+  static const String shopSettings = AppPermissions.shopManage;
+  static const String usersList = AppPermissions.usersView;
+  static const String usersCreate = AppPermissions.usersCreate;
+  static const String usersUpdate = AppPermissions.usersEdit;
+  static const String branchManage = AppPermissions.branchManage;
+  static const String doctorsManage = AppPermissions.doctorsManage;
 }

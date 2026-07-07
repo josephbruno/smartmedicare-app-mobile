@@ -3,6 +3,11 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/services/permission_service.dart';
+import '../../core/session/auth_session.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/widgets/paginated_data_table.dart';
+import '../../core/widgets/table_column_def.dart';
 import '../../data/models/stock_transfer.dart';
 
 class StockTransferListScreen extends StatefulWidget {
@@ -17,7 +22,6 @@ class _StockTransferListScreenState extends State<StockTransferListScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   String _direction = 'outgoing';
-  late Future<List<StockTransfer>> _future;
 
   @override
   void initState() {
@@ -25,12 +29,8 @@ class _StockTransferListScreenState extends State<StockTransferListScreen>
     _tabs = TabController(length: 2, vsync: this);
     _tabs.addListener(() {
       if (_tabs.indexIsChanging) return;
-      setState(() {
-        _direction = _tabs.index == 0 ? 'outgoing' : 'incoming';
-        _reload();
-      });
+      setState(() => _direction = _tabs.index == 0 ? 'outgoing' : 'incoming');
     });
-    _future = _load();
   }
 
   @override
@@ -39,103 +39,94 @@ class _StockTransferListScreenState extends State<StockTransferListScreen>
     super.dispose();
   }
 
-  Future<List<StockTransfer>> _load() {
-    return context
-        .read<AppServices>()
-        .inventory
-        .listTransfers(query: {'direction': _direction});
-  }
-
-  void _reload() => _future = _load();
-
   Color _statusColor(String s) {
     switch (s) {
       case 'accepted':
-        return Colors.green;
+        return AppTheme.accent;
       case 'pending':
-        return Colors.orange;
+        return AppTheme.warning;
       case 'rejected':
-        return Colors.red;
+        return AppTheme.danger;
       default:
-        return Colors.grey;
+        return AppTheme.textSecondary;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final services = context.read<AppServices>();
+    final canCreate = context.watch<AuthSession>().hasPermission(AppPermissions.inventoryTransfer);
+
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          await context.push('/stock-transfers/new');
-          if (mounted) setState(_reload);
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('New'),
-      ),
+      floatingActionButton: canCreate
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                await context.push('/stock-transfers/new');
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('New'),
+            )
+          : null,
       body: Column(
-      children: [
-        TabBar(
-          controller: _tabs,
-          tabs: const [
-            Tab(text: '📤 Outgoing'),
-            Tab(text: '📥 Incoming'),
-          ],
-        ),
-        Expanded(
-          child: FutureBuilder<List<StockTransfer>>(
-            future: _future,
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snap.hasError) {
-                return Center(child: Text('${snap.error}'));
-              }
-              final list = snap.data ?? [];
-              if (list.isEmpty) {
-                return const Center(child: Text('No transfers found'));
-              }
-              return RefreshIndicator(
-                onRefresh: () async {
-                  setState(_reload);
-                  await _future;
-                },
-                child: ListView.separated(
-                  itemCount: list.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (c, i) {
-                    final t = list[i];
-                    final other = _direction == 'outgoing'
-                        ? (t.toBranchName ?? 'Branch #${t.toBranchId}')
-                        : (t.fromBranchName ?? 'Branch #${t.fromBranchId}');
-                    final showVerify =
-                        _direction == 'incoming' && t.status == 'pending';
-                    return ListTile(
-                      title: Text(t.transferNumber,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text(
-                          '$other • ${t.items.length} item(s) • ${t.createdAt.length >= 10 ? t.createdAt.substring(0, 10) : t.createdAt}'),
-                      trailing: Chip(
-                        label: Text(showVerify ? 'verify' : t.status,
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.white)),
-                        backgroundColor: _statusColor(t.status),
-                        padding: EdgeInsets.zero,
-                        materialTapTargetSize:
-                            MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onTap: () async {
-                        await context.push('/stock-transfers/${t.id}');
-                        if (mounted) setState(_reload);
-                      },
+        children: [
+          TabBar(
+            controller: _tabs,
+            tabs: const [
+              Tab(text: 'Outgoing'),
+              Tab(text: 'Incoming'),
+            ],
+          ),
+          Expanded(
+            child: AppPaginatedTable<StockTransfer>(
+              key: ValueKey(_direction),
+              loadPage: ({required page, required perPage}) =>
+                  services.inventory.listTransfersPaginated(
+                    page: page,
+                    perPage: perPage,
+                    direction: _direction,
+                  ),
+              onRowTap: (t) => context.push('/stock-transfers/${t.id}'),
+              columns: [
+                TableColumnDef(
+                  label: 'Transfer #',
+                  flex: 1.2,
+                  cellBuilder: (c, t) => Text(
+                    t.transferNumber,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                TableColumnDef(
+                  label: 'From',
+                  flex: 1.3,
+                  cellBuilder: (c, t) => Text(t.fromBranchName ?? '—'),
+                ),
+                TableColumnDef(
+                  label: 'To',
+                  flex: 1.3,
+                  cellBuilder: (c, t) => Text(t.toBranchName ?? '—'),
+                ),
+                TableColumnDef(
+                  label: 'Items',
+                  flex: 0.7,
+                  align: TextAlign.center,
+                  cellBuilder: (c, t) => Text('${t.items.length}'),
+                ),
+                TableColumnDef(
+                  label: 'Status',
+                  flex: 0.9,
+                  align: TextAlign.center,
+                  cellBuilder: (c, t) {
+                    final color = _statusColor(t.status);
+                    return Text(
+                      t.status,
+                      style: TextStyle(color: color, fontWeight: FontWeight.w600),
                     );
                   },
                 ),
-              );
-            },
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }

@@ -2,55 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/widgets/paginated_data_table.dart';
+import '../../core/widgets/table_column_def.dart';
 import '../../data/models/purchase.dart';
 
-class SupplierListScreen extends StatefulWidget {
+class SupplierListScreen extends StatelessWidget {
   const SupplierListScreen({super.key});
 
   @override
-  State<SupplierListScreen> createState() => _SupplierListScreenState();
-}
-
-class _SupplierListScreenState extends State<SupplierListScreen> {
-  late Future<List<Supplier>> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = context.read<AppServices>().suppliers.list();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Supplier>>(
-      future: _future,
-      builder: (context, snap) {
-        if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snap.hasError) {
-          return Center(child: Text('${snap.error}'));
-        }
-        final list = snap.data!;
-        return RefreshIndicator(
-          onRefresh: () async {
-            setState(() {
-              _future = context.read<AppServices>().suppliers.list();
-            });
-            await _future;
-          },
-          child: ListView.builder(
-            itemCount: list.length,
-            itemBuilder: (c, i) {
-              final s = list[i];
-              return ListTile(
-                title: Text(s.name),
-                subtitle: Text(s.phone),
-              );
-            },
-          ),
-        );
-      },
+    final services = context.read<AppServices>();
+
+    return Scaffold(
+      body: AppPaginatedTable<Supplier>(
+        loadPage: ({required page, required perPage}) =>
+            services.suppliers.listPaginated(page: page, perPage: perPage),
+        columns: const [
+          TableColumnDef(label: 'Name', flex: 2, cellBuilder: _nameCell),
+          TableColumnDef(label: 'Phone', flex: 1.2, cellBuilder: _phoneCell),
+          TableColumnDef(label: 'Email', flex: 1.5, cellBuilder: _emailCell),
+          TableColumnDef(label: 'GSTIN', flex: 1.2, cellBuilder: _gstinCell),
+        ],
+      ),
     );
   }
+
+  static Widget _nameCell(BuildContext context, Supplier s) => Text(
+        s.name,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      );
+
+  static Widget _phoneCell(BuildContext context, Supplier s) => Text(s.phone);
+
+  static Widget _emailCell(BuildContext context, Supplier s) => Text(s.email ?? '—');
+
+  static Widget _gstinCell(BuildContext context, Supplier s) => Text(s.gstin ?? '—');
 }

@@ -1,4 +1,5 @@
 import '../json_helpers.dart';
+import 'product.dart';
 
 class CustomerLite {
   CustomerLite({
@@ -177,16 +178,23 @@ class PetUpcomingReminder {
 }
 
 class DoctorLite {
-  DoctorLite({required this.id, required this.name, this.specialty});
+  DoctorLite({
+    required this.id,
+    required this.name,
+    this.specialty,
+    this.consultationFee,
+  });
 
   final int id;
   final String name;
   final String? specialty;
+  final double? consultationFee;
 
   factory DoctorLite.fromJson(Map<String, dynamic> j) => DoctorLite(
         id: intOrNull(j['id']) ?? 0,
         name: j['name']?.toString() ?? '',
         specialty: j['specialty']?.toString(),
+        consultationFee: numOrNull(j['consultation_fee']),
       );
 }
 
@@ -301,6 +309,9 @@ class PetVisit {
     this.clinicalNotes,
     this.followUpDate,
     this.followUpNotes,
+    this.serviceCharge = 0,
+    this.serviceChargeProductId,
+    this.serviceChargeProduct,
     required this.status,
     this.pet,
     this.doctor,
@@ -327,6 +338,9 @@ class PetVisit {
   final String? clinicalNotes;
   final String? followUpDate;
   final String? followUpNotes;
+  final double serviceCharge;
+  final int? serviceChargeProductId;
+  final Product? serviceChargeProduct;
   final String status;
   final PetSearchResult? pet;
   final DoctorLite? doctor;
@@ -338,6 +352,7 @@ class PetVisit {
   factory PetVisit.fromJson(Map<String, dynamic> j) {
     final petMap = mapOrNull(j['pet']);
     final doctorMap = mapOrNull(j['doctor']);
+    final serviceProductMap = mapOrNull(j['service_charge_product']);
     List<VisitDiagnosis>? diagnoses;
     if (j['diagnoses'] is List) {
       diagnoses = listFromData(j['diagnoses'], VisitDiagnosis.fromJson);
@@ -368,6 +383,11 @@ class PetVisit {
       clinicalNotes: j['clinical_notes']?.toString(),
       followUpDate: formatApiDate(j['follow_up_date']?.toString()),
       followUpNotes: j['follow_up_notes']?.toString(),
+      serviceCharge: numOrNull(j['service_charge']) ?? 0,
+      serviceChargeProductId: intOrNull(j['service_charge_product_id']),
+      serviceChargeProduct: serviceProductMap != null
+          ? Product.fromJson(Map<String, dynamic>.from(serviceProductMap))
+          : null,
       status: j['status']?.toString() ?? 'open',
       pet: petMap != null ? PetSearchResult.fromJson(petMap) : null,
       doctor: doctorMap != null ? DoctorLite.fromJson(doctorMap) : null,
@@ -466,6 +486,7 @@ class VisitTreatment {
   VisitTreatment({
     required this.treatmentName,
     this.productId,
+    this.product,
     this.quantity = 1,
     this.unitPrice = 0,
     this.notes,
@@ -473,17 +494,24 @@ class VisitTreatment {
 
   final String treatmentName;
   final int? productId;
+  final Product? product;
   final double quantity;
   final double unitPrice;
   final String? notes;
 
-  factory VisitTreatment.fromJson(Map<String, dynamic> j) => VisitTreatment(
-        treatmentName: j['treatment_name']?.toString() ?? '',
-        productId: intOrNull(j['product_id']),
-        quantity: numOrNull(j['quantity']) ?? 1,
-        unitPrice: numOrNull(j['unit_price']) ?? 0,
-        notes: j['notes']?.toString(),
-      );
+  factory VisitTreatment.fromJson(Map<String, dynamic> j) {
+    final productMap = mapOrNull(j['product']);
+    return VisitTreatment(
+      treatmentName: j['treatment_name']?.toString() ?? '',
+      productId: intOrNull(j['product_id']),
+      product: productMap != null
+          ? Product.fromJson(Map<String, dynamic>.from(productMap))
+          : null,
+      quantity: numOrNull(j['quantity']) ?? 1,
+      unitPrice: numOrNull(j['unit_price']) ?? 0,
+      notes: j['notes']?.toString(),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         if (productId != null) 'product_id': productId,
@@ -498,6 +526,7 @@ class VisitMedicine {
   VisitMedicine({
     required this.medicineName,
     this.productId,
+    this.product,
     this.dosage,
     this.frequency,
     this.durationDays,
@@ -508,6 +537,7 @@ class VisitMedicine {
 
   final String medicineName;
   final int? productId;
+  final Product? product;
   final String? dosage;
   final String? frequency;
   final int? durationDays;
@@ -515,16 +545,22 @@ class VisitMedicine {
   final double unitPrice;
   final bool isDispensed;
 
-  factory VisitMedicine.fromJson(Map<String, dynamic> j) => VisitMedicine(
-        medicineName: j['medicine_name']?.toString() ?? '',
-        productId: intOrNull(j['product_id']),
-        dosage: j['dosage']?.toString(),
-        frequency: j['frequency']?.toString(),
-        durationDays: intOrNull(j['duration_days']),
-        quantity: numOrNull(j['quantity']) ?? 1,
-        unitPrice: numOrNull(j['unit_price']) ?? 0,
-        isDispensed: j['is_dispensed'] as bool? ?? false,
-      );
+  factory VisitMedicine.fromJson(Map<String, dynamic> j) {
+    final productMap = mapOrNull(j['product']);
+    return VisitMedicine(
+      medicineName: j['medicine_name']?.toString() ?? '',
+      productId: intOrNull(j['product_id']),
+      product: productMap != null
+          ? Product.fromJson(Map<String, dynamic>.from(productMap))
+          : null,
+      dosage: j['dosage']?.toString(),
+      frequency: j['frequency']?.toString(),
+      durationDays: intOrNull(j['duration_days']),
+      quantity: numOrNull(j['quantity']) ?? 1,
+      unitPrice: numOrNull(j['unit_price']) ?? 0,
+      isDispensed: j['is_dispensed'] as bool? ?? false,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         if (productId != null) 'product_id': productId,

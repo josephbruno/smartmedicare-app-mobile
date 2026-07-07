@@ -33,6 +33,7 @@ class Customer {
     required this.phone,
     this.city,
     this.state,
+    this.gstin,
     required this.isActive,
     this.outstandingBalance,
     this.pets,
@@ -44,6 +45,7 @@ class Customer {
   final String phone;
   final String? city;
   final String? state;
+  final String? gstin;
   final bool isActive;
   final double? outstandingBalance;
   final List<Pet>? pets;
@@ -63,6 +65,7 @@ class Customer {
       phone: j['phone']?.toString() ?? '',
       city: j['city']?.toString(),
       state: j['state']?.toString(),
+      gstin: j['gstin']?.toString(),
       isActive: j['is_active'] as bool? ?? true,
       outstandingBalance: (j['outstanding_balance'] as num?)?.toDouble(),
       pets: pets,

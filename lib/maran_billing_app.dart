@@ -11,6 +11,8 @@ import 'core/messaging/app_messenger.dart';
 import 'core/router/app_router.dart';
 import 'core/session/auth_session.dart';
 import 'core/theme/app_theme.dart';
+import 'core/notifications/push_notification_service.dart';
+import 'core/notifications/visit_billing_poll_service.dart';
 import 'core/connectivity/offline_sync_listener.dart';
 import 'data/local/customer_local_dao.dart';
 import 'data/local/customer_sync_service.dart';
@@ -26,6 +28,7 @@ import 'data/repositories/pos_product_repository.dart';
 import 'core/network/api_client.dart';
 import 'data/services/auth_service.dart';
 import 'features/pos/pos_cart_notifier.dart';
+import 'features/emr/visit_billing_queue_notifier.dart';
 
 class MaranBillingApp extends StatefulWidget {
   const MaranBillingApp({super.key});
@@ -50,6 +53,8 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
   late final OfflineBillingCoordinator _billingCoordinator;
   late final SyncCoordinator _syncCoordinator;
   late final PosProductRepository _posProducts;
+  late final PushNotificationService _pushService;
+  late final VisitBillingPollService _visitPollService;
 
   @override
   void initState() {
@@ -83,9 +88,48 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
       billingCoordinator: _billingCoordinator,
     );
     _posProducts = PosProductRepository(_services.products, _productDao);
+    _pushService = PushNotificationService(
+      deviceTokens: _services.deviceTokens,
+      auth: _session,
+    );
+    _visitPollService = VisitBillingPollService(
+      emr: _services.emr,
+      auth: _session,
+      push: _pushService,
+    );
     _session.bindRepository(_authRepository);
-    _session.restore();
+    _session.addListener(_onAuthSessionChanged);
+    _session.restore().then((_) async {
+      await _pushService.initialize(
+        onTap: (data) => _pushService.handleRouterNavigation(_router, data),
+      );
+      _onAuthSessionChanged();
+    });
     unawaited(AppDatabase.instance());
+  }
+
+  void _onAuthSessionChanged() {
+    if (_session.isAuthenticated && _session.isUnlocked) {
+      if (!_session.cashierPlatformAllowed) {
+        _visitPollService.updateEnabled(false);
+        return;
+      }
+      unawaited(_pushService.syncRegistration());
+      _visitPollService.updateEnabled(
+        _session.hasRole('cashier') && AppConfig.isCashierPlatform,
+      );
+    } else if (!_session.isAuthenticated) {
+      unawaited(_pushService.unregister());
+      _visitPollService.updateEnabled(false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _session.removeListener(_onAuthSessionChanged);
+    _pushService.dispose();
+    _visitPollService.dispose();
+    super.dispose();
   }
 
   @override
@@ -95,6 +139,7 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
         ChangeNotifierProvider.value(value: _session),
         Provider.value(value: _services),
         ChangeNotifierProvider(create: (_) => PosCartNotifier()),
+        ChangeNotifierProvider(create: (_) => VisitBillingQueueNotifier()),
         ChangeNotifierProvider(create: (_) => ConnectivityNotifier()),
         Provider.value(value: _offlineQueue),
         Provider.value(value: _productDao),
@@ -105,6 +150,7 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
         Provider.value(value: _billingCoordinator),
         ChangeNotifierProvider.value(value: _syncCoordinator),
         Provider.value(value: _posProducts),
+        Provider.value(value: _pushService),
       ],
       child: MaterialApp.router(
         title: 'Maran Billing',

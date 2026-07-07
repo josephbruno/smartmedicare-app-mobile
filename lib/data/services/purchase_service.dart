@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
+import '../models/api_response.dart';
 import '../models/purchase.dart';
 
 class PurchaseService {
@@ -10,9 +11,23 @@ class PurchaseService {
   final ApiClient _client;
 
   Future<List<Purchase>> list({Map<String, dynamic>? query}) async {
+    final result = await listPaginated(
+      page: int.tryParse(query?['page']?.toString() ?? '') ?? 1,
+      perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
+    );
+    return result.items;
+  }
+
+  Future<({List<Purchase> items, PaginationMeta? meta})> listPaginated({
+    int page = 1,
+    int perPage = 20,
+  }) async {
     try {
-      final res = await _client.get('/purchases', queryParameters: query);
-      return parseEnvelopeData(res, (data) => listFromData(data, Purchase.fromJson));
+      final res = await _client.get('/purchases', queryParameters: {
+        'page': page,
+        'per_page': perPage,
+      });
+      return parseEnvelopeList(res, Purchase.fromJson);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -49,9 +64,23 @@ class SupplierService {
   final ApiClient _client;
 
   Future<List<Supplier>> list({Map<String, dynamic>? query}) async {
+    final result = await listPaginated(
+      page: int.tryParse(query?['page']?.toString() ?? '') ?? 1,
+      perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
+    );
+    return result.items;
+  }
+
+  Future<({List<Supplier> items, PaginationMeta? meta})> listPaginated({
+    int page = 1,
+    int perPage = 20,
+  }) async {
     try {
-      final res = await _client.get('/suppliers', queryParameters: query);
-      return parseEnvelopeData(res, (data) => listFromData(data, Supplier.fromJson));
+      final res = await _client.get('/suppliers', queryParameters: {
+        'page': page,
+        'per_page': perPage,
+      });
+      return parseEnvelopeList(res, Supplier.fromJson);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
