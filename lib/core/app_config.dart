@@ -33,6 +33,10 @@ class AppConfig {
   /// Native mobile (Android/iOS) is excluded.
   static bool get usesLargeUiScale => kIsWeb || isDesktopPlatform;
 
+  /// True on native Android/iOS builds (not web or desktop).
+  static bool get isNativeMobile =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
   /// Global text scale applied on web & desktop for readability.
   static const double desktopTextScale = 1.35;
 

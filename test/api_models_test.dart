@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile/data/json_helpers.dart';
-import 'package:mobile/data/models/dashboard_data.dart';
-import 'package:mobile/data/models/emr.dart';
-import 'package:mobile/data/models/inventory.dart';
-import 'package:mobile/data/models/invoice.dart';
-import 'package:mobile/data/models/product.dart';
+import 'package:maran/data/json_helpers.dart';
+import 'package:maran/data/models/dashboard_data.dart';
+import 'package:maran/data/models/emr.dart';
+import 'package:maran/data/models/inventory.dart';
+import 'package:maran/data/models/invoice.dart';
+import 'package:maran/data/models/product.dart';
 
 void main() {
   group('formatApiDate', () {

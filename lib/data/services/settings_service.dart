@@ -78,4 +78,46 @@ class UsersService {
       ApiClient.throwFromDio(e);
     }
   }
+
+  Future<User> create(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/users', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => User.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<User> update(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/users/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => User.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<({String value, String label})>> listRoles() async {
+    try {
+      final res = await _client.get('/users/roles');
+      final rows = parseEnvelopeData(res, (data) => listFromData(data, (j) => j));
+      return rows
+          .map(
+            (j) => (
+              value: j['value']?.toString() ?? '',
+              label: j['label']?.toString() ?? j['value']?.toString() ?? '',
+            ),
+          )
+          .where((r) => r.value.isNotEmpty)
+          .toList();
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
 }

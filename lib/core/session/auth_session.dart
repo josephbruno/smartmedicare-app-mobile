@@ -49,13 +49,26 @@ class AuthSession extends ChangeNotifier {
 
   bool get isShopOwner => isSuperAdmin;
 
+  /// True when cached user is missing permission names (stale session data).
+  bool get needsPermissionRefresh {
+    if (_user == null || _token == null || _token!.isEmpty) return false;
+    if (isSuperAdmin) return false;
+    return _user!.permissions.isEmpty;
+  }
+
   BranchLite? get currentBranch => _user?.branch;
 
   ShopLite? get currentShop => _user?.shop;
 
   bool hasPermission(String permission) {
     if (isSuperAdmin) return true;
-    return _user?.permissions.contains(permission) ?? false;
+    final perms = _user?.permissions ?? [];
+    if (perms.contains(permission)) return true;
+    // Stale cached sessions may have roles but an empty permissions list.
+    if (perms.isEmpty && hasRole(AppRoles.cashier)) {
+      return AppRoles.cashierPermissions.contains(permission);
+    }
+    return false;
   }
 
   bool hasRole(String role) => _user?.roles.contains(role) ?? false;
@@ -113,6 +126,9 @@ class AuthSession extends ChangeNotifier {
   Future<void> login(String email, String password) async {
     final pair = await _repository!.login(email, password);
     await _setAuth(pair.user, pair.token);
+    if (needsPermissionRefresh) {
+      await fetchMe();
+    }
     if (pair.user.hasPin) {
       _isUnlocked = true;
       notifyListeners();
@@ -135,7 +151,17 @@ class AuthSession extends ChangeNotifier {
   Future<void> verifyPin(String pin) async {
     await _repository!.verifyPin(pin);
     _isUnlocked = true;
+    if (needsPermissionRefresh) {
+      await fetchMe();
+    }
     notifyListeners();
+  }
+
+  /// Refreshes profile from API when permissions are missing from cache.
+  Future<void> refreshProfileIfNeeded() async {
+    if (needsPermissionRefresh) {
+      await fetchMe();
+    }
   }
 
   Future<void> fetchMe() async {

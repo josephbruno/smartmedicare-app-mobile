@@ -148,12 +148,14 @@ class ResponsiveTableContainer extends StatelessWidget {
 }
 
 /// Paginated data table with loading, error, and empty states.
+/// On mobile (< 600dp) renders a [ListView]; on tablet/desktop renders a data table.
 class AppPaginatedTable<T> extends StatefulWidget {
   const AppPaginatedTable({
     super.key,
     required this.loadPage,
     required this.columns,
     this.onRowTap,
+    this.mobileItemBuilder,
     this.perPage = 20,
     this.emptyMessage = 'No records found',
     this.header,
@@ -163,6 +165,8 @@ class AppPaginatedTable<T> extends StatefulWidget {
   final PaginatedLoad<T> loadPage;
   final List<TableColumnDef<T>> columns;
   final void Function(T item)? onRowTap;
+  /// Optional custom list tile for mobile. Defaults to a card built from [columns].
+  final Widget Function(BuildContext context, T item)? mobileItemBuilder;
   final int perPage;
   final String emptyMessage;
   final Widget? header;
@@ -263,19 +267,19 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
                     style: const TextStyle(color: AppTheme.textSecondary),
                   ),
                 )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final metrics = ResponsiveTableMetrics.fromColumns(
-                      context,
-                      columns: widget.columns.cast<TableColumnDef<dynamic>>(),
-                      maxWidth: constraints.maxWidth,
-                    );
+              : ResponsiveLayout.isMobile(context)
+                  ? _buildMobileList(context)
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final metrics = ResponsiveTableMetrics.fromColumns(
+                          context,
+                          columns: widget.columns.cast<TableColumnDef<dynamic>>(),
+                          maxWidth: constraints.maxWidth,
+                        );
 
-                    return RefreshIndicator(
-                      onRefresh: () => _fetch(page: _page),
-                      child: Stack(
-                        children: [
-                          SingleChildScrollView(
+                        return _buildRefreshableContent(
+                          context,
+                          child: SingleChildScrollView(
                             physics: const AlwaysScrollableScrollPhysics(),
                             child: Padding(
                               padding: EdgeInsets.symmetric(
@@ -288,21 +292,9 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
                               ),
                             ),
                           ),
-                          if (_loading)
-                            const Positioned(
-                              top: 8,
-                              right: 8,
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                        );
+                      },
+                    ),
         ),
         TablePaginationBar(
           meta: _meta,
@@ -311,6 +303,125 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
           onPerPageChanged: widget.showPerPageSelector ? _onPerPageChanged : null,
         ),
       ],
+    );
+  }
+
+  Widget _buildRefreshableContent(BuildContext context, {required Widget child}) {
+    return RefreshIndicator(
+      onRefresh: () => _fetch(page: _page),
+      child: Stack(
+        children: [
+          child,
+          if (_loading)
+            const Positioned(
+              top: 8,
+              right: 8,
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileList(BuildContext context) {
+    return _buildRefreshableContent(
+      context,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        itemCount: _items.length,
+        itemBuilder: (context, index) {
+          final item = _items[index];
+          if (widget.mobileItemBuilder != null) {
+            return widget.mobileItemBuilder!(context, item);
+          }
+          return _buildDefaultMobileItem(context, item);
+        },
+      ),
+    );
+  }
+
+  Widget _buildDefaultMobileItem(BuildContext context, T item) {
+    final labeledColumns =
+        widget.columns.where((c) => c.label.trim().isNotEmpty).toList();
+    final actionColumns =
+        widget.columns.where((c) => c.label.trim().isEmpty).toList();
+
+    final titleColumn = labeledColumns.isNotEmpty ? labeledColumns.first : null;
+    final detailColumns =
+        labeledColumns.length > 1 ? labeledColumns.sublist(1) : <TableColumnDef<T>>[];
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: widget.onRowTap != null ? () => widget.onRowTap!(item) : null,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (titleColumn != null)
+                      DefaultTextStyle(
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          color: AppTheme.textPrimary,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        child: titleColumn.cellBuilder(context, item),
+                      ),
+                    if (detailColumns.isNotEmpty) const SizedBox(height: 8),
+                    for (final column in detailColumns)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 84,
+                              child: Text(
+                                column.label,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            Expanded(child: column.cellBuilder(context, item)),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (actionColumns.isNotEmpty)
+                Column(
+                  children: [
+                    for (final column in actionColumns)
+                      column.cellBuilder(context, item),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

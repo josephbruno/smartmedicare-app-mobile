@@ -60,6 +60,7 @@ abstract class AppPermissions {
 
   // EMR
   static const String emrVisitsView = 'emr.visits.view';
+  static const String emrMasterDataManage = 'emr.master_data.manage';
   static const String emrVisitsCreate = 'emr.visits.create';
   static const String emrVisitsEdit = 'emr.visits.edit';
   static const String emrVisitsBill = 'emr.visits.bill';
@@ -99,6 +100,26 @@ abstract class AppRoles {
     branchManager,
     doctor,
     cashier,
+  ];
+
+  /// Default cashier permissions (mirrors RolePermissionSeeder).
+  static const List<String> cashierPermissions = [
+    AppPermissions.productsView,
+    AppPermissions.inventoryView,
+    AppPermissions.invoicesView,
+    AppPermissions.invoicesCreate,
+    AppPermissions.paymentsCreate,
+    AppPermissions.customersView,
+    AppPermissions.customersCreate,
+    AppPermissions.customersEdit,
+    AppPermissions.petsView,
+    AppPermissions.petsCreate,
+    AppPermissions.emrVisitsView,
+    AppPermissions.emrVisitsBill,
+    AppPermissions.emrRemindersView,
+    AppPermissions.patientAppointmentsView,
+    AppPermissions.patientAppointmentsCreate,
+    AppPermissions.discountsApply,
   ];
 }
 

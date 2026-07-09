@@ -23,11 +23,19 @@ class CashierDashboardSection extends StatefulWidget {
 class _CashierDashboardSectionState extends State<CashierDashboardSection> {
   late Future<DashboardData> _shiftFuture;
 
+  void _loadShiftStats() {
+    final auth = context.read<AuthSession>();
+    _shiftFuture = context.read<AppServices>().reports.dashboard(
+          branchId: auth.currentBranchId,
+        );
+    setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
-    _shiftFuture = context.read<AppServices>().reports.dashboard();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadShiftStats();
       context.read<VisitBillingQueueNotifier>().startPolling(
             context.read<AppServices>().emr,
             interval: const Duration(seconds: 25),
@@ -44,6 +52,38 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
         FutureBuilder<DashboardData>(
           future: _shiftFuture,
           builder: (context, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return const Padding(
+                padding: EdgeInsets.only(bottom: 20),
+                child: SizedBox(
+                  height: 88,
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                ),
+              );
+            }
+            if (snap.hasError) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: AppTheme.danger),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Could not load shift stats: ${snap.error}',
+                            style: const TextStyle(color: AppTheme.textSecondary),
+                          ),
+                        ),
+                        TextButton(onPressed: _loadShiftStats, child: const Text('Retry')),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
             if (!snap.hasData) return const SizedBox.shrink();
             final d = snap.data!;
             return Padding(
@@ -221,16 +261,14 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
           },
         ),
         const SizedBox(height: 28),
-        Row(
-          children: [
-            const DashboardSectionHeader(icon: Icons.pause_circle_outline, title: 'Bills on hold'),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: _reload,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Refresh'),
-            ),
-          ],
+        DashboardSectionHeader(
+          icon: Icons.pause_circle_outline,
+          title: 'Bills on hold',
+          trailing: TextButton.icon(
+            onPressed: _reload,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Refresh'),
+          ),
         ),
         const SizedBox(height: 12),
         FutureBuilder<List<PetVisit>>(

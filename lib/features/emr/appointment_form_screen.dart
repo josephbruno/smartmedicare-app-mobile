@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mobile/core/messaging/app_messenger.dart';
+import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -217,14 +217,23 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: _appointmentType,
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Appointment type'),
-            items: _types.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+            items: _types
+                .map(
+                  (t) => DropdownMenuItem(
+                    value: t,
+                    child: Text(t, overflow: TextOverflow.ellipsis, maxLines: 1),
+                  ),
+                )
+                .toList(),
             onChanged: (v) => setState(() => _appointmentType = v ?? 'consultation'),
           ),
           if (_isEdit) ...[
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: _status,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Status'),
               items: const [
                 DropdownMenuItem(value: 'scheduled', child: Text('Scheduled')),
@@ -241,11 +250,35 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           if (_doctors.isNotEmpty)
             DropdownButtonFormField<int>(
               value: _selectedDoctor?.id,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Doctor'),
+              selectedItemBuilder: (context) => [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('— None —', overflow: TextOverflow.ellipsis, maxLines: 1),
+                ),
+                ..._doctors.map(
+                  (d) => Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      d.displayLabel,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                ),
+              ],
               items: [
                 const DropdownMenuItem(value: null, child: Text('— None —')),
                 ..._doctors.map(
-                  (d) => DropdownMenuItem(value: d.id, child: Text(d.name)),
+                  (d) => DropdownMenuItem(
+                    value: d.id,
+                    child: Text(
+                      d.displayLabel,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
                 ),
               ],
               onChanged: (id) => setState(() {

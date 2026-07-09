@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mobile/core/messaging/app_messenger.dart';
+import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +8,7 @@ import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
 import '../../data/models/product.dart';
+import '../../data/services/emr_master_data_service.dart';
 
 class VisitFormScreen extends StatefulWidget {
   const VisitFormScreen({super.key, this.visitId, this.appointmentId, this.petId});
@@ -40,6 +41,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   final List<_MedicineRow> _medicines = [];
   List<String> _complaintSuggestions = [];
   List<VisitDiagnosis> _diagnosisSuggestions = [];
+  List<TreatmentSuggestion> _treatmentSuggestions = [];
+  List<MedicineSuggestion> _medicineSuggestions = [];
+  List<String> _dosageSuggestions = [];
+  List<String> _frequencySuggestions = [];
   PetSummary? _petSummary;
   int? _serviceChargeProductId;
   String? _serviceChargeProductName;
@@ -79,6 +84,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     try {
       _doctors = await emr.listDoctors();
       _complaintSuggestions = await emr.getComplaints();
+      _treatmentSuggestions = await emr.getTreatmentSuggestions();
+      _medicineSuggestions = await emr.getMedicineSuggestions();
+      _dosageSuggestions = await emr.getDosageSuggestions();
+      _frequencySuggestions = await emr.getFrequencySuggestions();
 
       if (auth.hasRole('doctor') && auth.user != null) {
         _selectedDoctor = _doctors.where((d) => d.id == auth.user!.id).firstOrNull ??
@@ -245,6 +254,28 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           _weight.text = summary.weight.toString();
         }
       }
+    } catch (_) {}
+  }
+
+  Future<void> _searchTreatments(String q) async {
+    if (q.length < 2) {
+      setState(() => _treatmentSuggestions = []);
+      return;
+    }
+    try {
+      final results = await context.read<AppServices>().emr.getTreatmentSuggestions(q: q);
+      if (mounted) setState(() => _treatmentSuggestions = results);
+    } catch (_) {}
+  }
+
+  Future<void> _searchMedicines(String q) async {
+    if (q.length < 2) {
+      setState(() => _medicineSuggestions = []);
+      return;
+    }
+    try {
+      final results = await context.read<AppServices>().emr.getMedicineSuggestions(q: q);
+      if (mounted) setState(() => _medicineSuggestions = results);
     } catch (_) {}
   }
 
@@ -561,9 +592,15 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: _visitType,
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Visit type'),
             items: _visitTypes
-                .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                .map(
+                  (t) => DropdownMenuItem(
+                    value: t,
+                    child: Text(t, overflow: TextOverflow.ellipsis, maxLines: 1),
+                  ),
+                )
                 .toList(),
             onChanged: (v) => setState(() => _visitType = v ?? 'consultation'),
           ),
@@ -571,13 +608,34 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           if (_doctors.isNotEmpty)
             DropdownButtonFormField<int>(
               value: _selectedDoctor?.id,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Doctor'),
+              selectedItemBuilder: (context) => [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('— None —', overflow: TextOverflow.ellipsis, maxLines: 1),
+                ),
+                ..._doctors.map(
+                  (d) => Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      d.displayLabel,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                ),
+              ],
               items: [
                 const DropdownMenuItem(value: null, child: Text('— None —')),
                 ..._doctors.map(
                   (d) => DropdownMenuItem(
                     value: d.id,
-                    child: Text(d.specialty != null ? '${d.name} (${d.specialty})' : d.name),
+                    child: Text(
+                      d.displayLabel,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
                   ),
                 ),
               ],
@@ -651,7 +709,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
+                child: OutlinedButton(
                   onPressed: () async {
                     final d = await showDatePicker(
                       context: context,
@@ -661,13 +719,24 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     );
                     if (d != null) setState(() => _visitDate = d);
                   },
-                  icon: const Icon(Icons.calendar_today, size: 18),
-                  label: Text(_visitDate.toIso8601String().substring(0, 10)),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, size: 18),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _visitDate.toIso8601String().substring(0, 10),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: OutlinedButton.icon(
+                child: OutlinedButton(
                   onPressed: () async {
                     final t = await showTimePicker(
                       context: context,
@@ -675,8 +744,19 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     );
                     if (t != null) setState(() => _visitTime = t);
                   },
-                  icon: const Icon(Icons.access_time, size: 18),
-                  label: Text(_visitTime.format(context)),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.access_time, size: 18),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _visitTime.format(context),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -855,6 +935,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                               isDense: true,
                             ),
                             controller: t.nameCtrl,
+                            onChanged: _searchTreatments,
                           ),
                         ),
                         IconButton(
@@ -877,6 +958,30 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         ),
                       ],
                     ),
+                    if (_treatmentSuggestions.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _treatmentSuggestions.take(6).map((s) {
+                            return ActionChip(
+                              label: Text(s.name, style: const TextStyle(fontSize: 12)),
+                              onPressed: () {
+                                setState(() {
+                                  t.nameCtrl.text = s.name;
+                                  if (s.defaultPrice != null &&
+                                      (t.priceCtrl.text.isEmpty ||
+                                          t.priceCtrl.text == '0')) {
+                                    t.priceCtrl.text = s.defaultPrice.toString();
+                                  }
+                                  _treatmentSuggestions = [];
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     Row(
                       children: [
                         Expanded(
@@ -938,6 +1043,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                               isDense: true,
                             ),
                             controller: m.nameCtrl,
+                            onChanged: _searchMedicines,
                           ),
                         ),
                         IconButton(
@@ -959,6 +1065,34 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         ),
                       ],
                     ),
+                    if (_medicineSuggestions.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _medicineSuggestions.take(6).map((s) {
+                            return ActionChip(
+                              label: Text(s.name, style: const TextStyle(fontSize: 12)),
+                              onPressed: () {
+                                setState(() {
+                                  m.nameCtrl.text = s.name;
+                                  if (s.defaultDosage != null && m.dosageCtrl.text.isEmpty) {
+                                    m.dosageCtrl.text = s.defaultDosage!;
+                                  }
+                                  if (s.defaultFrequency != null && m.freqCtrl.text.isEmpty) {
+                                    m.freqCtrl.text = s.defaultFrequency!;
+                                  }
+                                  if (s.defaultDurationDays != null && m.daysCtrl.text.isEmpty) {
+                                    m.daysCtrl.text = s.defaultDurationDays.toString();
+                                  }
+                                  _medicineSuggestions = [];
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     Row(
                       children: [
                         Expanded(
@@ -976,6 +1110,28 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         ),
                       ],
                     ),
+                    if (_dosageSuggestions.isNotEmpty || _frequencySuggestions.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            ..._dosageSuggestions.take(4).map(
+                                  (d) => ActionChip(
+                                    label: Text(d, style: const TextStyle(fontSize: 11)),
+                                    onPressed: () => setState(() => m.dosageCtrl.text = d),
+                                  ),
+                                ),
+                            ..._frequencySuggestions.take(4).map(
+                                  (f) => ActionChip(
+                                    label: Text(f, style: const TextStyle(fontSize: 11)),
+                                    onPressed: () => setState(() => m.freqCtrl.text = f),
+                                  ),
+                                ),
+                          ],
+                        ),
+                      ),
                     const SizedBox(height: 8),
                     Row(
                       children: [

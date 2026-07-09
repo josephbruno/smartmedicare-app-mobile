@@ -6,6 +6,7 @@ import '../json_helpers.dart';
 import '../models/api_response.dart';
 import '../models/emr.dart';
 import '../models/invoice.dart';
+import 'emr_master_data_service.dart';
 
 class EmrService {
   EmrService(this._client);
@@ -329,6 +330,72 @@ class EmrService {
                   isPrimary: false,
                 ))
             .toList();
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<TreatmentSuggestion>> getTreatmentSuggestions({String? q}) async {
+    try {
+      final res = await _client.get(
+        '/visits/treatments',
+        queryParameters: q != null && q.isNotEmpty ? {'q': q} : null,
+      );
+      return parseEnvelopeData(res, (data) {
+        if (data is! List) return <TreatmentSuggestion>[];
+        return data
+            .whereType<Map>()
+            .map((e) => TreatmentSuggestion.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<MedicineSuggestion>> getMedicineSuggestions({String? q}) async {
+    try {
+      final res = await _client.get(
+        '/visits/medicines',
+        queryParameters: q != null && q.isNotEmpty ? {'q': q} : null,
+      );
+      return parseEnvelopeData(res, (data) {
+        if (data is! List) return <MedicineSuggestion>[];
+        return data
+            .whereType<Map>()
+            .map((e) => MedicineSuggestion.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<String>> getDosageSuggestions({String? q}) async {
+    try {
+      final res = await _client.get(
+        '/visits/dosages',
+        queryParameters: q != null && q.isNotEmpty ? {'q': q} : null,
+      );
+      return parseEnvelopeData(res, (data) {
+        if (data is List) return data.map((e) => e.toString()).toList();
+        return <String>[];
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<String>> getFrequencySuggestions({String? q}) async {
+    try {
+      final res = await _client.get(
+        '/visits/frequencies',
+        queryParameters: q != null && q.isNotEmpty ? {'q': q} : null,
+      );
+      return parseEnvelopeData(res, (data) {
+        if (data is List) return data.map((e) => e.toString()).toList();
+        return <String>[];
       });
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);

@@ -190,6 +190,9 @@ class DoctorLite {
   final String? specialty;
   final double? consultationFee;
 
+  String get displayLabel =>
+      specialty != null && specialty!.isNotEmpty ? '$name ($specialty)' : name;
+
   factory DoctorLite.fromJson(Map<String, dynamic> j) => DoctorLite(
         id: intOrNull(j['id']) ?? 0,
         name: j['name']?.toString() ?? '',

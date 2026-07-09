@@ -1,10 +1,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile/core/app_config.dart';
-import 'package:mobile/data/json_helpers.dart';
-import 'package:mobile/data/models/dashboard_data.dart';
-import 'package:mobile/data/models/invoice.dart';
-import 'package:mobile/data/models/product.dart';
+import 'package:maran/core/app_config.dart';
+import 'package:maran/data/json_helpers.dart';
+import 'package:maran/data/models/dashboard_data.dart';
+import 'package:maran/data/models/invoice.dart';
+import 'package:maran/data/models/product.dart';
 
 /// Optional live checks against the deployed API.
 ///

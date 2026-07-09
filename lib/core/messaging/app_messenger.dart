@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:mobile/core/messaging/app_messenger.dart';
 
 import '../theme/app_theme.dart';
 

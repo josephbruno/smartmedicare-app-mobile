@@ -10,6 +10,7 @@ import 'data/services/inventory_service.dart';
 import 'data/services/product_service.dart';
 import 'data/services/purchase_service.dart';
 import 'data/services/reports_service.dart';
+import 'data/services/emr_master_data_service.dart';
 import 'data/services/settings_service.dart';
 
 /// Centralized API services (constructed once per app).
@@ -24,6 +25,7 @@ class AppServices {
         suppliers = SupplierService(api),
         expenses = ExpenseService(api),
         emr = EmrService(api),
+        emrMasterData = EmrMasterDataService(api),
         doctors = DoctorService(api),
         reports = ReportsService(api),
         shop = ShopService(api),
@@ -41,6 +43,7 @@ class AppServices {
   final SupplierService suppliers;
   final ExpenseService expenses;
   final EmrService emr;
+  final EmrMasterDataService emrMasterData;
   final DoctorService doctors;
   final ReportsService reports;
   final ShopService shop;

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mobile/core/messaging/app_messenger.dart';
+import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,7 +36,10 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthSession>();
-      if (auth.isAuthenticated && (auth.user?.roles.isEmpty ?? false)) {
+      if (auth.isAuthenticated && auth.isUnlocked) {
+        auth.refreshProfileIfNeeded();
+      } else if (auth.isAuthenticated &&
+          (auth.user?.roles.isEmpty ?? false)) {
         auth.fetchMe();
       }
     });
@@ -860,6 +863,8 @@ List<_MenuItem> _menuItems(AuthSession auth) {
       _MenuItem(label: 'Suppliers', icon: Icons.local_shipping_outlined, path: '/suppliers'),
     if (can('doctors.manage'))
       _MenuItem(label: 'Doctors', icon: Icons.medical_information_outlined, path: '/settings/doctors'),
+    if (can('emr.master_data.manage'))
+      _MenuItem(label: 'EMR Master Data', icon: Icons.list_alt_outlined, path: '/settings/emr-master-data'),
     if (can('shop.manage'))
       _MenuItem(label: 'Settings', icon: Icons.settings_outlined, path: '/settings'),
     if (can('users.view'))
@@ -894,6 +899,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/reports/sales')) return 'Sales Report';
   if (path.startsWith('/reports/gst')) return 'GST Report';
   if (path.startsWith('/settings/doctors')) return 'Doctors';
+  if (path.startsWith('/settings/emr-master-data')) return 'EMR Master Data';
   if (path.startsWith('/settings/users')) return 'Users';
   if (path.startsWith('/settings/branches')) return 'Branches';
   if (path.startsWith('/settings')) return 'Settings';
@@ -1084,35 +1090,37 @@ class _MobileShell extends StatelessWidget {
         ),
       ),
       body: child,
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 10,
-              offset: Offset(0, -2),
-            ),
-          ],
-        ),
-        child: NavigationBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          height: 64,
-          indicatorColor: AppTheme.primary.withOpacity(0.12),
-          selectedIndex: _mobileNavIndex(location, destinations),
-          onDestinationSelected: (i) {
-            context.go(destinations[i].location);
-          },
-          destinations: [
-            for (final d in destinations)
-              NavigationDestination(
-                icon: Icon(d.icon, color: AppTheme.textSecondary),
-                selectedIcon: Icon(d.activeIcon, color: AppTheme.primary),
-                label: d.label,
+      bottomNavigationBar: destinations.length >= 2
+          ? Container(
+              decoration: const BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 10,
+                    offset: Offset(0, -2),
+                  ),
+                ],
               ),
-          ],
-        ),
-      ),
+              child: NavigationBar(
+                backgroundColor: Colors.white,
+                elevation: 0,
+                height: 64,
+                indicatorColor: AppTheme.primary.withOpacity(0.12),
+                selectedIndex: _mobileNavIndex(location, destinations),
+                onDestinationSelected: (i) {
+                  context.go(destinations[i].location);
+                },
+                destinations: [
+                  for (final d in destinations)
+                    NavigationDestination(
+                      icon: Icon(d.icon, color: AppTheme.textSecondary),
+                      selectedIcon: Icon(d.activeIcon, color: AppTheme.primary),
+                      label: d.label,
+                    ),
+                ],
+              ),
+            )
+          : null,
     );
   }
 }
