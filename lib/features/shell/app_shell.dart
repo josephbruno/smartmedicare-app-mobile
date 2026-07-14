@@ -350,6 +350,14 @@ class _DesktopShellState extends State<_DesktopShell> {
     }
   }
 
+  bool _isMenuItemSelected(String location, String? menuPath, List<_MenuItem> allItems) {
+    if (menuPath == null) return false;
+
+    // Since all menus are separate (no parent-child relationships),
+    // only highlight on exact path match
+    return location == menuPath;
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = _menuItems(widget.auth);
@@ -439,8 +447,7 @@ class _DesktopShellState extends State<_DesktopShell> {
                       }
                       if (m.path == null) return const SizedBox.shrink();
 
-                      final isSelected =
-                          widget.location == m.path || widget.location.startsWith('${m.path}/');
+                      final isSelected = _isMenuItemSelected(widget.location, m.path, items);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Tooltip(
@@ -830,10 +837,8 @@ List<_MenuItem> _menuItems(AuthSession auth) {
   addSection('INVENTORY', [
     if (can('products.view'))
       _MenuItem(label: 'Products', icon: Icons.inventory_2_outlined, path: '/products'),
-    if (can('inventory.view')) ...[
+    if (can('inventory.view'))
       _MenuItem(label: 'Inventory', icon: Icons.warehouse_outlined, path: '/inventory'),
-      _MenuItem(label: 'Stock Ageing', icon: Icons.timeline_outlined, path: '/stock-ageing'),
-    ],
     if (can('inventory.transfer'))
       _MenuItem(label: 'Stock Transfers', icon: Icons.swap_horiz_outlined, path: '/stock-transfers'),
   ]);
@@ -843,8 +848,6 @@ List<_MenuItem> _menuItems(AuthSession auth) {
       _MenuItem(label: 'Customers', icon: Icons.people_outline, path: '/customers'),
       _MenuItem(label: 'Patient List', icon: Icons.pets_outlined, path: '/patients'),
     ],
-    if (can('patient_appointments.view'))
-      _MenuItem(label: 'Patient Appointments', icon: Icons.event_outlined, path: '/emr/appointments'),
     if (can('emr.visits.view'))
       _MenuItem(label: 'Visit Records', icon: Icons.medical_services_outlined, path: '/emr/visits'),
     if (can('emr.reminders.view'))
@@ -887,7 +890,6 @@ String _titleForPath(String path) {
   if (path.startsWith('/suppliers')) return 'Suppliers';
   if (path.startsWith('/customers')) return 'Customers';
   if (path.startsWith('/patients')) return 'Patient List';
-  if (path.startsWith('/emr/appointments')) return 'Patient Appointments';
   if (path.startsWith('/emr/pets') && path.contains('/timeline')) return 'Pet Timeline';
   if (path.startsWith('/emr/pets') && path.contains('/deworming')) return 'Deworming';
   if (path.startsWith('/emr/pets') && path.contains('/surgeries')) return 'Surgeries';

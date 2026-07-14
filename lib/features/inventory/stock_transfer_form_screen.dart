@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/session/auth_session.dart';
+import '../../core/theme/app_theme.dart';
 import '../../data/models/inventory.dart';
 import '../../data/models/shop.dart';
 
@@ -128,53 +129,183 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('New Stock Transfer')),
+      appBar: AppBar(
+        title: const Text('New Stock Transfer'),
+        elevation: 1,
+        backgroundColor: Colors.white,
+        foregroundColor: AppTheme.textPrimary,
+      ),
+      backgroundColor: AppTheme.background,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!))
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: _loadData,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
               : ListView(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
                   children: [
-                    DropdownButtonFormField<int>(
-                      value: _toBranchId,
-                      decoration:
-                          const InputDecoration(labelText: 'Send to branch'),
-                      items: [
-                        for (final b in _branches)
-                          DropdownMenuItem(value: b.id, child: Text(b.name)),
-                      ],
-                      onChanged: (v) => setState(() => _toBranchId = v),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _notes,
-                      decoration: const InputDecoration(
-                          labelText: 'Notes (optional)'),
-                    ),
-                    const Divider(height: 32),
-                    const Text('Items',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    for (int i = 0; i < _rows.length; i++) _buildRow(i),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => setState(() => _rows.add(_LineRow())),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Add item'),
-                    ),
-                    const SizedBox(height: 24),
-                    FilledButton(
-                      onPressed: _saving ? null : _submit,
-                      child: _saving
-                          ? const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Send Request'),
-                    ),
+                    _buildDetailsCard(),
+                    const SizedBox(height: 20),
+                    _buildItemsCard(),
+                    const SizedBox(height: 28),
+                    _buildActions(),
                   ],
                 ),
+    );
+  }
+
+  Widget _buildDetailsCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Transfer Details',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<int>(
+            value: _toBranchId,
+            decoration: InputDecoration(
+              labelText: 'Send to branch *',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: AppTheme.primary, width: 2),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+            items: [
+              for (final b in _branches)
+                DropdownMenuItem(
+                  value: b.id,
+                  child: Text(
+                    b.name,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+            ],
+            onChanged: (v) => setState(() => _toBranchId = v),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _notes,
+            maxLines: 3,
+            decoration: InputDecoration(
+              labelText: 'Notes (optional)',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              hintText: 'Add any special instructions or comments',
+              hintStyle: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemsCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Items',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+              ),
+              Text(
+                '${_rows.where((r) => r.productId != null).length} item${_rows.where((r) => r.productId != null).length != 1 ? 's' : ''}',
+                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          for (int i = 0; i < _rows.length; i++)
+            Padding(
+              padding: EdgeInsets.only(bottom: i < _rows.length - 1 ? 10 : 0),
+              child: _buildRow(i),
+            ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => setState(() => _rows.add(_LineRow())),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add item'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton(
+          onPressed: _saving ? null : _submit,
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+          child: _saving
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Send Request', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton(
+          onPressed: _saving ? null : () => context.pop(),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+          child: const Text('Cancel'),
+        ),
+      ],
     );
   }
 
@@ -188,10 +319,18 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
         .toSet();
     final options = _stock
         .where((s) =>
-            (_availableFor(s.productId) > 0) && !chosen.contains(s.productId))
+            (_availableFor(s.productId) > 0) &&
+            (!chosen.contains(s.productId) || s.productId == row.productId))
         .toList();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    final available = row.productId != null ? _availableFor(row.productId) : 0;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -199,14 +338,39 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
             child: DropdownButtonFormField<int>(
               value: row.productId,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Product'),
+              decoration: InputDecoration(
+                labelText: 'Product',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: const BorderSide(color: AppTheme.primary, width: 2),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
               items: [
                 for (final s in options)
                   DropdownMenuItem(
                     value: s.productId,
                     child: Text(
-                      '${s.product?.name ?? 'Product #${s.productId}'} (${_availableFor(s.productId)})',
+                      '${s.product?.name ?? 'Product #${s.productId}'} (Avail: ${_availableFor(s.productId)})',
                       overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
               ],
@@ -216,22 +380,28 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
               }),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
             flex: 1,
             child: TextField(
               controller: row.qty,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Qty'),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Qty',
+                helperText: available > 0 ? 'Max: $available' : '',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              ),
             ),
           ),
-          IconButton(
-            onPressed: _rows.length == 1
-                ? null
-                : () => setState(() => _rows.removeAt(i)),
-            icon: const Icon(Icons.close),
-          ),
+          const SizedBox(width: 8),
+          if (_rows.length > 1)
+            IconButton(
+              onPressed: () => setState(() => _rows.removeAt(i)),
+              icon: const Icon(Icons.close, size: 20),
+              color: AppTheme.danger,
+              tooltip: 'Remove item',
+            ),
         ],
       ),
     );

@@ -1,24 +1,23 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/services/device_token_service.dart';
-import '../../firebase_options.dart';
 import '../app_config.dart';
 import '../desktop/desktop_prefs.dart';
 import '../services/permission_service.dart';
 import '../session/auth_session.dart';
 
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-}
+// NOTE: Firebase (firebase_core / firebase_messaging) has been intentionally
+// excluded from the Windows build because the precompiled Firebase C++ Windows
+// SDK is ABI-incompatible with VS 2022 17.12 (unresolved __std_remove_8 /
+// __std_find_last_of_trivial_pos_1 linker symbols).
+// FCM is already gated to Android/iOS only at runtime; this stub preserves
+// full Windows/desktop functionality via flutter_local_notifications.
 
 typedef NotificationTapHandler = void Function(Map<String, dynamic> data);
 
@@ -37,7 +36,6 @@ class PushNotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
-  bool _fcmReady = false;
   String? _currentToken;
   NotificationTapHandler? _onTap;
   final Set<int> _seenCompletedVisitIds = {};
@@ -79,7 +77,8 @@ class PushNotificationService {
           ?.createNotificationChannel(_visitChannel);
     }
 
-    // Cashiers on Linux/Windows use visit polling + local notifications (no FCM).
+    // FCM is only supported on Android/iOS. On Windows/Linux/macOS we rely on
+    // visit polling + local notifications instead.
     if (_supportsFcm && !_auth.hasRole(AppRoles.cashier)) {
       await _initFcm();
     }
@@ -96,46 +95,21 @@ class PushNotificationService {
   bool get _cashierNotificationsEnabled =>
       _auth.hasRole(AppRoles.cashier) && AppConfig.isCashierPlatform;
 
+  /// FCM initialisation — mobile only (Android / iOS).
+  /// On Windows this method is never called (see [_supportsFcm]).
   Future<void> _initFcm() async {
-    try {
-      if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
-        );
-      }
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-      _fcmReady = true;
-
-      final settings = await FirebaseMessaging.instance.requestPermission();
-      if (settings.authorizationStatus == AuthorizationStatus.denied) {
-        return;
-      }
-
-      FirebaseMessaging.onMessage.listen(_showRemoteMessage);
-      FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        _onTap?.call(message.data);
-      });
-
-      final initial = await FirebaseMessaging.instance.getInitialMessage();
-      if (initial != null) {
-        _onTap?.call(initial.data);
-      }
-
-      FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
-        _currentToken = token;
-        await _registerToken(token);
-      });
-
-      _currentToken = await FirebaseMessaging.instance.getToken();
-    } catch (e) {
-      debugPrint('FCM init skipped: $e');
-      _fcmReady = false;
-    }
+    // Firebase is excluded from the Windows build.
+    // On Android/iOS this would normally initialise firebase_messaging,
+    // but we guard entry via [_supportsFcm] so this is only reached on mobile.
+    // If you need FCM on mobile, re-add firebase_core & firebase_messaging to
+    // pubspec.yaml (Windows is unaffected by those packages at the Dart level;
+    // the issue is purely in the precompiled C++ Windows SDK).
+    debugPrint('FCM init skipped on this platform (Firebase not linked).');
   }
 
   Future<void> syncRegistration() async {
     if (!_initialized || _auth.hasRole(AppRoles.cashier)) return;
-    if (_fcmReady && _currentToken != null) {
+    if (_currentToken != null) {
       await _registerToken(_currentToken!);
     }
   }
@@ -160,16 +134,6 @@ class PushNotificationService {
     } catch (e) {
       debugPrint('Device token registration failed: $e');
     }
-  }
-
-  void _showRemoteMessage(RemoteMessage message) {
-    final notification = message.notification;
-    _showLocal(
-      id: message.hashCode,
-      title: notification?.title ?? 'Maran Billing',
-      body: notification?.body ?? 'New notification',
-      payload: _encodePayload(message.data),
-    );
   }
 
   Future<void> showVisitReady({

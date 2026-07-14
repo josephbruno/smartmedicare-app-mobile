@@ -42,7 +42,6 @@ class AppTheme {
 
     return base.copyWith(
       dialogTheme: DialogThemeData(
-        constraints: BoxConstraints(maxWidth: dialogMaxWidth),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       iconTheme: IconThemeData(color: textPrimary, size: defaultIconSize),
@@ -53,10 +52,10 @@ class AppTheme {
         scrolledUnderElevation: 0,
         iconTheme: IconThemeData(color: textPrimary, size: appBarIconSize),
         titleTextStyle: const TextStyle(
+          fontFamily: 'Roboto',
           color: textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.bold,
-          fontFamily: 'Roboto',
         ),
       ),
       cardTheme: CardThemeData(
@@ -73,8 +72,8 @@ class AppTheme {
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        hintStyle: const TextStyle(color: textSecondary, fontSize: 14),
-        labelStyle: const TextStyle(color: textSecondary, fontSize: 14, fontWeight: FontWeight.w500),
+        hintStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 14),
+        labelStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 14, fontWeight: FontWeight.w500),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
@@ -107,6 +106,7 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: const TextStyle(
+            fontFamily: 'Roboto',
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2,
@@ -123,6 +123,7 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: const TextStyle(
+            fontFamily: 'Roboto',
             fontSize: 16,
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2,
@@ -134,6 +135,7 @@ class AppTheme {
           foregroundColor: primary,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           textStyle: const TextStyle(
+            fontFamily: 'Roboto',
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -144,39 +146,46 @@ class AppTheme {
         elevation: 8,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         contentTextStyle: const TextStyle(
+          fontFamily: 'Roboto',
           fontWeight: FontWeight.w600,
           fontSize: 14,
         ),
       ),
       textTheme: base.textTheme.copyWith(
         titleLarge: const TextStyle(
+          fontFamily: 'Roboto',
           color: textPrimary,
           fontSize: 22,
           fontWeight: FontWeight.bold,
           letterSpacing: -0.5,
         ),
         titleMedium: const TextStyle(
+          fontFamily: 'Roboto',
           color: textPrimary,
           fontSize: 18,
           fontWeight: FontWeight.w600,
           letterSpacing: -0.2,
         ),
         titleSmall: const TextStyle(
+          fontFamily: 'Roboto',
           color: textPrimary,
           fontSize: 15,
           fontWeight: FontWeight.w600,
         ),
         bodyLarge: const TextStyle(
+          fontFamily: 'Roboto',
           color: textPrimary,
           fontSize: 15,
           fontWeight: FontWeight.normal,
         ),
         bodyMedium: const TextStyle(
+          fontFamily: 'Roboto',
           color: textSecondary,
           fontSize: 13.5,
           height: 1.4,
         ),
         labelMedium: const TextStyle(
+          fontFamily: 'Roboto',
           color: textSecondary,
           fontSize: 12,
           fontWeight: FontWeight.bold,

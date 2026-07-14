@@ -32,6 +32,16 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# Workaround: Firebase C++ SDK (precompiled) is incompatible with VS 2022 17.8+
+# because the MSVC STL introduced new vectorized intrinsics (__std_remove_8,
+# __std_find_last_of_trivial_pos_1) that are not present in the precompiled lib.
+# This flag disables those vectorized implementations to restore ABI compatibility.
+add_definitions(-D_DISABLE_VECTOR_ANNOTATION)
+
+# Fix C1041: Force synchronous PDB writes so multiple cl.exe processes don't
+# conflict when writing to the same .pdb file during parallel builds.
+add_compile_options(/FS)
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by

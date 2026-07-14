@@ -22,46 +22,64 @@ class ProductListScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      floatingActionButton: canCreate
-          ? FloatingActionButton(
-              onPressed: () => context.go('/products/new'),
-              backgroundColor: AppTheme.primary,
-              foregroundColor: Colors.white,
-              child: const Icon(Icons.add_rounded),
-            )
-          : null,
-      body: AppPaginatedTable<Product>(
-        emptyMessage: 'No products yet. Tap + to add your first product.',
-        loadPage: ({required page, required perPage}) =>
-            services.products.listPaginated(page: page, perPage: perPage),
-        onRowTap: canEdit ? (p) => context.go('/products/${p.id}/edit') : null,
-        columns: const [
-          TableColumnDef(label: 'Product', flex: 2, cellBuilder: _nameCell),
-          TableColumnDef(label: 'SKU', flex: 1, cellBuilder: _skuCell),
-          TableColumnDef(label: 'Category', flex: 1.2, cellBuilder: _categoryCell),
-          TableColumnDef(
-            label: 'Stock',
-            flex: 0.8,
-            align: TextAlign.center,
-            cellBuilder: _stockCell,
+      body: Column(
+        children: [
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Products',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                if (canCreate)
+                  FilledButton.icon(
+                    onPressed: () => context.go('/products/new'),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('New Product'),
+                  ),
+              ],
+            ),
           ),
-          TableColumnDef(
-            label: 'Price',
-            flex: 1,
-            align: TextAlign.right,
-            cellBuilder: _priceCell,
-          ),
-          TableColumnDef(
-            label: 'MRP',
-            flex: 1,
-            align: TextAlign.right,
-            cellBuilder: _mrpCell,
-          ),
-          TableColumnDef(
-            label: 'Status',
-            flex: 0.8,
-            align: TextAlign.center,
-            cellBuilder: _statusCell,
+          Expanded(
+            child: AppPaginatedTable<Product>(
+              emptyMessage: 'No products yet. Click New Product to add your first product.',
+              loadPage: ({required page, required perPage}) =>
+                  services.products.listPaginated(page: page, perPage: perPage),
+              onRowTap: canEdit ? (p) => context.go('/products/${p.id}/edit') : null,
+              columns: const [
+                TableColumnDef(label: 'Product', flex: 2, cellBuilder: _nameCell),
+                TableColumnDef(label: 'SKU', flex: 1, cellBuilder: _skuCell),
+                TableColumnDef(label: 'Category', flex: 1.2, cellBuilder: _categoryCell),
+                TableColumnDef(
+                  label: 'Stock',
+                  flex: 0.8,
+                  align: TextAlign.center,
+                  cellBuilder: _stockCell,
+                ),
+                TableColumnDef(
+                  label: 'Price',
+                  flex: 1,
+                  align: TextAlign.right,
+                  cellBuilder: _priceCell,
+                ),
+                TableColumnDef(
+                  label: 'MRP',
+                  flex: 1,
+                  align: TextAlign.right,
+                  cellBuilder: _mrpCell,
+                ),
+                TableColumnDef(
+                  label: 'Status',
+                  flex: 0.8,
+                  align: TextAlign.center,
+                  cellBuilder: _statusCell,
+                ),
+              ],
+            ),
           ),
         ],
       ),

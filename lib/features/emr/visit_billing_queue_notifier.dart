@@ -15,7 +15,7 @@ class VisitBillingQueueNotifier extends ChangeNotifier {
   Timer? _timer;
   EmrService? _emr;
 
-  void startPolling(EmrService emr, {Duration interval = const Duration(seconds: 30)}) {
+  void startPolling(EmrService emr, {Duration interval = const Duration(seconds: 90)}) {
     _emr = emr;
     _timer?.cancel();
     _timer = Timer.periodic(interval, (_) => unawaited(refresh()));

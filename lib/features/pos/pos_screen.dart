@@ -1192,6 +1192,9 @@ class _PosScreenState extends State<PosScreen> {
         ShortcutKey.ctrl(LogicalKeyboardKey.enter): () {
           if (cart.items.isNotEmpty) _checkout();
         },
+        ShortcutKey.ctrl(LogicalKeyboardKey.numpadEnter): () {
+          if (cart.items.isNotEmpty) _checkout();
+        },
         ShortcutKey.ctrl(LogicalKeyboardKey.keyE): cart.clear,
         ShortcutKey.ctrl(LogicalKeyboardKey.keyH): () {
           if (cart.items.isNotEmpty) cart.holdBill();

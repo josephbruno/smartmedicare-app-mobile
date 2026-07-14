@@ -1037,11 +1037,6 @@ Future<bool> showPosCheckoutDialog({
                   child: Theme(
               data: Theme.of(context).copyWith(
                 dialogTheme: DialogThemeData(
-                  constraints: BoxConstraints(
-                    minWidth: dialogWidth,
-                    maxWidth: dialogWidth,
-                    maxHeight: screenHeight * 0.92,
-                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),
                   ),

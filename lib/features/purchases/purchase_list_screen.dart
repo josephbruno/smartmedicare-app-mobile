@@ -18,31 +18,51 @@ class PurchaseListScreen extends StatelessWidget {
     final canCreate = context.watch<AuthSession>().hasPermission(AppPermissions.purchasesCreate);
 
     return Scaffold(
-      floatingActionButton: canCreate
-          ? FloatingActionButton(
-              onPressed: () => context.go('/purchases/new'),
-              child: const Icon(Icons.add),
-            )
-          : null,
-      body: AppPaginatedTable<Purchase>(
-        loadPage: ({required page, required perPage}) =>
-            services.purchases.listPaginated(page: page, perPage: perPage),
-        onRowTap: (p) => context.go('/purchases/${p.id}'),
-        columns: const [
-          TableColumnDef(label: 'Purchase #', flex: 1.2, cellBuilder: _numberCell),
-          TableColumnDef(label: 'Supplier', flex: 2, cellBuilder: _supplierCell),
-          TableColumnDef(label: 'Date', flex: 1, cellBuilder: _dateCell),
-          TableColumnDef(
-            label: 'Amount',
-            flex: 1,
-            align: TextAlign.right,
-            cellBuilder: _amountCell,
+      body: Column(
+        children: [
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Purchases',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                if (canCreate)
+                  FilledButton.icon(
+                    onPressed: () => context.go('/purchases/new'),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('New Purchase'),
+                  ),
+              ],
+            ),
           ),
-          TableColumnDef(
-            label: 'Status',
-            flex: 0.8,
-            align: TextAlign.center,
-            cellBuilder: _statusCell,
+          Expanded(
+            child: AppPaginatedTable<Purchase>(
+              loadPage: ({required page, required perPage}) =>
+                  services.purchases.listPaginated(page: page, perPage: perPage),
+              onRowTap: (p) => context.go('/purchases/${p.id}'),
+              columns: const [
+                TableColumnDef(label: 'Purchase #', flex: 1.2, cellBuilder: _numberCell),
+                TableColumnDef(label: 'Supplier', flex: 2, cellBuilder: _supplierCell),
+                TableColumnDef(label: 'Date', flex: 1, cellBuilder: _dateCell),
+                TableColumnDef(
+                  label: 'Amount',
+                  flex: 1,
+                  align: TextAlign.right,
+                  cellBuilder: _amountCell,
+                ),
+                TableColumnDef(
+                  label: 'Status',
+                  flex: 0.8,
+                  align: TextAlign.center,
+                  cellBuilder: _statusCell,
+                ),
+              ],
+            ),
           ),
         ],
       ),

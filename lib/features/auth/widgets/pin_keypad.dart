@@ -19,10 +19,14 @@ class PinKeypad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final isWideDesktop = size.width >= 1280;
     final isDesktop = AppConfig.usesLargeUiScale;
-    final keySize = isDesktop ? 76.0 : 64.0;
-    final gap = isDesktop ? 14.0 : 10.0;
-    final fontSize = isDesktop ? 28.0 : 24.0;
+    final isTablet = size.width >= 600 && size.width < 840;
+
+    final keySize = isWideDesktop ? 88.0 : isDesktop ? 76.0 : isTablet ? 70.0 : 64.0;
+    final gap = isWideDesktop ? 16.0 : isDesktop ? 14.0 : isTablet ? 12.0 : 10.0;
+    final fontSize = isWideDesktop ? 32.0 : isDesktop ? 28.0 : isTablet ? 26.0 : 24.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,

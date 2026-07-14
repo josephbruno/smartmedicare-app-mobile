@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/app_config.dart';
 import '../../../core/theme/app_theme.dart';
@@ -30,12 +31,14 @@ class PinEntryWithKeypadState extends State<PinEntryWithKeypad>
   String _digits = '';
   late final AnimationController _shakeController;
   late final Animation<double> _shakeAnimation;
+  late final FocusNode _focusNode;
 
   String get digits => _digits;
 
   @override
   void initState() {
     super.initState();
+    _focusNode = FocusNode();
     _shakeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 450),
@@ -46,6 +49,9 @@ class PinEntryWithKeypadState extends State<PinEntryWithKeypad>
       TweenSequenceItem(tween: Tween(begin: 10.0, end: -8.0), weight: 2),
       TweenSequenceItem(tween: Tween(begin: -8.0, end: 0.0), weight: 1),
     ]).animate(CurvedAnimation(parent: _shakeController, curve: Curves.easeOut));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
   }
 
   @override
@@ -59,7 +65,47 @@ class PinEntryWithKeypadState extends State<PinEntryWithKeypad>
   @override
   void dispose() {
     _shakeController.dispose();
+    _focusNode.dispose();
     super.dispose();
+  }
+
+  void _handleKeyboardInput(RawKeyEvent event) {
+    if (!widget.enabled || event is! RawKeyDownEvent) return;
+
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.backspace) {
+      _backspace();
+      return;
+    }
+
+    // Try to use the character property first
+    if (event.character != null) {
+      final char = event.character!;
+      if (char.runes.length == 1 && char.codeUnitAt(0) >= 48 && char.codeUnitAt(0) <= 57) {
+        _addDigit(char);
+        return;
+      }
+    }
+
+    // Map numpad keys explicitly
+    final numpadMap = {
+      LogicalKeyboardKey.numpad0: '0',
+      LogicalKeyboardKey.numpad1: '1',
+      LogicalKeyboardKey.numpad2: '2',
+      LogicalKeyboardKey.numpad3: '3',
+      LogicalKeyboardKey.numpad4: '4',
+      LogicalKeyboardKey.numpad5: '5',
+      LogicalKeyboardKey.numpad6: '6',
+      LogicalKeyboardKey.numpad7: '7',
+      LogicalKeyboardKey.numpad8: '8',
+      LogicalKeyboardKey.numpad9: '9',
+    };
+
+    if (numpadMap.containsKey(key)) {
+      _addDigit(numpadMap[key]!);
+      return;
+    }
   }
 
   void clear() {
@@ -81,19 +127,34 @@ class PinEntryWithKeypadState extends State<PinEntryWithKeypad>
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final isWideDesktop = size.width >= 1280;
     final isDesktop = AppConfig.usesLargeUiScale;
+    final isTablet = size.width >= 600 && size.width < 840;
 
-    return Align(
-      alignment: Alignment.center,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: isDesktop ? 380 : 340),
-        child: Container(
+    final maxWidth = isWideDesktop ? 440.0 : isDesktop ? 380.0 : isTablet ? 360.0 : 340.0;
+    final dotSize = isWideDesktop ? 28.0 : isDesktop ? 22.0 : isTablet ? 20.0 : 18.0;
+    final dotGap = isWideDesktop ? 18.0 : isDesktop ? 14.0 : isTablet ? 12.0 : 10.0;
+    final containerPaddingH = isWideDesktop ? 36.0 : isDesktop ? 28.0 : isTablet ? 24.0 : 20.0;
+    final containerPaddingV = isWideDesktop ? 36.0 : isDesktop ? 28.0 : isTablet ? 26.0 : 22.0;
+    final containerPaddingBottom = isWideDesktop ? 40.0 : isDesktop ? 32.0 : isTablet ? 28.0 : 26.0;
+    final spacerHeight = isWideDesktop ? 18.0 : isDesktop ? 14.0 : isTablet ? 12.0 : 10.0;
+    final keypadGap = isWideDesktop ? 32.0 : isDesktop ? 28.0 : isTablet ? 24.0 : 22.0;
+
+    return RawKeyboardListener(
+      focusNode: _focusNode,
+      onKey: _handleKeyboardInput,
+      child: Align(
+        alignment: Alignment.center,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Container(
           width: double.infinity,
           padding: EdgeInsets.fromLTRB(
-            isDesktop ? 28 : 20,
-            isDesktop ? 28 : 22,
-            isDesktop ? 28 : 20,
-            isDesktop ? 32 : 26,
+            containerPaddingH,
+            containerPaddingV,
+            containerPaddingH,
+            containerPaddingBottom,
           ),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.82),
@@ -130,9 +191,9 @@ class PinEntryWithKeypadState extends State<PinEntryWithKeypad>
                       duration: const Duration(milliseconds: 180),
                       curve: Curves.easeOut,
                       margin:
-                          EdgeInsets.only(right: i < pinLength - 1 ? 14 : 0),
-                      width: isDesktop ? 22 : 18,
-                      height: isDesktop ? 22 : 18,
+                          EdgeInsets.only(right: i < pinLength - 1 ? dotGap : 0),
+                      width: dotSize,
+                      height: dotSize,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: filled
@@ -163,17 +224,17 @@ class PinEntryWithKeypadState extends State<PinEntryWithKeypad>
                   }),
                 ),
               ),
-              SizedBox(height: isDesktop ? 14 : 10),
+              SizedBox(height: spacerHeight),
               Text(
                 '${_digits.length}/$pinLength',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: isWideDesktop ? 13.0 : 12.0,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textSecondary.withValues(alpha: 0.8),
                   letterSpacing: 0.5,
                 ),
               ),
-              SizedBox(height: isDesktop ? 28 : 22),
+              SizedBox(height: keypadGap),
               PinKeypad(
                 enabled: widget.enabled,
                 onDigit: _addDigit,
@@ -181,6 +242,7 @@ class PinEntryWithKeypadState extends State<PinEntryWithKeypad>
               ),
             ],
           ),
+        ),
         ),
       ),
     );

@@ -38,7 +38,7 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
       _loadShiftStats();
       context.read<VisitBillingQueueNotifier>().startPolling(
             context.read<AppServices>().emr,
-            interval: const Duration(seconds: 25),
+            interval: const Duration(seconds: 90),
           );
     });
   }

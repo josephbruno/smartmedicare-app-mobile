@@ -183,7 +183,7 @@ class ReportBarChart extends StatelessWidget {
                 showTitles: true,
                 reservedSize: 44,
                 getTitlesWidget: (v, _) => Text(
-                  formatReportCurrencyCompact(v),
+                  _formatAxisValue(v),
                   style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
                 ),
               ),
@@ -254,10 +254,12 @@ class ReportLineChart extends StatelessWidget {
         .fold<double>(0, (m, v) => math.max(m, v));
     final top = maxY <= 0 ? 1.0 : maxY * 1.15;
 
+    final chartHeight = series.length > 1 ? height - 30 : height;
+
     return Column(
       children: [
         SizedBox(
-          height: height,
+          height: chartHeight,
           child: LineChart(
             LineChartData(
               minY: 0,
@@ -277,7 +279,7 @@ class ReportLineChart extends StatelessWidget {
                     showTitles: true,
                     reservedSize: 44,
                     getTitlesWidget: (v, _) => Text(
-                      formatReportCurrencyCompact(v),
+                      _formatAxisValue(v),
                       style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
                     ),
                   ),
@@ -321,20 +323,23 @@ class ReportLineChart extends StatelessWidget {
           ),
         ),
         if (series.length > 1) ...[
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 12,
-            children: [
-              for (final s in series)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(width: 10, height: 10, decoration: BoxDecoration(color: s.color, shape: BoxShape.circle)),
-                    const SizedBox(width: 6),
-                    Text(s.name, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
-                  ],
-                ),
-            ],
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Wrap(
+              spacing: 12,
+              children: [
+                for (final s in series)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(width: 10, height: 10, decoration: BoxDecoration(color: s.color, shape: BoxShape.circle)),
+                      const SizedBox(width: 6),
+                      Text(s.name, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                    ],
+                  ),
+              ],
+            ),
           ),
         ],
       ],
@@ -594,3 +599,16 @@ class ReportHorizontalBarChart extends StatelessWidget {
 }
 
 Color chartColorAt(int index) => kChartPalette[index % kChartPalette.length];
+
+String _formatAxisValue(double value) {
+  if (value == 0) return '₹0';
+  final absValue = value.abs();
+  if (absValue >= 1000000) {
+    return '₹${(value / 1000000).toStringAsFixed(1)}M';
+  } else if (absValue >= 100000) {
+    return '₹${(value / 100000).toStringAsFixed(1)}L';
+  } else if (absValue >= 1000) {
+    return '₹${(value / 1000).toStringAsFixed(1)}K';
+  }
+  return '₹${value.toStringAsFixed(0)}';
+}

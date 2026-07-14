@@ -35,7 +35,7 @@ class VisitBillingPollService {
     if (!shouldRun) {
       return;
     }
-    _timer = Timer.periodic(const Duration(seconds: 45), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 120), (_) {
       unawaited(_poll());
     });
     unawaited(_poll());

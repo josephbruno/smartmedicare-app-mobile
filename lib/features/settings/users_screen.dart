@@ -1364,7 +1364,12 @@ class _ActiveToggleCard extends StatelessWidget {
                 value: isActive,
                 onChanged: onChanged,
                 activeTrackColor: AppTheme.accent.withValues(alpha: 0.35),
-                activeThumbColor: AppTheme.accent,
+                thumbColor: WidgetStateProperty.resolveWith<Color>((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return AppTheme.accent;
+                  }
+                  return Colors.white;
+                }),
               ),
             ],
           ),

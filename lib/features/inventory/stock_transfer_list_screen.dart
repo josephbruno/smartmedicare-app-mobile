@@ -58,17 +58,30 @@ class _StockTransferListScreenState extends State<StockTransferListScreen>
     final canCreate = context.watch<AuthSession>().hasPermission(AppPermissions.inventoryTransfer);
 
     return Scaffold(
-      floatingActionButton: canCreate
-          ? FloatingActionButton.extended(
-              onPressed: () async {
-                await context.push('/stock-transfers/new');
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('New'),
-            )
-          : null,
       body: Column(
         children: [
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Stock Transfers',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                if (canCreate)
+                  FilledButton.icon(
+                    onPressed: () async {
+                      await context.push('/stock-transfers/new');
+                    },
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('New Transfer'),
+                  ),
+              ],
+            ),
+          ),
           TabBar(
             controller: _tabs,
             tabs: const [

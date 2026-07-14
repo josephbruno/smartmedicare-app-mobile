@@ -25,10 +25,97 @@ class PinFullscreenLayout extends StatelessWidget {
   final bool loading;
   final Widget? footer;
 
+  Widget _buildDesktopTwoColumnLayout({
+    required String title,
+    required String subtitle,
+    required String? secondaryText,
+    required bool loading,
+    required String? error,
+    required double screenWidth,
+    required Widget pinEntry,
+    required Widget? footer,
+    required bool isWideDesktop,
+  }) {
+    final columnGap = isWideDesktop ? 80.0 : 60.0;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Flexible(
+          child: _HeaderCard(
+            title: title,
+            subtitle: subtitle,
+            secondaryText: secondaryText,
+            loading: loading,
+            error: error,
+            screenWidth: screenWidth,
+          ),
+        ),
+        SizedBox(width: columnGap),
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              pinEntry,
+              if (footer != null) ...[
+                SizedBox(height: isWideDesktop ? 24.0 : 20.0),
+                footer!,
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileColumnLayout({
+    required String title,
+    required String subtitle,
+    required String? secondaryText,
+    required bool loading,
+    required String? error,
+    required double screenWidth,
+    required Widget pinEntry,
+    required Widget? footer,
+    required double spaceBetweenElements,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _HeaderCard(
+          title: title,
+          subtitle: subtitle,
+          secondaryText: secondaryText,
+          loading: loading,
+          error: error,
+          screenWidth: screenWidth,
+        ),
+        SizedBox(height: spaceBetweenElements),
+        pinEntry,
+        if (footer != null) ...[
+          SizedBox(height: spaceBetweenElements > 24 ? 20.0 : 16.0),
+          footer!,
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDesktop = AppConfig.usesLargeUiScale;
     final size = MediaQuery.sizeOf(context);
+    final isDesktop = AppConfig.usesLargeUiScale;
+
+    // More granular breakpoints for responsive design
+    final isWideDesktop = size.width >= 1280;
+    final isTablet = size.width >= 600 && size.width < 840;
+
+    final horizontalPadding = isWideDesktop ? 60.0 : isDesktop ? 40.0 : isTablet ? 32.0 : 20.0;
+    final verticalPadding = isWideDesktop ? 48.0 : isDesktop ? 32.0 : isTablet ? 28.0 : 20.0;
+    final spaceBetweenElements = isWideDesktop ? 48.0 : isDesktop ? 32.0 : isTablet ? 28.0 : 24.0;
 
     return Scaffold(
       body: Container(
@@ -68,28 +155,32 @@ class PinFullscreenLayout extends StatelessWidget {
               child: Center(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.symmetric(
-                    horizontal: isDesktop ? 40 : 20,
-                    vertical: isDesktop ? 32 : 20,
+                    horizontal: horizontalPadding,
+                    vertical: verticalPadding,
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      _HeaderCard(
-                        title: title,
-                        subtitle: subtitle,
-                        secondaryText: secondaryText,
-                        loading: loading,
-                        error: error,
-                      ),
-                      SizedBox(height: isDesktop ? 32 : 24),
-                      pinEntry,
-                      if (footer != null) ...[
-                        SizedBox(height: isDesktop ? 20 : 16),
-                        footer!,
-                      ],
-                    ],
-                  ),
+                  child: isDesktop
+                      ? _buildDesktopTwoColumnLayout(
+                          title: title,
+                          subtitle: subtitle,
+                          secondaryText: secondaryText,
+                          loading: loading,
+                          error: error,
+                          screenWidth: size.width,
+                          pinEntry: pinEntry,
+                          footer: footer,
+                          isWideDesktop: isWideDesktop,
+                        )
+                      : _buildMobileColumnLayout(
+                          title: title,
+                          subtitle: subtitle,
+                          secondaryText: secondaryText,
+                          loading: loading,
+                          error: error,
+                          screenWidth: size.width,
+                          pinEntry: pinEntry,
+                          footer: footer,
+                          spaceBetweenElements: spaceBetweenElements,
+                        ),
                 ),
               ),
             ),
@@ -107,6 +198,7 @@ class _HeaderCard extends StatelessWidget {
     this.secondaryText,
     required this.loading,
     this.error,
+    required this.screenWidth,
   });
 
   final String title;
@@ -114,16 +206,29 @@ class _HeaderCard extends StatelessWidget {
   final String? secondaryText;
   final bool loading;
   final String? error;
+  final double screenWidth;
 
   @override
   Widget build(BuildContext context) {
+    final isWideDesktop = screenWidth >= 1280;
     final isDesktop = AppConfig.usesLargeUiScale;
+    final isTablet = screenWidth >= 600 && screenWidth < 840;
+
+    // Narrower max width for desktop two-column layout
+    final maxWidth = isWideDesktop ? 380.0 : isDesktop ? 340.0 : isTablet ? 480.0 : 400.0;
+    final logoSize = isWideDesktop ? 84.0 : isDesktop ? 72.0 : isTablet ? 68.0 : 60.0;
+    final titleFontSize = isWideDesktop ? 36.0 : isDesktop ? 32.0 : isTablet ? 30.0 : 26.0;
+    final spaceBetween = isWideDesktop ? 32.0 : isDesktop ? 28.0 : isTablet ? 24.0 : 22.0;
+    final avatarRadius = isWideDesktop ? 20.0 : isDesktop ? 18.0 : isTablet ? 17.0 : 16.0;
+    final subtitleFontSize = isWideDesktop ? 17.0 : isDesktop ? 16.0 : isTablet ? 15.5 : 15.0;
+    final secondaryFontSize = isWideDesktop ? 16.0 : isDesktop ? 15.0 : isTablet ? 14.5 : 14.0;
+
     final initial = subtitle.trim().isNotEmpty
         ? subtitle.trim()[0].toUpperCase()
         : '?';
 
     return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: isDesktop ? 520 : 400),
+      constraints: BoxConstraints(maxWidth: maxWidth),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -140,9 +245,9 @@ class _HeaderCard extends StatelessWidget {
                 ),
               ],
             ),
-            child: AppLogo(size: isDesktop ? 72 : 60),
+            child: AppLogo(size: logoSize),
           ),
-          SizedBox(height: isDesktop ? 28 : 22),
+          SizedBox(height: spaceBetween),
           Text(
             title,
             textAlign: TextAlign.center,
@@ -150,7 +255,7 @@ class _HeaderCard extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   color: AppTheme.textPrimary,
                   letterSpacing: -0.5,
-                  fontSize: isDesktop ? 32 : 26,
+                  fontSize: titleFontSize,
                 ),
           ),
           const SizedBox(height: 12),
@@ -165,14 +270,14 @@ class _HeaderCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 CircleAvatar(
-                  radius: isDesktop ? 18 : 16,
+                  radius: avatarRadius,
                   backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
                   child: Text(
                     initial,
                     style: TextStyle(
                       color: AppTheme.primaryDark,
                       fontWeight: FontWeight.w700,
-                      fontSize: isDesktop ? 16 : 14,
+                      fontSize: subtitleFontSize - 1,
                     ),
                   ),
                 ),
@@ -180,7 +285,7 @@ class _HeaderCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: TextStyle(
-                    fontSize: isDesktop ? 16 : 15,
+                    fontSize: subtitleFontSize,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.textPrimary,
                   ),
@@ -189,20 +294,20 @@ class _HeaderCard extends StatelessWidget {
             ),
           ),
           if (secondaryText != null) ...[
-            SizedBox(height: isDesktop ? 18 : 14),
+            SizedBox(height: isWideDesktop ? 20.0 : isDesktop ? 18.0 : 14.0),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   Icons.lock_outline_rounded,
-                  size: 16,
+                  size: isWideDesktop ? 18.0 : 16.0,
                   color: AppTheme.textSecondary.withValues(alpha: 0.9),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   secondaryText!,
                   style: TextStyle(
-                    fontSize: isDesktop ? 15 : 14,
+                    fontSize: secondaryFontSize,
                     color: AppTheme.textSecondary,
                     fontWeight: FontWeight.w500,
                   ),
@@ -213,8 +318,8 @@ class _HeaderCard extends StatelessWidget {
           if (loading) ...[
             const SizedBox(height: 20),
             SizedBox(
-              height: 26,
-              width: 26,
+              height: isWideDesktop ? 30.0 : 26.0,
+              width: isWideDesktop ? 30.0 : 26.0,
               child: CircularProgressIndicator(
                 strokeWidth: 2.5,
                 color: AppTheme.primary.withValues(alpha: 0.8),
