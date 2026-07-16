@@ -123,8 +123,8 @@ class AuthSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> login(String email, String password) async {
-    final pair = await _repository!.login(email, password);
+  Future<void> login(String login, String password) async {
+    final pair = await _repository!.login(login, password);
     await _setAuth(pair.user, pair.token);
     if (needsPermissionRefresh) {
       await fetchMe();

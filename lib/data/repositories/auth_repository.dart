@@ -6,8 +6,8 @@ class AuthRepository {
 
   final AuthService _service;
 
-  Future<({User user, String token})> login(String email, String password) =>
-      _service.login(email, password);
+  Future<({User user, String token})> login(String login, String password) =>
+      _service.login(login, password);
 
   Future<({User user, String token})> register(Map<String, dynamic> body) =>
       _service.register(body);

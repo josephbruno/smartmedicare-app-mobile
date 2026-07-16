@@ -10,7 +10,7 @@ class LoginViewModel extends ChangeNotifier {
 
   final AuthSession _auth;
 
-  String email = '';
+  String login = '';
   String password = '';
   bool loading = false;
   String? error;
@@ -20,7 +20,7 @@ class LoginViewModel extends ChangeNotifier {
     loading = true;
     notifyListeners();
     try {
-      await _auth.login(email.trim(), password);
+      await _auth.login(login.trim(), password);
       if (_auth.hasRole(AppRoles.cashier) && !AppConfig.isCashierPlatform) {
         await _auth.logout();
         error =

@@ -9,10 +9,13 @@ class AuthService {
 
   final ApiClient _client;
 
-  Future<({User user, String token})> login(String email, String password) async {
+  Future<({User user, String token})> login(
+    String login,
+    String password,
+  ) async {
     try {
       final res = await _client.post('/auth/login', data: {
-        'email': email,
+        'login': login,
         'password': password,
       });
       return parseEnvelopeData(res, (data) {
