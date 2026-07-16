@@ -158,6 +158,7 @@ class AppPaginatedTable<T> extends StatefulWidget {
     this.mobileItemBuilder,
     this.perPage = 20,
     this.emptyMessage = 'No records found',
+    this.emptyBuilder,
     this.header,
     this.showPerPageSelector = true,
   });
@@ -169,6 +170,8 @@ class AppPaginatedTable<T> extends StatefulWidget {
   final Widget Function(BuildContext context, T item)? mobileItemBuilder;
   final int perPage;
   final String emptyMessage;
+  /// Optional custom empty state. Falls back to [emptyMessage] when null.
+  final WidgetBuilder? emptyBuilder;
   final Widget? header;
   final bool showPerPageSelector;
 
@@ -261,12 +264,7 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
         if (widget.header != null) widget.header!,
         Expanded(
           child: _items.isEmpty
-              ? Center(
-                  child: Text(
-                    widget.emptyMessage,
-                    style: const TextStyle(color: AppTheme.textSecondary),
-                  ),
-                )
+              ? _buildEmptyState(context)
               : ResponsiveLayout.isMobile(context)
                   ? _buildMobileList(context)
                   : LayoutBuilder(
@@ -296,13 +294,53 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
                       },
                     ),
         ),
-        TablePaginationBar(
-          meta: _meta,
-          perPage: _perPage,
-          onPageChanged: (p) => _fetch(page: p),
-          onPerPageChanged: widget.showPerPageSelector ? _onPerPageChanged : null,
-        ),
+        if (_items.isNotEmpty)
+          TablePaginationBar(
+            meta: _meta,
+            perPage: _perPage,
+            onPageChanged: (p) => _fetch(page: p),
+            onPerPageChanged: widget.showPerPageSelector ? _onPerPageChanged : null,
+          ),
       ],
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    if (widget.emptyBuilder != null) {
+      return Center(child: widget.emptyBuilder!(context));
+    }
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(
+                Icons.inbox_outlined,
+                size: 32,
+                color: AppTheme.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              widget.emptyMessage,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

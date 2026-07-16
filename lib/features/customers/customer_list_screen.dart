@@ -21,6 +21,7 @@ class CustomerListScreen extends StatefulWidget {
 
 class _CustomerListScreenState extends State<CustomerListScreen> {
   final _search = TextEditingController();
+  final _tableKey = GlobalKey<AppPaginatedTableState<Customer>>();
   int? _selectedId;
 
   @override
@@ -30,6 +31,18 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   }
 
   bool get _splitPane => useWebLikeShell(context) && MediaQuery.sizeOf(context).width >= 1100;
+
+  Future<void> _refreshTable({int? selectCustomerId}) async {
+    await _tableKey.currentState?.refresh();
+    if (!mounted || selectCustomerId == null) return;
+    setState(() => _selectedId = selectCustomerId);
+  }
+
+  Future<void> _openCreateCustomer() async {
+    final created = await context.push<Customer>('/customers/new');
+    if (!mounted || created == null) return;
+    await _refreshTable(selectCustomerId: created.id);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,20 +54,34 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: TextField(
-            controller: _search,
-            decoration: const InputDecoration(
-              hintText: 'Search customers by name or phone…',
-              prefixIcon: Icon(Icons.search),
-              isDense: true,
-            ),
-            onSubmitted: (_) => setState(() {}),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _search,
+                  decoration: const InputDecoration(
+                    hintText: 'Search customers by name or phone…',
+                    prefixIcon: Icon(Icons.search),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => setState(() {}),
+                ),
+              ),
+              if (canCreate && _splitPane) ...[
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed: _openCreateCustomer,
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Add Customer'),
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(height: 8),
         Expanded(
           child: AppPaginatedTable<Customer>(
-            key: ValueKey(search),
+            key: _tableKey,
             emptyMessage: 'No customers found.',
             loadPage: ({required page, required perPage}) =>
                 services.customers.listPaginated(
@@ -87,7 +114,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       backgroundColor: AppTheme.background,
       floatingActionButton: canCreate && !_splitPane
           ? FloatingActionButton(
-              onPressed: () => context.go('/customers/new'),
+              onPressed: _openCreateCustomer,
               backgroundColor: AppTheme.primary,
               foregroundColor: Colors.white,
               child: const Icon(Icons.add_rounded),

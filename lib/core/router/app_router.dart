@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../session/auth_session.dart';
 import '../services/permission_service.dart';
@@ -46,6 +47,7 @@ import '../../features/purchases/purchase_list_screen.dart';
 import '../../features/purchases/supplier_list_screen.dart';
 import '../../features/reports/gst_report_screen.dart';
 import '../../features/reports/sales_report_screen.dart';
+import '../../features/reports/stock_transfer_report_screen.dart';
 import '../../features/settings/branches_screen.dart';
 import '../../features/settings/doctors_screen.dart';
 import '../../features/settings/emr_master_data_screen.dart';
@@ -148,7 +150,7 @@ GoRouter createAppRouter({
       if (need(AppPermissions.expensesView)) return denied;
     }
     if (path.startsWith('/reports')) {
-      if (need(AppPermissions.reportsView)) return denied;
+      if (need(AppPermissions.reportsView) || !auth.isSuperAdmin) return denied;
     }
     if (path.startsWith('/settings/doctors')) {
       if (need(AppPermissions.doctorsManage)) return denied;
@@ -483,17 +485,28 @@ GoRouter createAppRouter({
           GoRoute(
             path: '/reports/sales',
             name: 'SalesReport',
-            builder: (c, s) => const PermissionGuard(
+            builder: (c, s) => PermissionGuard(
               permission: AppPermissions.reportsView,
-              child: SalesReportScreen(),
+              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
+              child: const SalesReportScreen(),
             ),
           ),
           GoRoute(
             path: '/reports/gst',
             name: 'GSTReport',
-            builder: (c, s) => const PermissionGuard(
+            builder: (c, s) => PermissionGuard(
               permission: AppPermissions.reportsView,
-              child: GstReportScreen(),
+              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
+              child: const GstReportScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/reports/stock-transfers',
+            name: 'StockTransferReport',
+            builder: (c, s) => PermissionGuard(
+              permission: AppPermissions.reportsView,
+              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
+              child: const StockTransferReportScreen(),
             ),
           ),
           GoRoute(

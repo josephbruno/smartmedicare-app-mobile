@@ -19,6 +19,26 @@ class VisitListScreen extends StatefulWidget {
   State<VisitListScreen> createState() => _VisitListScreenState();
 }
 
+ButtonStyle get _visitOutlinedButtonStyle => OutlinedButton.styleFrom(
+      foregroundColor: AppTheme.primary,
+      side: const BorderSide(color: AppTheme.primary, width: 1.5),
+      minimumSize: const Size(0, 44),
+      fixedSize: const Size.fromHeight(44),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+    );
+
+ButtonStyle get _visitFilledButtonStyle => FilledButton.styleFrom(
+      backgroundColor: AppTheme.primary,
+      foregroundColor: Colors.white,
+      minimumSize: const Size(0, 44),
+      fixedSize: const Size.fromHeight(44),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+    );
+
 class _VisitListScreenState extends State<VisitListScreen> {
   static const _filters = ['all', 'open', 'bill_on_hold', 'completed'];
 
@@ -126,21 +146,14 @@ class _VisitListScreenState extends State<VisitListScreen> {
                           onPressed: () => showQuickVisitSheet(context),
                           icon: const Icon(Icons.bolt, size: 18),
                           label: const Text('Quick visit'),
+                          style: _visitOutlinedButtonStyle,
                         ),
                       if (!isMobile) const SizedBox(width: 8),
                       FilledButton.icon(
                         onPressed: () => context.push('/emr/visits/new'),
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('New visit'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          minimumSize: const Size(0, 40),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
+                        style: _visitFilledButtonStyle,
                       ),
                     ],
                   ],
@@ -183,6 +196,15 @@ class _VisitListScreenState extends State<VisitListScreen> {
           Expanded(
             child: AppPaginatedTable<PetVisit>(
               key: ValueKey('$_statusFilter-$search'),
+              emptyMessage: search.length >= 2
+                  ? 'No visits match your search.'
+                  : 'No visit records yet.',
+              emptyBuilder: (context) => _VisitEmptyState(
+                hasSearch: search.length >= 2,
+                canCreate: canCreate,
+                onQuickVisit: () => showQuickVisitSheet(context),
+                onNewVisit: () => context.push('/emr/visits/new'),
+              ),
               loadPage: ({required page, required perPage}) =>
                   services.emr.listVisitsPaginated(
                     page: page,
@@ -253,6 +275,91 @@ class _VisitListScreenState extends State<VisitListScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VisitEmptyState extends StatelessWidget {
+  const _VisitEmptyState({
+    required this.hasSearch,
+    required this.canCreate,
+    required this.onQuickVisit,
+    required this.onNewVisit,
+  });
+
+  final bool hasSearch;
+  final bool canCreate;
+  final VoidCallback onQuickVisit;
+  final VoidCallback onNewVisit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(
+              hasSearch ? Icons.search_off_rounded : Icons.medical_services_outlined,
+              size: 36,
+              color: AppTheme.primary,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            hasSearch ? 'No matching visits' : 'No visit records yet',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Text(
+              hasSearch
+                  ? 'Try a different search or clear filters to see all visits.'
+                  : 'Create a visit to start recording consultations, treatments, and billing.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ),
+          if (canCreate && !hasSearch) ...[
+            const SizedBox(height: 24),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onQuickVisit,
+                  icon: const Icon(Icons.bolt, size: 18),
+                  label: const Text('Quick visit'),
+                  style: _visitOutlinedButtonStyle,
+                ),
+                FilledButton.icon(
+                  onPressed: onNewVisit,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('New visit'),
+                  style: _visitFilledButtonStyle,
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

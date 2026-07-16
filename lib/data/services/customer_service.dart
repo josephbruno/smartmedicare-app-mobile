@@ -81,4 +81,28 @@ class CustomerService {
       ApiClient.throwFromDio(e);
     }
   }
+
+  Future<Pet> createPet(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/pets', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Pet.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Pet> updatePet(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/pets/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Pet.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
 }

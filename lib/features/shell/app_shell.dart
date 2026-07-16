@@ -855,9 +855,10 @@ List<_MenuItem> _menuItems(AuthSession auth) {
   ]);
 
   addSection('REPORTS', [
-    if (can('reports.view')) ...[
+    if (auth.isSuperAdmin && can('reports.view')) ...[
       _MenuItem(label: 'Sales Report', icon: Icons.bar_chart_outlined, path: '/reports/sales'),
       _MenuItem(label: 'GST Report', icon: Icons.description_outlined, path: '/reports/gst'),
+      _MenuItem(label: 'Stock Transfer Report', icon: Icons.swap_horiz_outlined, path: '/reports/stock-transfers'),
     ],
   ]);
 
@@ -900,6 +901,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/expenses')) return 'Expenses';
   if (path.startsWith('/reports/sales')) return 'Sales Report';
   if (path.startsWith('/reports/gst')) return 'GST Report';
+  if (path.startsWith('/reports/stock-transfers')) return 'Stock Transfer Report';
   if (path.startsWith('/settings/doctors')) return 'Doctors';
   if (path.startsWith('/settings/emr-master-data')) return 'EMR Master Data';
   if (path.startsWith('/settings/users')) return 'Users';
@@ -908,7 +910,7 @@ String _titleForPath(String path) {
   return 'Dashboard';
 }
 
-class _MobileShell extends StatelessWidget {
+class _MobileShell extends StatefulWidget {
   const _MobileShell({
     required this.auth,
     required this.location,
@@ -926,7 +928,165 @@ class _MobileShell extends StatelessWidget {
   final Widget child;
 
   @override
+  State<_MobileShell> createState() => _MobileShellState();
+}
+
+class _MobileShellState extends State<_MobileShell> {
+  List<Branch> _branches = [];
+  bool _loadingBranches = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBranches();
+  }
+
+  Future<void> _loadBranches() async {
+    if (!widget.auth.isSuperAdmin) return;
+    setState(() => _loadingBranches = true);
+    try {
+      final list = await context.read<AppServices>().branches.list();
+      if (mounted) setState(() => _branches = list);
+    } catch (_) {
+      if (mounted) setState(() => _branches = []);
+    } finally {
+      if (mounted) setState(() => _loadingBranches = false);
+    }
+  }
+
+  Future<void> _switchBranch(int branchId) async {
+    try {
+      await widget.auth.switchBranch(branchId);
+      if (!mounted) return;
+      AppMessenger.show(
+        context,
+        const SnackBar(
+          content: Text('Branch switched'),
+          backgroundColor: AppTheme.accent,
+        ),
+      );
+      Navigator.of(context).maybePop();
+    } catch (e) {
+      if (!mounted) return;
+      AppMessenger.show(
+        context,
+        SnackBar(
+          content: Text('Failed: $e'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showBranchPicker() async {
+    if (_loadingBranches) return;
+    if (_branches.isEmpty) {
+      await _loadBranches();
+    }
+    if (!mounted) return;
+    if (_branches.isEmpty) {
+      AppMessenger.show(
+        context,
+        const SnackBar(
+          content: Text('No branches available'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 4, 20, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Select Branch',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+              ),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _branches.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                  itemBuilder: (context, index) {
+                    final branch = _branches[index];
+                    final selected = branch.id == widget.auth.currentBranchId;
+                    return ListTile(
+                      leading: Icon(
+                        selected
+                            ? Icons.radio_button_checked_rounded
+                            : Icons.radio_button_off_rounded,
+                        color: selected
+                            ? AppTheme.primary
+                            : AppTheme.textSecondary,
+                      ),
+                      title: Text(
+                        branch.name,
+                        style: TextStyle(
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      subtitle: branch.code != null && branch.code!.isNotEmpty
+                          ? Text(branch.code!)
+                          : null,
+                      trailing: branch.isMain
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text(
+                                'Main',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.primary,
+                                ),
+                              ),
+                            )
+                          : null,
+                      onTap: selected
+                          ? () => Navigator.pop(context)
+                          : () async {
+                              Navigator.pop(context);
+                              await _switchBranch(branch.id);
+                            },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final auth = widget.auth;
     final items = _menuItems(auth);
     final userName = auth.user?.name ?? 'Admin';
     final userInitials = userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'A';
@@ -934,23 +1094,35 @@ class _MobileShell extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _titleForPath(location),
+          _titleForPath(widget.location),
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
         ),
         actions: [
+          if (auth.isSuperAdmin)
+            IconButton(
+              tooltip: auth.currentBranch?.name ?? 'Switch Branch',
+              onPressed: _loadingBranches ? null : _showBranchPicker,
+              icon: _loadingBranches
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.account_tree_outlined),
+            ),
           // Network indicator
           Container(
             margin: const EdgeInsets.only(right: 8),
             width: 8,
             height: 8,
             decoration: BoxDecoration(
-              color: connectivity.isOnline ? AppTheme.accent : AppTheme.danger,
+              color: widget.connectivity.isOnline ? AppTheme.accent : AppTheme.danger,
               shape: BoxShape.circle,
             ),
           ),
           IconButton(
             tooltip: 'Sync Offline Data',
-            onPressed: onSync,
+            onPressed: widget.onSync,
             icon: const Icon(Icons.cloud_upload_outlined),
           ),
         ],
@@ -962,7 +1134,7 @@ class _MobileShell extends StatelessWidget {
             // Drawer Header
             DrawerHeader(
               decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.08),
+                color: AppTheme.primary.withValues(alpha: 0.08),
                 border: const Border(
                   bottom: BorderSide(color: Color(0xFFE2E8F0)),
                 ),
@@ -995,9 +1167,11 @@ class _MobileShell extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
-                          'Store Manager',
-                          style: TextStyle(
+                        Text(
+                          auth.isSuperAdmin
+                              ? (auth.currentBranch?.name ?? 'Super Admin')
+                              : 'Store Manager',
+                          style: const TextStyle(
                             fontSize: 12,
                             color: AppTheme.textSecondary,
                           ),
@@ -1031,7 +1205,7 @@ class _MobileShell extends StatelessWidget {
                   }
                   if (m.path == null) return const SizedBox.shrink();
 
-                  final isSelected = location == m.path || location.startsWith('${m.path}/');
+                  final isSelected = widget.location == m.path || widget.location.startsWith('${m.path}/');
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 2),
                     child: ListTile(
@@ -1063,6 +1237,36 @@ class _MobileShell extends StatelessWidget {
                 },
               ),
             ),
+            if (auth.isSuperAdmin) ...[
+              const Divider(height: 1),
+              ListTile(
+                dense: true,
+                leading: _loadingBranches
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(
+                        Icons.account_tree_outlined,
+                        color: AppTheme.primary,
+                        size: 20,
+                      ),
+                title: const Text(
+                  'Switch Branch',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                subtitle: Text(
+                  auth.currentBranch?.name ?? 'Choose active branch',
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+                onTap: _loadingBranches ? null : _showBranchPicker,
+              ),
+            ],
             // Drawer Footer Logout Button
             const Divider(height: 1),
             Padding(
@@ -1081,7 +1285,7 @@ class _MobileShell extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
-                tileColor: AppTheme.danger.withOpacity(0.05),
+                tileColor: AppTheme.danger.withValues(alpha: 0.05),
                 onTap: () async {
                   await auth.logout();
                   if (context.mounted) context.go('/');
@@ -1091,8 +1295,8 @@ class _MobileShell extends StatelessWidget {
           ],
         ),
       ),
-      body: child,
-      bottomNavigationBar: destinations.length >= 2
+      body: widget.child,
+      bottomNavigationBar: widget.destinations.length >= 2
           ? Container(
               decoration: const BoxDecoration(
                 boxShadow: [
@@ -1107,13 +1311,13 @@ class _MobileShell extends StatelessWidget {
                 backgroundColor: Colors.white,
                 elevation: 0,
                 height: 64,
-                indicatorColor: AppTheme.primary.withOpacity(0.12),
-                selectedIndex: _mobileNavIndex(location, destinations),
+                indicatorColor: AppTheme.primary.withValues(alpha: 0.12),
+                selectedIndex: _mobileNavIndex(widget.location, widget.destinations),
                 onDestinationSelected: (i) {
-                  context.go(destinations[i].location);
+                  context.go(widget.destinations[i].location);
                 },
                 destinations: [
-                  for (final d in destinations)
+                  for (final d in widget.destinations)
                     NavigationDestination(
                       icon: Icon(d.icon, color: AppTheme.textSecondary),
                       selectedIcon: Icon(d.activeIcon, color: AppTheme.primary),

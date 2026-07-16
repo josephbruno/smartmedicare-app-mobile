@@ -128,13 +128,13 @@ class _BranchManagerDashboardSectionState extends State<BranchManagerDashboardSe
                     color: AppTheme.warning,
                     onTap: () => context.go('/inventory'),
                   ),
-                if (auth.hasPermission(AppPermissions.reportsView))
+                if (auth.hasPermission(AppPermissions.inventoryTransfer))
                   QuickActionCard(
-                    icon: Icons.bar_chart_outlined,
-                    label: 'Sales report',
-                    subtitle: 'Analytics',
-                    color: const Color(0xFF8B5CF6),
-                    onTap: () => context.go('/reports/sales'),
+                    icon: Icons.swap_horiz_outlined,
+                    label: 'Stock transfers',
+                    subtitle: 'Send / receive',
+                    color: AppTheme.primary,
+                    onTap: () => context.go('/stock-transfers'),
                   ),
               ],
             ),

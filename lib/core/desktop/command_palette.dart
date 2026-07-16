@@ -262,8 +262,13 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
   add('Inventory', '/inventory', Icons.warehouse_outlined, visible: () => can(AppPermissions.inventoryView));
   add('Purchases', '/purchases', Icons.shopping_bag_outlined, visible: () => can(AppPermissions.purchasesView));
   add('Expenses', '/expenses', Icons.payments_outlined, visible: () => can(AppPermissions.expensesView));
-  add('Sales report', '/reports/sales', Icons.bar_chart_outlined, visible: () => can(AppPermissions.reportsView));
-  add('GST report', '/reports/gst', Icons.description_outlined, visible: () => can(AppPermissions.reportsView));
+  add('Sales report', '/reports/sales', Icons.bar_chart_outlined,
+      visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView));
+  add('GST report', '/reports/gst', Icons.description_outlined,
+      visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView));
+  add('Stock transfer report', '/reports/stock-transfers', Icons.swap_horiz_outlined,
+      visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView),
+      keywords: ['inventory', 'transfer']);
   add('Settings', '/settings', Icons.settings_outlined, visible: () => auth.canAccessSettings);
 
   return entries;
