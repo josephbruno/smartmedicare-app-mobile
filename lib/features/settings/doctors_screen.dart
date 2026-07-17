@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../app_services.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/emr.dart';
 
 class DoctorsScreen extends StatefulWidget {
@@ -44,7 +45,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
       if (mounted) setState(() => _doctors = list);
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context,SnackBar(content: Text('$e')));
+        AppMessenger.show(context, SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -57,7 +58,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
       _load();
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context,SnackBar(content: Text('$e')));
+        AppMessenger.show(context, SnackBar(content: Text('$e')));
       }
     }
   }
@@ -79,177 +80,29 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
       _load();
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context,SnackBar(content: Text('$e')));
+        AppMessenger.show(context, SnackBar(content: Text('$e')));
       }
     }
   }
 
   Future<void> _openForm({Doctor? doctor}) async {
-    final isEdit = doctor != null;
-    final name = TextEditingController(text: doctor?.name ?? '');
-    final email = TextEditingController(text: doctor?.email ?? '');
-    final phone = TextEditingController(text: doctor?.phone ?? '');
-    final password = TextEditingController();
-    final passwordConfirm = TextEditingController();
-    final specialty = TextEditingController(text: doctor?.specialty ?? '');
-    final license = TextEditingController(text: doctor?.licenseNumber ?? '');
-    final fee = TextEditingController(
-      text: doctor?.consultationFee?.toString() ?? '',
-    );
-    final bio = TextEditingController(text: doctor?.bio ?? '');
-    var selectedDays = Set<String>.from(doctor?.availableDays ?? []);
-
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 16,
-            bottom: MediaQuery.viewInsetsOf(ctx).bottom + 16,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(isEdit ? 'Edit Doctor' : 'Add Doctor',
-                    style: Theme.of(ctx).textTheme.titleLarge),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: name,
-                  decoration: const InputDecoration(labelText: 'Full name *'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: email,
-                  readOnly: isEdit,
-                  decoration: const InputDecoration(labelText: 'Email *'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: phone,
-                  decoration: const InputDecoration(labelText: 'Phone'),
-                ),
-                if (!isEdit) ...[
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: password,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password *'),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: passwordConfirm,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Confirm password *'),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                TextField(
-                  controller: specialty,
-                  decoration: const InputDecoration(labelText: 'Specialty'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: license,
-                  decoration: const InputDecoration(labelText: 'License number'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: fee,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Consultation fee (₹)'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: bio,
-                  maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Bio'),
-                ),
-                const SizedBox(height: 12),
-                const Text('Available days'),
-                Wrap(
-                  spacing: 6,
-                  children: _weekDays.map((day) {
-                    final selected = selectedDays.contains(day);
-                    return FilterChip(
-                      label: Text(day),
-                      selected: selected,
-                      onSelected: (_) {
-                        setSheet(() {
-                          if (selected) {
-                            selectedDays.remove(day);
-                          } else {
-                            selectedDays.add(day);
-                          }
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: Text(isEdit ? 'Update' : 'Create'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    if (saved != true || name.text.trim().isEmpty || email.text.trim().isEmpty) return;
-    if (!isEdit && (password.text.isEmpty || password.text != passwordConfirm.text)) {
-      if (mounted) {
-        AppMessenger.show(context,
-          const SnackBar(content: Text('Passwords must match')),
-        );
-      }
-      return;
+    final bool? saved;
+    if (useCenteredFormDialog(context)) {
+      saved = await showAppDialog<bool>(
+        context: context,
+        builder: (ctx) => _DoctorFormDialog(doctor: doctor, weekDays: _weekDays),
+      );
+    } else {
+      saved = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useRootNavigator: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => _DoctorFormBottomSheet(doctor: doctor, weekDays: _weekDays),
+      );
     }
 
-    final body = <String, dynamic>{
-      'name': name.text.trim(),
-      'email': email.text.trim(),
-      if (phone.text.isNotEmpty) 'phone': phone.text.trim(),
-      if (specialty.text.isNotEmpty) 'specialty': specialty.text.trim(),
-      if (license.text.isNotEmpty) 'license_number': license.text.trim(),
-      if (fee.text.isNotEmpty) 'consultation_fee': double.tryParse(fee.text) ?? 0,
-      if (bio.text.isNotEmpty) 'bio': bio.text.trim(),
-      if (selectedDays.isNotEmpty) 'available_days': selectedDays.toList(),
-      if (!isEdit) ...{
-        'password': password.text,
-        'password_confirmation': passwordConfirm.text,
-      },
-      if (isEdit && password.text.isNotEmpty) ...{
-        'password': password.text,
-        'password_confirmation': passwordConfirm.text.isNotEmpty
-            ? passwordConfirm.text
-            : password.text,
-      },
-    };
-
-    try {
-      final svc = context.read<AppServices>().doctors;
-      if (isEdit) {
-        await svc.updateProfile(doctor.id, body);
-      } else {
-        await svc.create(body);
-      }
-      if (mounted) {
-        AppMessenger.show(context,
-          SnackBar(content: Text(isEdit ? 'Doctor updated' : 'Doctor created')),
-        );
-        _load();
-      }
-    } catch (e) {
-      if (mounted) {
-        AppMessenger.show(context,SnackBar(content: Text('$e')));
-      }
-    }
+    if (saved == true && mounted) _load();
   }
 
   @override
@@ -264,13 +117,6 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      floatingActionButton: canManage
-          ? FloatingActionButton.extended(
-              onPressed: () => _openForm(),
-              icon: const Icon(Icons.add),
-              label: const Text('Add doctor'),
-            )
-          : null,
       body: Column(
         children: [
           Padding(
@@ -278,13 +124,41 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Doctor Management',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        )),
-                const SizedBox(height: 4),
-                const Text('Manage doctors and clinic profiles',
-                    style: TextStyle(color: AppTheme.textSecondary)),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Doctor Management',
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  )),
+                          const SizedBox(height: 4),
+                          const Text('Manage doctors and clinic profiles',
+                              style: TextStyle(color: AppTheme.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    if (canManage) ...[
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        onPressed: () => _openForm(),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add doctor'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _search,
@@ -416,6 +290,440 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Shared form helpers ────────────────────────────────────────────────────
+
+class _DoctorFormController {
+  _DoctorFormController({Doctor? doctor}) {
+    name = TextEditingController(text: doctor?.name ?? '');
+    email = TextEditingController(text: doctor?.email ?? '');
+    phone = TextEditingController(text: doctor?.phone ?? '');
+    password = TextEditingController();
+    passwordConfirm = TextEditingController();
+    specialty = TextEditingController(text: doctor?.specialty ?? '');
+    license = TextEditingController(text: doctor?.licenseNumber ?? '');
+    fee = TextEditingController(text: doctor?.consultationFee?.toString() ?? '');
+    bio = TextEditingController(text: doctor?.bio ?? '');
+    selectedDays = Set<String>.from(doctor?.availableDays ?? []);
+  }
+
+  late final TextEditingController name;
+  late final TextEditingController email;
+  late final TextEditingController phone;
+  late final TextEditingController password;
+  late final TextEditingController passwordConfirm;
+  late final TextEditingController specialty;
+  late final TextEditingController license;
+  late final TextEditingController fee;
+  late final TextEditingController bio;
+  late Set<String> selectedDays;
+
+  void dispose() {
+    name.dispose();
+    email.dispose();
+    phone.dispose();
+    password.dispose();
+    passwordConfirm.dispose();
+    specialty.dispose();
+    license.dispose();
+    fee.dispose();
+    bio.dispose();
+  }
+
+  Map<String, dynamic>? buildPayload(BuildContext context, {required bool isEdit}) {
+    if (name.text.trim().isEmpty || email.text.trim().isEmpty) {
+      AppMessenger.show(
+        context,
+        const SnackBar(content: Text('Name and email are required')),
+      );
+      return null;
+    }
+    if (!isEdit && (password.text.isEmpty || password.text != passwordConfirm.text)) {
+      AppMessenger.show(
+        context,
+        const SnackBar(content: Text('Passwords must match')),
+      );
+      return null;
+    }
+    if (!isEdit && password.text.length < 8) {
+      AppMessenger.show(
+        context,
+        const SnackBar(content: Text('Password must be at least 8 characters')),
+      );
+      return null;
+    }
+
+    return {
+      'name': name.text.trim(),
+      'email': email.text.trim(),
+      if (phone.text.isNotEmpty) 'phone': phone.text.trim(),
+      if (specialty.text.isNotEmpty) 'specialty': specialty.text.trim(),
+      if (license.text.isNotEmpty) 'license_number': license.text.trim(),
+      if (fee.text.isNotEmpty) 'consultation_fee': double.tryParse(fee.text) ?? 0,
+      if (bio.text.isNotEmpty) 'bio': bio.text.trim(),
+      if (selectedDays.isNotEmpty) 'available_days': selectedDays.toList(),
+      if (!isEdit) ...{
+        'password': password.text,
+        'password_confirmation': passwordConfirm.text,
+      },
+      if (isEdit && password.text.isNotEmpty) ...{
+        'password': password.text,
+        'password_confirmation': passwordConfirm.text.isNotEmpty
+            ? passwordConfirm.text
+            : password.text,
+      },
+    };
+  }
+}
+
+class _DoctorFormFields extends StatelessWidget {
+  const _DoctorFormFields({
+    required this.controller,
+    required this.isEdit,
+    required this.weekDays,
+    required this.onChanged,
+    this.twoColumn = false,
+  });
+
+  final _DoctorFormController controller;
+  final bool isEdit;
+  final List<String> weekDays;
+  final VoidCallback onChanged;
+  final bool twoColumn;
+
+  @override
+  Widget build(BuildContext context) {
+    final nameField = TextField(
+      controller: controller.name,
+      textCapitalization: TextCapitalization.words,
+      textInputAction: TextInputAction.next,
+      decoration: appFormFieldDecoration('Full name *', hint: 'Dr. Priya Sharma'),
+    );
+
+    final emailField = TextField(
+      controller: controller.email,
+      readOnly: isEdit,
+      keyboardType: TextInputType.emailAddress,
+      textInputAction: TextInputAction.next,
+      decoration: appFormFieldDecoration('Email *', hint: 'doctor@clinic.com').copyWith(
+        filled: isEdit,
+        fillColor: isEdit ? const Color(0xFFF1F5F9) : null,
+      ),
+    );
+
+    final phoneField = TextField(
+      controller: controller.phone,
+      keyboardType: TextInputType.phone,
+      textInputAction: TextInputAction.next,
+      decoration: appFormFieldDecoration('Phone', hint: '10-digit mobile'),
+    );
+
+    final specialtyField = TextField(
+      controller: controller.specialty,
+      textInputAction: TextInputAction.next,
+      decoration: appFormFieldDecoration('Specialty', hint: 'e.g. Dermatology'),
+    );
+
+    final licenseField = TextField(
+      controller: controller.license,
+      textInputAction: TextInputAction.next,
+      decoration: appFormFieldDecoration('License number', hint: 'VCI-XXXXX'),
+    );
+
+    final feeField = TextField(
+      controller: controller.fee,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textInputAction: TextInputAction.next,
+      decoration: appFormFieldDecoration('Consultation fee (₹)', hint: '0.00'),
+    );
+
+    final bioField = TextField(
+      controller: controller.bio,
+      maxLines: 2,
+      minLines: 2,
+      textInputAction: TextInputAction.newline,
+      decoration: appFormFieldDecoration('Bio', hint: 'Brief introduction...'),
+    );
+
+    final passwordFields = <Widget>[
+      if (!isEdit) ...[
+        TextField(
+          controller: controller.password,
+          obscureText: true,
+          textInputAction: TextInputAction.next,
+          decoration: appFormFieldDecoration('Password *', hint: 'Min. 8 characters'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: controller.passwordConfirm,
+          obscureText: true,
+          textInputAction: TextInputAction.next,
+          decoration: appFormFieldDecoration('Confirm password *'),
+        ),
+        const SizedBox(height: 12),
+      ],
+    ];
+
+    final daysSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Available days',
+          style: Theme.of(context).inputDecorationTheme.labelStyle,
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: weekDays.map((day) {
+            final selected = controller.selectedDays.contains(day);
+            return FilterChip(
+              label: Text(day),
+              selected: selected,
+              showCheckmark: false,
+              selectedColor: AppTheme.primary,
+              checkmarkColor: Colors.white,
+              labelStyle: TextStyle(
+                color: selected ? Colors.white : AppTheme.textSecondary,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+              side: BorderSide(
+                color: selected ? AppTheme.primary : const Color(0xFFCBD5E1),
+              ),
+              backgroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              onSelected: (_) {
+                if (selected) {
+                  controller.selectedDays.remove(day);
+                } else {
+                  controller.selectedDays.add(day);
+                }
+                onChanged();
+              },
+            );
+          }).toList(),
+        ),
+      ],
+    );
+
+    if (!twoColumn) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          nameField,
+          const SizedBox(height: 12),
+          emailField,
+          const SizedBox(height: 12),
+          phoneField,
+          const SizedBox(height: 12),
+          ...passwordFields,
+          specialtyField,
+          const SizedBox(height: 12),
+          licenseField,
+          const SizedBox(height: 12),
+          feeField,
+          const SizedBox(height: 12),
+          bioField,
+          const SizedBox(height: 14),
+          daysSection,
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        nameField,
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: emailField),
+            const SizedBox(width: 12),
+            Expanded(child: phoneField),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...passwordFields,
+        specialtyField,
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: licenseField),
+            const SizedBox(width: 12),
+            Expanded(child: feeField),
+          ],
+        ),
+        const SizedBox(height: 12),
+        bioField,
+        const SizedBox(height: 14),
+        daysSection,
+      ],
+    );
+  }
+}
+
+Future<bool> _saveDoctor(
+  BuildContext context, {
+  required _DoctorFormController form,
+  required Doctor? doctor,
+}) async {
+  final isEdit = doctor != null;
+  final body = form.buildPayload(context, isEdit: isEdit);
+  if (body == null) return false;
+
+  try {
+    final svc = context.read<AppServices>().doctors;
+    if (isEdit) {
+      await svc.updateProfile(doctor.id, body);
+    } else {
+      await svc.create(body);
+    }
+    if (context.mounted) {
+      AppMessenger.show(
+        context,
+        SnackBar(content: Text(isEdit ? 'Doctor updated' : 'Doctor created')),
+      );
+    }
+    return true;
+  } catch (e) {
+    if (context.mounted) {
+      AppMessenger.show(context, SnackBar(content: Text('$e')));
+    }
+    return false;
+  }
+}
+
+// ─── Desktop / web dialog ───────────────────────────────────────────────────
+
+class _DoctorFormDialog extends StatefulWidget {
+  const _DoctorFormDialog({
+    required this.doctor,
+    required this.weekDays,
+  });
+
+  final Doctor? doctor;
+  final List<String> weekDays;
+
+  @override
+  State<_DoctorFormDialog> createState() => _DoctorFormDialogState();
+}
+
+class _DoctorFormDialogState extends State<_DoctorFormDialog> {
+  late final _DoctorFormController _form;
+  bool _saving = false;
+
+  bool get _isEdit => widget.doctor != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _form = _DoctorFormController(doctor: widget.doctor);
+  }
+
+  @override
+  void dispose() {
+    _form.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() => _saving = true);
+    final ok = await _saveDoctor(context, form: _form, doctor: widget.doctor);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (ok) Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppFormDialogShell(
+      title: _isEdit ? 'Edit Doctor' : 'Add Doctor',
+      subtitle: _isEdit ? 'Update doctor profile' : 'Create a doctor account',
+      icon: Icons.medical_services_outlined,
+      onClose: () => Navigator.pop(context),
+      body: _DoctorFormFields(
+        controller: _form,
+        isEdit: _isEdit,
+        weekDays: widget.weekDays,
+        twoColumn: true,
+        onChanged: () => setState(() {}),
+      ),
+      footer: AppFormFooter(
+        primaryLabel: _isEdit ? 'Update Doctor' : 'Add Doctor',
+        saving: _saving,
+        onCancel: () => Navigator.pop(context),
+        onSubmit: _submit,
+      ),
+    );
+  }
+}
+
+// ─── Mobile bottom sheet ────────────────────────────────────────────────────
+
+class _DoctorFormBottomSheet extends StatefulWidget {
+  const _DoctorFormBottomSheet({
+    required this.doctor,
+    required this.weekDays,
+  });
+
+  final Doctor? doctor;
+  final List<String> weekDays;
+
+  @override
+  State<_DoctorFormBottomSheet> createState() => _DoctorFormBottomSheetState();
+}
+
+class _DoctorFormBottomSheetState extends State<_DoctorFormBottomSheet> {
+  late final _DoctorFormController _form;
+  bool _saving = false;
+
+  bool get _isEdit => widget.doctor != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _form = _DoctorFormController(doctor: widget.doctor);
+  }
+
+  @override
+  void dispose() {
+    _form.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() => _saving = true);
+    final ok = await _saveDoctor(context, form: _form, doctor: widget.doctor);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (ok) Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppFormBottomSheetShell(
+      title: _isEdit ? 'Edit Doctor' : 'Add Doctor',
+      subtitle: _isEdit ? 'Update doctor profile' : 'Create a doctor account',
+      icon: Icons.medical_services_outlined,
+      onClose: () => Navigator.pop(context),
+      body: _DoctorFormFields(
+        controller: _form,
+        isEdit: _isEdit,
+        weekDays: widget.weekDays,
+        onChanged: () => setState(() {}),
+      ),
+      footer: AppFormFooter(
+        primaryLabel: _isEdit ? 'Update Doctor' : 'Add Doctor',
+        saving: _saving,
+        onCancel: () => Navigator.pop(context),
+        onSubmit: _submit,
       ),
     );
   }

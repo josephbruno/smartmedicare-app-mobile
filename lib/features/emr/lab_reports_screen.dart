@@ -9,6 +9,7 @@ import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/emr.dart';
 
 class LabReportsScreen extends StatefulWidget {
@@ -56,42 +57,44 @@ class _LabReportsScreenState extends State<LabReportsScreen> {
     var reportType = 'blood';
     var reportDate = DateTime.now();
 
-    final saved = await showDialog<bool>(
+    final saved = await showAppAlertForm<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => AlertDialog(
-          title: const Text('Upload lab report'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  value: reportType,
-                  decoration: const InputDecoration(labelText: 'Report type'),
-                  items: _reportTypes
-                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                      .toList(),
-                  onChanged: (v) => setDialog(() => reportType = v ?? 'blood'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: title,
-                  decoration: const InputDecoration(labelText: 'Title *'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: labName,
-                  decoration: const InputDecoration(labelText: 'Lab name'),
-                ),
-              ],
+      title: 'Upload lab report',
+      content: StatefulBuilder(
+        builder: (ctx, setDialog) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              value: reportType,
+              decoration: appFormFieldDecoration('Report type'),
+              items: _reportTypes
+                  .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                  .toList(),
+              onChanged: (v) => setDialog(() => reportType = v ?? 'blood'),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Upload')),
+            const SizedBox(height: 16),
+            TextField(
+              controller: title,
+              decoration: appFormFieldDecoration('Title *'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: labName,
+              decoration: appFormFieldDecoration('Lab name'),
+            ),
           ],
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
+          child: const Text('Upload'),
+        ),
+      ],
     );
     if (saved != true || title.text.trim().isEmpty || !mounted) return;
 

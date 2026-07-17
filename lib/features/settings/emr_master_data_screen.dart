@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_form_dialog.dart';
 import '../../data/services/emr_master_data_service.dart';
 
 class EmrMasterDataScreen extends StatefulWidget {
@@ -96,98 +97,118 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     );
     var isActive = item?.isActive ?? true;
 
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 16,
-            bottom: MediaQuery.viewInsetsOf(ctx).bottom + 16,
+    final title =
+        isEdit ? 'Edit ${_tabLabels[_tabs.index]}' : 'Add ${_tabLabels[_tabs.index]}';
+
+    Widget buildFields(void Function(VoidCallback) setLocal) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_currentKey == 'dosages' || _currentKey == 'frequencies')
+            TextField(
+              controller: label,
+              decoration: appFormFieldDecoration('Label *'),
+            )
+          else
+            TextField(
+              controller: name,
+              decoration: appFormFieldDecoration('Name *'),
+            ),
+          if (_currentKey == 'diagnoses') ...[
+            const SizedBox(height: 16),
+            TextField(
+              controller: icd,
+              decoration: appFormFieldDecoration('ICD Code'),
+            ),
+          ],
+          if (_currentKey == 'treatments') ...[
+            const SizedBox(height: 16),
+            TextField(
+              controller: code,
+              decoration: appFormFieldDecoration('Procedure code'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: price,
+              keyboardType: TextInputType.number,
+              decoration: appFormFieldDecoration('Default price'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: category,
+              decoration: appFormFieldDecoration('Category'),
+            ),
+          ],
+          if (_currentKey == 'medicines') ...[
+            const SizedBox(height: 16),
+            TextField(
+              controller: dosage,
+              decoration: appFormFieldDecoration('Default dosage'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: frequency,
+              decoration: appFormFieldDecoration('Default frequency'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: days,
+              keyboardType: TextInputType.number,
+              decoration: appFormFieldDecoration('Default days'),
+            ),
+          ],
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Active'),
+            value: isActive,
+            onChanged: (v) => setLocal(() => isActive = v),
           ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  isEdit ? 'Edit ${_tabLabels[_tabs.index]}' : 'Add ${_tabLabels[_tabs.index]}',
-                  style: Theme.of(ctx).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 16),
-                if (_currentKey == 'dosages' || _currentKey == 'frequencies')
-                  TextField(
-                    controller: label,
-                    decoration: const InputDecoration(labelText: 'Label *'),
-                  )
-                else
-                  TextField(
-                    controller: name,
-                    decoration: const InputDecoration(labelText: 'Name *'),
-                  ),
-                if (_currentKey == 'diagnoses') ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: icd,
-                    decoration: const InputDecoration(labelText: 'ICD Code'),
-                  ),
-                ],
-                if (_currentKey == 'treatments') ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: code,
-                    decoration: const InputDecoration(labelText: 'Procedure code'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: price,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Default price'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: category,
-                    decoration: const InputDecoration(labelText: 'Category'),
-                  ),
-                ],
-                if (_currentKey == 'medicines') ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: dosage,
-                    decoration: const InputDecoration(labelText: 'Default dosage'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: frequency,
-                    decoration: const InputDecoration(labelText: 'Default frequency'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: days,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Default days'),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Active'),
-                  value: isActive,
-                  onChanged: (v) => setSheet(() => isActive = v),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: Text(isEdit ? 'Save' : 'Add'),
-                ),
-              ],
+        ],
+      );
+    }
+
+    final bool? saved;
+    if (useCenteredFormDialog(context)) {
+      saved = await showAppAlertForm<bool>(
+        context: context,
+        title: title,
+        content: StatefulBuilder(
+          builder: (ctx, setLocal) => buildFields(setLocal),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
+            child: Text(isEdit ? 'Save' : 'Add'),
+          ),
+        ],
+      );
+    } else {
+      saved = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useRootNavigator: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setSheet) => AppFormBottomSheetShell(
+            title: title,
+            icon: Icons.medical_information_outlined,
+            onClose: () => Navigator.pop(ctx, false),
+            body: buildFields(setSheet),
+            footer: AppFormFooter(
+              primaryLabel: isEdit ? 'Save' : 'Add',
+              onCancel: () => Navigator.pop(ctx, false),
+              onSubmit: () => Navigator.pop(ctx, true),
             ),
           ),
         ),
-      ),
-    );
+      );
+    }
 
     if (saved != true || !mounted) return;
 

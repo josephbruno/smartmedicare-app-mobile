@@ -6,6 +6,7 @@ import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/emr.dart';
 
 class SurgeryManagementScreen extends StatefulWidget {
@@ -49,76 +50,78 @@ class _SurgeryManagementScreenState extends State<SurgeryManagementScreen> {
     var status = 'scheduled';
     int? surgeonId;
 
-    final saved = await showDialog<bool>(
+    final saved = await showAppAlertForm<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => AlertDialog(
-          title: const Text('Add surgery record'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: name,
-                  decoration: const InputDecoration(labelText: 'Surgery name *'),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: status,
-                  decoration: const InputDecoration(labelText: 'Status'),
-                  items: const [
-                    DropdownMenuItem(value: 'scheduled', child: Text('Scheduled')),
-                    DropdownMenuItem(value: 'completed', child: Text('Completed')),
-                    DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
-                  ],
-                  onChanged: (v) => setDialog(() => status = v ?? 'scheduled'),
-                ),
-                if (_doctors.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<int?>(
-                    value: surgeonId,
-                    decoration: const InputDecoration(labelText: 'Surgeon'),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('— None —')),
-                      ..._doctors.map(
-                        (d) => DropdownMenuItem(value: d.id, child: Text(d.name)),
-                      ),
-                    ],
-                    onChanged: (v) => setDialog(() => surgeonId = v),
+      title: 'Add surgery record',
+      content: StatefulBuilder(
+        builder: (ctx, setDialog) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: name,
+              decoration: appFormFieldDecoration('Surgery name *'),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: status,
+              decoration: appFormFieldDecoration('Status'),
+              items: const [
+                DropdownMenuItem(value: 'scheduled', child: Text('Scheduled')),
+                DropdownMenuItem(value: 'completed', child: Text('Completed')),
+                DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
+              ],
+              onChanged: (v) => setDialog(() => status = v ?? 'scheduled'),
+            ),
+            if (_doctors.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int?>(
+                value: surgeonId,
+                decoration: appFormFieldDecoration('Surgeon'),
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('— None —')),
+                  ..._doctors.map(
+                    (d) => DropdownMenuItem(value: d.id, child: Text(d.name)),
                   ),
                 ],
-                const SizedBox(height: 8),
-                TextField(
-                  controller: anesthesia,
-                  decoration: const InputDecoration(labelText: 'Anesthesia type'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: cost,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Cost'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: preOp,
-                  maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Pre-op notes'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: postOp,
-                  maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Post-op notes'),
-                ),
-              ],
+                onChanged: (v) => setDialog(() => surgeonId = v),
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextField(
+              controller: anesthesia,
+              decoration: appFormFieldDecoration('Anesthesia type'),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+            const SizedBox(height: 16),
+            TextField(
+              controller: cost,
+              keyboardType: TextInputType.number,
+              decoration: appFormFieldDecoration('Cost'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: preOp,
+              maxLines: 2,
+              decoration: appFormFieldDecoration('Pre-op notes'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: postOp,
+              maxLines: 2,
+              decoration: appFormFieldDecoration('Post-op notes'),
+            ),
           ],
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
+          child: const Text('Save'),
+        ),
+      ],
     );
     if (saved != true || name.text.trim().isEmpty || !mounted) return;
 

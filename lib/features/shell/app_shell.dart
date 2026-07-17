@@ -867,6 +867,8 @@ List<_MenuItem> _menuItems(AuthSession auth) {
       _MenuItem(label: 'Suppliers', icon: Icons.local_shipping_outlined, path: '/suppliers'),
     if (can('doctors.manage'))
       _MenuItem(label: 'Doctors', icon: Icons.medical_information_outlined, path: '/settings/doctors'),
+    if (can('products.edit'))
+      _MenuItem(label: 'Catalog', icon: Icons.sell_outlined, path: '/settings/catalog'),
     if (can('emr.master_data.manage'))
       _MenuItem(label: 'EMR Master Data', icon: Icons.list_alt_outlined, path: '/settings/emr-master-data'),
     if (can('shop.manage'))
@@ -903,6 +905,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/reports/gst')) return 'GST Report';
   if (path.startsWith('/reports/stock-transfers')) return 'Stock Transfer Report';
   if (path.startsWith('/settings/doctors')) return 'Doctors';
+  if (path.startsWith('/settings/catalog')) return 'Catalog';
   if (path.startsWith('/settings/emr-master-data')) return 'EMR Master Data';
   if (path.startsWith('/settings/users')) return 'Users';
   if (path.startsWith('/settings/branches')) return 'Branches';

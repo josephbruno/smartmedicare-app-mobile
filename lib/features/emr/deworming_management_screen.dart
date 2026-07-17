@@ -6,6 +6,7 @@ import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/emr.dart';
 
 class DewormingManagementScreen extends StatefulWidget {
@@ -37,42 +38,44 @@ class _DewormingManagementScreenState extends State<DewormingManagementScreen> {
     final notes = TextEditingController();
     var administered = DateTime.now();
 
-    final saved = await showDialog<bool>(
+    final saved = await showAppAlertForm<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add deworming record'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: medicine,
-                decoration: const InputDecoration(labelText: 'Medicine *'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: dosage,
-                decoration: const InputDecoration(labelText: 'Dosage'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: administeredBy,
-                decoration: const InputDecoration(labelText: 'Administered by'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: notes,
-                maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Notes'),
-              ),
-            ],
+      title: 'Add deworming record',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: medicine,
+            decoration: appFormFieldDecoration('Medicine *'),
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+          const SizedBox(height: 16),
+          TextField(
+            controller: dosage,
+            decoration: appFormFieldDecoration('Dosage'),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: administeredBy,
+            decoration: appFormFieldDecoration('Administered by'),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: notes,
+            maxLines: 2,
+            decoration: appFormFieldDecoration('Notes'),
+          ),
         ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
+          child: const Text('Save'),
+        ),
+      ],
     );
     if (saved != true || medicine.text.trim().isEmpty || !mounted) return;
 

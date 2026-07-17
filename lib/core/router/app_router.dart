@@ -49,6 +49,7 @@ import '../../features/reports/gst_report_screen.dart';
 import '../../features/reports/sales_report_screen.dart';
 import '../../features/reports/stock_transfer_report_screen.dart';
 import '../../features/settings/branches_screen.dart';
+import '../../features/settings/catalog_master_data_screen.dart';
 import '../../features/settings/doctors_screen.dart';
 import '../../features/settings/emr_master_data_screen.dart';
 import '../../features/settings/settings_screen.dart';
@@ -157,6 +158,9 @@ GoRouter createAppRouter({
     }
     if (path.startsWith('/settings/emr-master-data')) {
       if (need(AppPermissions.emrMasterDataManage)) return denied;
+    }
+    if (path.startsWith('/settings/catalog')) {
+      if (need(AppPermissions.productsEdit)) return denied;
     }
     if (path == '/settings' || path.startsWith('/settings/')) {
       if (path == '/settings' && need(AppPermissions.shopManage)) return denied;
@@ -539,6 +543,14 @@ GoRouter createAppRouter({
             builder: (c, s) => const PermissionGuard(
               permission: AppPermissions.emrMasterDataManage,
               child: EmrMasterDataScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/catalog',
+            name: 'Catalog',
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.productsEdit,
+              child: CatalogMasterDataScreen(),
             ),
           ),
           GoRoute(

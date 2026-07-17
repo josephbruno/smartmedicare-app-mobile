@@ -16,6 +16,9 @@ class Product {
     this.hsnCode,
     this.description,
     this.imageUrl,
+    this.categoryId,
+    this.brandId,
+    this.unitId,
     required this.purchasePrice,
     required this.sellingPrice,
     required this.mrp,
@@ -41,6 +44,9 @@ class Product {
   final String? hsnCode;
   final String? description;
   final String? imageUrl;
+  final int? categoryId;
+  final int? brandId;
+  final int? unitId;
   final double purchasePrice;
   final double sellingPrice;
   final double mrp;
@@ -77,6 +83,9 @@ class Product {
       hsnCode: j['hsn_code']?.toString(),
       description: j['description']?.toString(),
       imageUrl: j['image_url']?.toString(),
+      categoryId: intOrNull(cat?['id']) ?? intOrNull(j['category_id']),
+      brandId: intOrNull(brand?['id']) ?? intOrNull(j['brand_id']),
+      unitId: intOrNull(unit?['id']) ?? intOrNull(j['unit_id']),
       purchasePrice: numOrNull(j['purchase_price']) ?? 0,
       sellingPrice: numOrNull(j['selling_price']) ?? 0,
       mrp: numOrNull(j['mrp']) ?? 0,

@@ -156,4 +156,112 @@ class ProductService {
       ApiClient.throwFromDio(e);
     }
   }
+
+  Future<List<Unit>> listUnits({Map<String, dynamic>? query}) async {
+    try {
+      final res = await _client.get('/units', queryParameters: query);
+      return parseEnvelopeData(res, (data) => listFromData(data, Unit.fromJson));
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  // --- Categories ---
+  Future<Category> createCategory(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/categories', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Category.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Category> updateCategory(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/categories/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Category.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deleteCategory(int id) async {
+    try {
+      await _client.delete('/categories/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  // --- Brands ---
+  Future<Brand> createBrand(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/brands', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Brand.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Brand> updateBrand(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/brands/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Brand.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deleteBrand(int id) async {
+    try {
+      await _client.delete('/brands/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  // --- Units ---
+  Future<Unit> createUnit(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/units', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Unit.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Unit> updateUnit(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/units/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Unit.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deleteUnit(int id) async {
+    try {
+      await _client.delete('/units/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
 }

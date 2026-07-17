@@ -4,8 +4,8 @@ import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app_services.dart';
-import '../../../core/app_config.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_form_dialog.dart';
 import '../../../data/models/customer.dart';
 
 const _speciesOptions = <({String value, String label})>[
@@ -24,20 +24,17 @@ Future<bool> showPetFormSheet(
   required int customerId,
   Pet? pet,
 }) async {
-  final useDialog = AppConfig.usesLargeUiScale ||
-      MediaQuery.sizeOf(context).width >= AppConfig.mobileCompactBreakpoint;
-
   final bool? result;
-  if (useDialog) {
-    result = await showDialog<bool>(
+  if (useCenteredFormDialog(context)) {
+    result = await showAppDialog<bool>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.35),
       builder: (ctx) => _PetFormDialog(customerId: customerId, pet: pet),
     );
   } else {
     result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _PetFormBottomSheet(customerId: customerId, pet: pet),
     );
@@ -562,6 +559,7 @@ class _PetFormDialogState extends State<_PetFormDialog> {
     return Dialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
+      alignment: Alignment.center,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
@@ -569,30 +567,34 @@ class _PetFormDialogState extends State<_PetFormDialog> {
           maxWidth: 520,
           maxHeight: maxHeight,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _PetFormHeader(
-              isEdit: _isEdit,
-              onClose: () => Navigator.pop(context),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: _PetFormFields(
-                  controller: _form,
-                  twoColumn: true,
-                  onChanged: () => setState(() {}),
+        child: SizedBox(
+          width: 520,
+          height: maxHeight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PetFormHeader(
+                isEdit: _isEdit,
+                onClose: () => Navigator.pop(context),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: _PetFormFields(
+                    controller: _form,
+                    twoColumn: true,
+                    onChanged: () => setState(() {}),
+                  ),
                 ),
               ),
-            ),
-            _PetFormFooter(
-              isEdit: _isEdit,
-              saving: _saving,
-              onCancel: () => Navigator.pop(context),
-              onSubmit: _save,
-            ),
-          ],
+              _PetFormFooter(
+                isEdit: _isEdit,
+                saving: _saving,
+                onCancel: () => Navigator.pop(context),
+                onSubmit: _save,
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -9,6 +9,7 @@ import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/emr.dart';
 
 class DocumentsScreen extends StatefulWidget {
@@ -53,45 +54,47 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     final authority = TextEditingController();
     var docType = 'other';
 
-    final saved = await showDialog<bool>(
+    final saved = await showAppAlertForm<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => AlertDialog(
-          title: const Text('Upload document'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  value: docType,
-                  decoration: const InputDecoration(labelText: 'Document type'),
-                  items: _docTypes
-                      .map((t) => DropdownMenuItem(
-                            value: t,
-                            child: Text(t.replaceAll('_', ' ')),
-                          ))
-                      .toList(),
-                  onChanged: (v) => setDialog(() => docType = v ?? 'other'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: title,
-                  decoration: const InputDecoration(labelText: 'Title *'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: authority,
-                  decoration: const InputDecoration(labelText: 'Issuing authority'),
-                ),
-              ],
+      title: 'Upload document',
+      content: StatefulBuilder(
+        builder: (ctx, setDialog) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              value: docType,
+              decoration: appFormFieldDecoration('Document type'),
+              items: _docTypes
+                  .map((t) => DropdownMenuItem(
+                        value: t,
+                        child: Text(t.replaceAll('_', ' ')),
+                      ))
+                  .toList(),
+              onChanged: (v) => setDialog(() => docType = v ?? 'other'),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Upload')),
+            const SizedBox(height: 16),
+            TextField(
+              controller: title,
+              decoration: appFormFieldDecoration('Title *'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: authority,
+              decoration: appFormFieldDecoration('Issuing authority'),
+            ),
           ],
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
+          child: const Text('Upload'),
+        ),
+      ],
     );
     if (saved != true || title.text.trim().isEmpty || !mounted) return;
 

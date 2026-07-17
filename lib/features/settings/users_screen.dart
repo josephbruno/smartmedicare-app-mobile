@@ -9,6 +9,7 @@ import '../../core/responsive/desktop_layout_helper.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_form_dialog.dart';
 import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
 import '../../data/models/shop.dart';
@@ -130,13 +131,9 @@ class _UsersScreenState extends State<UsersScreen> {
     required bool roleLocked,
     required bool doctorRoleOnly,
   }) {
-    final useDialog = AppConfig.usesLargeUiScale ||
-        MediaQuery.sizeOf(context).width >= AppConfig.mobileCompactBreakpoint;
-
-    if (useDialog) {
-      return showDialog<Map<String, dynamic>>(
+    if (useCenteredFormDialog(context)) {
+      return showAppDialog<Map<String, dynamic>>(
         context: context,
-        barrierColor: Colors.black.withValues(alpha: 0.35),
         builder: (ctx) => _UserFormDialog(
           user: user,
           branches: branches,
@@ -150,6 +147,7 @@ class _UsersScreenState extends State<UsersScreen> {
     return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _UserFormBottomSheet(
         user: user,
@@ -534,55 +532,60 @@ class _UserFormDialogState extends State<_UserFormDialog> {
     return Dialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
+      alignment: Alignment.center,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: dialogWidth, maxHeight: maxHeight),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _UserFormHeader(
-              isEdit: isEdit,
-              name: _name.text,
-              onClose: () => Navigator.pop(context),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                child: _UserFormFields(
-                  isEdit: isEdit,
-                  name: _name,
-                  email: _email,
-                  phone: _phone,
-                  password: _password,
-                  passwordConfirm: _passwordConfirm,
-                  selectedRole: _selectedRole,
-                  selectedBranchId: _selectedBranchId,
-                  isActive: _isActive,
-                  obscurePassword: _obscurePassword,
-                  obscureConfirm: _obscureConfirm,
-                  roleOptions: widget.roleOptions,
-                  branches: widget.branches,
-                  twoColumn: true,
-                  roleLocked: widget.roleLocked,
-                  doctorRoleOnly: widget.doctorRoleOnly,
-                  onRoleChanged: (v) => setState(() => _selectedRole = v),
-                  onBranchChanged: (v) => setState(() => _selectedBranchId = v),
-                  onActiveChanged: (v) => setState(() => _isActive = v),
-                  onTogglePassword: () => setState(() => _obscurePassword = !_obscurePassword),
-                  onToggleConfirm: () => setState(() => _obscureConfirm = !_obscureConfirm),
+        child: SizedBox(
+          width: dialogWidth,
+          height: maxHeight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _UserFormHeader(
+                isEdit: isEdit,
+                name: _name.text,
+                onClose: () => Navigator.pop(context),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                  child: _UserFormFields(
+                    isEdit: isEdit,
+                    name: _name,
+                    email: _email,
+                    phone: _phone,
+                    password: _password,
+                    passwordConfirm: _passwordConfirm,
+                    selectedRole: _selectedRole,
+                    selectedBranchId: _selectedBranchId,
+                    isActive: _isActive,
+                    obscurePassword: _obscurePassword,
+                    obscureConfirm: _obscureConfirm,
+                    roleOptions: widget.roleOptions,
+                    branches: widget.branches,
+                    twoColumn: true,
+                    roleLocked: widget.roleLocked,
+                    doctorRoleOnly: widget.doctorRoleOnly,
+                    onRoleChanged: (v) => setState(() => _selectedRole = v),
+                    onBranchChanged: (v) => setState(() => _selectedBranchId = v),
+                    onActiveChanged: (v) => setState(() => _isActive = v),
+                    onTogglePassword: () => setState(() => _obscurePassword = !_obscurePassword),
+                    onToggleConfirm: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                  ),
                 ),
               ),
-            ),
-            _UserFormFooter(
-              isEdit: isEdit,
-              onCancel: () => Navigator.pop(context),
-              onSubmit: () {
-                final payload = _validateAndBuildPayload();
-                if (payload != null) Navigator.pop(context, payload);
-              },
-            ),
-          ],
+              _UserFormFooter(
+                isEdit: isEdit,
+                onCancel: () => Navigator.pop(context),
+                onSubmit: () {
+                  final payload = _validateAndBuildPayload();
+                  if (payload != null) Navigator.pop(context, payload);
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

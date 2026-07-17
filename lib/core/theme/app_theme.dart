@@ -42,7 +42,19 @@ class AppTheme {
 
     return base.copyWith(
       dialogTheme: DialogThemeData(
+        alignment: Alignment.center,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        backgroundColor: surface,
+        surfaceTintColor: surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        showDragHandle: false,
       ),
       iconTheme: IconThemeData(color: textPrimary, size: defaultIconSize),
       appBarTheme: AppBarTheme(
@@ -70,17 +82,20 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        fillColor: const Color(0xFFF8FAFC),
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+        alignLabelWithHint: true,
+        contentPadding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
         hintStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 14),
-        labelStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 14, fontWeight: FontWeight.w500),
+        labelStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
+        floatingLabelStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+          borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+          borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
