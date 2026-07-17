@@ -85,4 +85,28 @@ class SupplierService {
       ApiClient.throwFromDio(e);
     }
   }
+
+  Future<Supplier> create(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/suppliers', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Supplier.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Supplier> update(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/suppliers/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Supplier.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
 }

@@ -11,11 +11,21 @@ class ProductService {
   final ApiClient _client;
 
   Future<List<Product>> list({Map<String, dynamic>? query}) async {
+    bool? isActive;
+    final rawActive = query?['is_active'];
+    if (rawActive is bool) {
+      isActive = rawActive;
+    } else if (rawActive != null) {
+      final s = rawActive.toString().toLowerCase();
+      if (s == 'true' || s == '1') isActive = true;
+      if (s == 'false' || s == '0') isActive = false;
+    }
     final result = await listPaginated(
       page: int.tryParse(query?['page']?.toString() ?? '') ?? 1,
       perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
       search: query?['search']?.toString(),
       type: query?['type']?.toString(),
+      isActive: isActive,
     );
     return result.items;
   }
@@ -25,6 +35,7 @@ class ProductService {
     int perPage = 20,
     String? search,
     String? type,
+    bool? isActive,
   }) async {
     try {
       final res = await _client.get('/products', queryParameters: {
@@ -32,6 +43,7 @@ class ProductService {
         'per_page': perPage,
         if (search != null && search.isNotEmpty) 'search': search,
         if (type != null && type.isNotEmpty) 'type': type,
+        if (isActive != null) 'is_active': isActive,
       });
       return parseEnvelopeList(res, Product.fromJson);
     } on DioException catch (e) {

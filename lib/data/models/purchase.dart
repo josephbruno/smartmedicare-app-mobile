@@ -6,6 +6,8 @@ class Supplier {
     this.email,
     required this.phone,
     this.gstin,
+    this.creditLimit,
+    this.creditDays,
     required this.isActive,
   });
 
@@ -15,6 +17,8 @@ class Supplier {
   final String? email;
   final String phone;
   final String? gstin;
+  final double? creditLimit;
+  final int? creditDays;
   final bool isActive;
 
   factory Supplier.fromJson(Map<String, dynamic> j) => Supplier(
@@ -24,6 +28,8 @@ class Supplier {
         email: j['email']?.toString(),
         phone: j['phone']?.toString() ?? '',
         gstin: j['gstin']?.toString(),
+        creditLimit: (j['credit_limit'] as num?)?.toDouble(),
+        creditDays: (j['credit_days'] as num?)?.toInt(),
         isActive: j['is_active'] as bool? ?? true,
       );
 }
