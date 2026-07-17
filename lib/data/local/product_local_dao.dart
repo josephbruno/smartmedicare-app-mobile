@@ -100,6 +100,66 @@ class ProductLocalDao {
     return list.isEmpty ? null : list.first;
   }
 
+  /// Removes local products for [branchId] that are not in [keepIds].
+  /// Used after a full catalog sync so deleted/replaced products disappear.
+  Future<int> pruneBranchExcept(int branchId, Set<int> keepIds) async {
+    final db = await AppDatabase.instance();
+    if (keepIds.isEmpty) {
+      return db.delete('products', where: 'branch_id = ?', whereArgs: [branchId]);
+    }
+
+    // SQLite variable limit ~999; chunk the NOT IN list.
+    const chunkSize = 400;
+    final keep = keepIds.toList();
+    var deleted = 0;
+
+    // Delete in one pass when small enough.
+    if (keep.length <= chunkSize) {
+      final placeholders = List.filled(keep.length, '?').join(',');
+      deleted = await db.delete(
+        'products',
+        where: 'branch_id = ? AND id NOT IN ($placeholders)',
+        whereArgs: [branchId, ...keep],
+      );
+      return deleted;
+    }
+
+    // Large catalogs: load local ids then delete missing.
+    final rows = await db.query(
+      'products',
+      columns: ['id'],
+      where: 'branch_id = ?',
+      whereArgs: [branchId],
+    );
+    final localIds = rows.map((r) => r['id'] as int).toSet();
+    final toDelete = localIds.difference(keepIds).toList();
+    for (var i = 0; i < toDelete.length; i += chunkSize) {
+      final chunk = toDelete.sublist(
+        i,
+        i + chunkSize > toDelete.length ? toDelete.length : i + chunkSize,
+      );
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      deleted += await db.delete(
+        'products',
+        where: 'branch_id = ? AND id IN ($placeholders)',
+        whereArgs: [branchId, ...chunk],
+      );
+    }
+    return deleted;
+  }
+
+  /// Marks products inactive locally (keeps row for delta continuity).
+  Future<void> markInactive(int branchId, Iterable<int> productIds) async {
+    final ids = productIds.toList();
+    if (ids.isEmpty) return;
+    final db = await AppDatabase.instance();
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await db.rawUpdate(
+      'UPDATE products SET is_active = 0, updated_at = ? WHERE branch_id = ? AND id IN ($placeholders)',
+      [DateTime.now().toUtc().toIso8601String(), branchId, ...ids],
+    );
+  }
+
   /// Optimistic stock decrement after offline checkout.
   Future<void> adjustStock(int branchId, int productId, double delta) async {
     final db = await AppDatabase.instance();

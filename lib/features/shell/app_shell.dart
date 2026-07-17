@@ -132,7 +132,11 @@ class _AppShellState extends State<AppShell> {
 
     Future<void> syncAll() async {
       try {
-        await syncCoordinator.syncAll(branchId: auth.currentBranchId);
+        // Force a full catalog rebuild so deleted/renamed products leave the POS list.
+        await syncCoordinator.syncAll(
+          branchId: auth.currentBranchId,
+          forceFullCatalog: true,
+        );
         if (context.mounted) {
           AppMessenger.show(context,
             const SnackBar(

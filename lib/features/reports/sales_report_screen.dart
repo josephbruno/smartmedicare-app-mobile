@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
 import '../../data/models/invoice.dart';
+import '../../data/models/shop.dart';
 import 'report_date_range.dart';
 import 'report_formatters.dart';
 import 'widgets/report_charts.dart';
@@ -25,6 +26,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   bool _loading = true;
   String? _error;
   List<Invoice> _invoices = [];
+  List<Branch> _branches = [];
+  /// `null` = overall (all branches).
+  int? _selectedBranchId;
   String _invoiceTab = 'all';
   final _search = TextEditingController();
 
@@ -47,16 +51,23 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     });
     try {
       final services = context.read<AppServices>();
-      final result = await services.billing.listForReport(
-        dateFrom: _range.fromYmd,
-        dateTo: _range.toYmd,
-        withPayments: true,
-      );
+      final results = await Future.wait([
+        services.billing.listForReport(
+          dateFrom: _range.fromYmd,
+          dateTo: _range.toYmd,
+          withPayments: true,
+        ),
+        services.branches.list(),
+      ]);
       if (!mounted) return;
+      final result = results[0] as InvoiceListResult;
+      final branches = results[1] as List<Branch>;
       setState(() {
         _invoices = result.items
             .where((i) => i.status != 'cancelled' && i.status != 'draft')
             .toList();
+        _branches = branches.where((b) => b.isActive).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
         _loading = false;
       });
     } catch (e) {
@@ -95,17 +106,47 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     _load();
   }
 
+  List<Invoice> get _scopedInvoices {
+    if (_selectedBranchId == null) return _invoices;
+    return _invoices.where((i) => i.branchId == _selectedBranchId).toList();
+  }
+
+  List<({int? id, String name})> get _branchOptions {
+    final map = <int, String>{};
+    for (final b in _branches) {
+      map[b.id] = b.name;
+    }
+    for (final inv in _invoices) {
+      final id = inv.branchId;
+      if (id != null && id > 0) {
+        map.putIfAbsent(id, () => inv.branch?.name ?? 'Branch #$id');
+      }
+    }
+    final list = <({int? id, String name})>[
+      for (final e in map.entries) (id: e.key, name: e.value),
+    ]..sort((a, b) => a.name.compareTo(b.name));
+    return [(id: null, name: 'Overall (all branches)'), ...list];
+  }
+
   List<Invoice> get _filteredTable {
     final q = _search.text.trim().toLowerCase();
-    return _invoices.where((inv) {
+    return _scopedInvoices.where((inv) {
       if (_invoiceTab == 'paid' && !(inv.paidAmount >= inv.totalAmount && inv.totalAmount > 0)) {
         return false;
       }
       if (_invoiceTab == 'unpaid' && inv.dueAmount <= 0) return false;
       if (q.isEmpty) return true;
-      final hay = '${inv.invoiceNumber} ${inv.customer?.name ?? 'Walk-in'} ${inv.status}'.toLowerCase();
+      final hay =
+          '${inv.invoiceNumber} ${inv.customer?.name ?? 'Walk-in'} ${inv.branchName} ${inv.status}'
+              .toLowerCase();
       return hay.contains(q);
     }).toList();
+  }
+
+  String get _scopeLabel {
+    if (_selectedBranchId == null) return 'All branches';
+    final match = _branchOptions.where((b) => b.id == _selectedBranchId);
+    return match.isEmpty ? 'Selected branch' : match.first.name;
   }
 
   @override
@@ -142,6 +183,10 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   }
 
   Widget _buildToolbar(BuildContext context) {
+    final branchValue = _branchOptions.any((b) => b.id == _selectedBranchId)
+        ? _selectedBranchId
+        : null;
+
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -170,6 +215,18 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             icon: const Icon(Icons.date_range, size: 18),
             label: Text('${_range.fromYmd} → ${_range.toYmd}'),
           ),
+          DropdownButton<int?>(
+            value: branchValue,
+            items: _branchOptions
+                .map(
+                  (b) => DropdownMenuItem<int?>(
+                    value: b.id,
+                    child: Text(b.name),
+                  ),
+                )
+                .toList(),
+            onChanged: (v) => setState(() => _selectedBranchId = v),
+          ),
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
         ],
       ),
@@ -177,26 +234,27 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   }
 
   Widget _buildContent(BuildContext context) {
-    final totalSales = _invoices.fold<double>(0, (s, i) => s + i.totalAmount);
-    final totalPaid = _invoices.fold<double>(0, (s, i) => s + i.paidAmount);
-    final totalDue = _invoices.fold<double>(0, (s, i) => s + i.dueAmount);
-    final avg = _invoices.isEmpty ? 0.0 : totalSales / _invoices.length;
+    final invoices = _scopedInvoices;
+    final totalSales = invoices.fold<double>(0, (s, i) => s + i.totalAmount);
+    final totalPaid = invoices.fold<double>(0, (s, i) => s + i.paidAmount);
+    final totalDue = invoices.fold<double>(0, (s, i) => s + i.dueAmount);
+    final avg = invoices.isEmpty ? 0.0 : totalSales / invoices.length;
 
     final byMode = <String, double>{};
-    for (final inv in _invoices) {
+    for (final inv in invoices) {
       for (final p in inv.payments ?? const []) {
         byMode[p.paymentMode] = (byMode[p.paymentMode] ?? 0) + p.amount;
       }
     }
 
     final byStatus = <String, double>{};
-    for (final inv in _invoices) {
+    for (final inv in invoices) {
       byStatus[inv.status] = (byStatus[inv.status] ?? 0) + inv.totalAmount;
     }
 
     final byDay = <String, double>{};
     final paidByDay = <String, double>{};
-    for (final inv in _invoices) {
+    for (final inv in invoices) {
       final day = inv.invoiceDate.length >= 10 ? inv.invoiceDate.substring(0, 10) : inv.invoiceDate;
       byDay[day] = (byDay[day] ?? 0) + inv.totalAmount;
       paidByDay[day] = (paidByDay[day] ?? 0) + inv.paidAmount;
@@ -209,13 +267,57 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     final statusEntries = byStatus.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
+    final branchSeries = <({String label, double total, double paid, double due})>[];
+    {
+      final map = <String, ({String label, double total, double paid, double due})>{};
+      for (final inv in invoices) {
+        final key = inv.branchId != null ? 'id:${inv.branchId}' : 'unknown';
+        final label = inv.branch?.name ?? (inv.branchId != null ? 'Branch #${inv.branchId}' : 'Unknown');
+        final prev = map[key];
+        map[key] = (
+          label: label,
+          total: (prev?.total ?? 0) + inv.totalAmount,
+          paid: (prev?.paid ?? 0) + inv.paidAmount,
+          due: (prev?.due ?? 0) + inv.dueAmount,
+        );
+      }
+      branchSeries.addAll(map.values);
+      branchSeries.sort((a, b) => b.total.compareTo(a.total));
+    }
+
+    final showBranchChart = _selectedBranchId == null && branchSeries.length > 1;
     final crossCount = ResponsiveLayout.isMobile(context) ? 1 : 2;
+    final isOverall = _selectedBranchId == null;
 
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: ResponsiveLayout.getResponsivePadding(context),
         children: [
+          if (isOverall)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Overall · $_scopeLabel',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Branch · $_scopeLabel',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ),
           GridView.count(
             crossAxisCount: ResponsiveLayout.isMobile(context) ? 2 : 4,
             shrinkWrap: true,
@@ -227,21 +329,22 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
               ReportKpiCard(
                 title: 'Total sales',
                 value: formatReportCurrency(totalSales),
-                subtitle: '${_invoices.length} invoices',
+                subtitle: '${invoices.length} invoices · $_scopeLabel',
                 icon: Icons.bar_chart_rounded,
                 color: AppTheme.primary,
               ),
               ReportKpiCard(
                 title: 'Total paid',
                 value: formatReportCurrency(totalPaid),
-                subtitle: '${_invoices.where((i) => i.paidAmount >= i.totalAmount && i.totalAmount > 0).length} paid',
+                subtitle:
+                    '${invoices.where((i) => i.paidAmount >= i.totalAmount && i.totalAmount > 0).length} paid',
                 icon: Icons.account_balance_wallet_outlined,
                 color: AppTheme.accent,
               ),
               ReportKpiCard(
                 title: 'Outstanding',
                 value: formatReportCurrency(totalDue),
-                subtitle: '${_invoices.where((i) => i.dueAmount > 0).length} due',
+                subtitle: '${invoices.where((i) => i.dueAmount > 0).length} due',
                 icon: Icons.warning_amber_rounded,
                 color: AppTheme.danger,
               ),
@@ -254,6 +357,30 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
               ),
             ],
           ),
+          if (showBranchChart) ...[
+            const SizedBox(height: 16),
+            ReportSectionCard(
+              title: 'Sales by branch',
+              height: 280,
+              child: ReportBarChart(
+                labels: branchSeries.take(8).map((e) => e.label).toList(),
+                series: [
+                  (
+                    name: 'Sales',
+                    color: AppTheme.primary,
+                    values: branchSeries.take(8).map((e) => e.total).toList(),
+                  ),
+                  (
+                    name: 'Paid',
+                    color: AppTheme.accent,
+                    values: branchSeries.take(8).map((e) => e.paid).toList(),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _BranchSummaryTable(rows: branchSeries),
+          ],
           const SizedBox(height: 16),
           GridView.count(
             crossAxisCount: crossCount,
@@ -269,8 +396,16 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                 child: ReportLineChart(
                   labels: dayLabels,
                   series: [
-                    (name: 'Total sales', color: AppTheme.primary, values: days.map((d) => byDay[d] ?? 0).toList()),
-                    (name: 'Paid', color: AppTheme.accent, values: days.map((d) => paidByDay[d] ?? 0).toList()),
+                    (
+                      name: 'Total sales',
+                      color: AppTheme.primary,
+                      values: days.map((d) => byDay[d] ?? 0).toList(),
+                    ),
+                    (
+                      name: 'Paid',
+                      color: AppTheme.accent,
+                      values: days.map((d) => paidByDay[d] ?? 0).toList(),
+                    ),
                   ],
                 ),
               ),
@@ -327,7 +462,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                       child: TextField(
                         controller: _search,
                         decoration: const InputDecoration(
-                          hintText: 'Search invoice or customer...',
+                          hintText: 'Search invoice, customer, branch...',
                           prefixIcon: Icon(Icons.search),
                           isDense: true,
                         ),
@@ -350,7 +485,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                 SizedBox(
                   height: 420,
                   child: AppPaginatedTable<Invoice>(
-                    key: ValueKey('$_invoiceTab-${_search.text}'),
+                    key: ValueKey('$_invoiceTab-$_selectedBranchId-${_search.text}'),
                     showPerPageSelector: false,
                     perPage: 15,
                     emptyMessage: 'No invoices in this period.',
@@ -370,6 +505,11 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         ),
                       ),
                       TableColumnDef(label: 'Date', flex: 1, cellBuilder: (c, inv) => Text(inv.displayDate)),
+                      TableColumnDef(
+                        label: 'Branch',
+                        flex: 1.2,
+                        cellBuilder: (c, inv) => Text(inv.branchName),
+                      ),
                       TableColumnDef(
                         label: 'Customer',
                         flex: 1.3,
@@ -396,7 +536,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         align: TextAlign.right,
                         cellBuilder: (c, inv) => Text(
                           formatReportCurrency(inv.dueAmount),
-                          style: TextStyle(color: inv.dueAmount > 0 ? AppTheme.danger : AppTheme.textSecondary),
+                          style: TextStyle(
+                            color: inv.dueAmount > 0 ? AppTheme.danger : AppTheme.textSecondary,
+                          ),
                         ),
                       ),
                       TableColumnDef(
@@ -409,6 +551,123 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BranchSummaryTable extends StatelessWidget {
+  const _BranchSummaryTable({required this.rows});
+
+  final List<({String label, double total, double paid, double due})> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return ReportSectionCard(
+      title: 'Branch summary',
+      child: Column(
+        children: [
+          const _BranchSummaryHeader(),
+          const Divider(height: 1),
+          for (final row in rows) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      row.label,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      formatReportCurrency(row.total),
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      formatReportCurrency(row.paid),
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(color: AppTheme.accent),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      formatReportCurrency(row.due),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        color: row.due > 0 ? AppTheme.danger : AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BranchSummaryHeader extends StatelessWidget {
+  const _BranchSummaryHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              'Branch',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              'Sales',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              'Paid',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              'Due',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
+              ),
             ),
           ),
         ],

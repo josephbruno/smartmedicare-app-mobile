@@ -556,7 +556,7 @@ GoRouter createAppRouter({
           GoRoute(
             path: '/settings/branches',
             name: 'Branches',
-            builder: (c, s) => const PermissionGuard(
+            builder: (c, s) => PermissionGuard(
               permission: AppPermissions.branchManage,
               child: BranchesScreen(),
             ),

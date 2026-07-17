@@ -1,6 +1,7 @@
 import '../json_helpers.dart';
 import 'api_response.dart';
 import 'customer.dart';
+import 'user.dart';
 
 class InvoiceCustomerLite {
   InvoiceCustomerLite({
@@ -132,6 +133,8 @@ class Invoice {
     this.notes,
     this.offlineId,
     this.shareToken,
+    this.branchId,
+    this.branch,
     this.customer,
     this.items,
     this.payments,
@@ -160,12 +163,15 @@ class Invoice {
   final String? notes;
   final String? offlineId;
   final String? shareToken;
+  final int? branchId;
+  final BranchLite? branch;
   final Customer? customer;
   final List<InvoiceItem>? items;
   final List<InvoicePayment>? payments;
   final String? createdAt;
 
   String get displayDate => formatApiDate(invoiceDate);
+  String get branchName => branch?.name ?? '—';
 
   bool get isPaid => status == 'paid';
   bool get isUnpaid => status == 'partial' || status == 'confirmed' || status == 'draft';
@@ -188,6 +194,11 @@ class Invoice {
     if (j['payments'] is List) {
       payments = listFromData(j['payments'], InvoicePayment.fromJson);
     }
+    BranchLite? branch;
+    if (j['branch'] is Map) {
+      branch = BranchLite.fromJson(Map<String, dynamic>.from(j['branch'] as Map));
+    }
+    final branchId = intOrNull(j['branch_id']) ?? branch?.id;
     return Invoice(
       id: intOrNull(j['id']) ?? 0,
       invoiceNumber: j['invoice_number']?.toString() ?? '',
@@ -211,6 +222,8 @@ class Invoice {
       notes: j['notes']?.toString(),
       offlineId: j['offline_id']?.toString(),
       shareToken: j['share_token']?.toString(),
+      branchId: branchId,
+      branch: branch,
       customer: c,
       items: items,
       payments: payments,

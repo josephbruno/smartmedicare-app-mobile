@@ -49,6 +49,30 @@ class BranchService {
       ApiClient.throwFromDio(e);
     }
   }
+
+  Future<Branch> create(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/branches', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Branch.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Branch> update(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/branches/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Branch.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
 }
 
 class UsersService {

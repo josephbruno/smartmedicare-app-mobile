@@ -20,10 +20,20 @@ class SalesSummary {
       return SalesSummary(total: 0, count: 0);
     }
     final byMode = <String, double>{};
-    if (j['by_mode'] is Map) {
-      (j['by_mode'] as Map).forEach((k, v) {
-        byMode[k.toString()] = (v as num?)?.toDouble() ?? 0;
+    final rawMode = j['by_mode'];
+    if (rawMode is Map) {
+      rawMode.forEach((k, v) {
+        byMode[k.toString()] = numOrNull(v) ?? 0;
       });
+    } else if (rawMode is List) {
+      // Some payloads send [{payment_mode, total}, ...] instead of a map.
+      for (final item in rawMode) {
+        final map = mapOrNull(item);
+        if (map == null) continue;
+        final mode = (map['payment_mode'] ?? map['mode'] ?? map['key'])?.toString();
+        if (mode == null || mode.isEmpty) continue;
+        byMode[mode] = numOrNull(map['total'] ?? map['amount'] ?? map['value']) ?? 0;
+      }
     }
     return SalesSummary(
       total: numOrNull(j['total']) ?? 0,
@@ -115,7 +125,9 @@ class DashboardData {
       alertsCount: intOrNull(j['alerts_count']) ?? 0,
       branches: br,
       branchCount: intOrNull(j['branch_count']),
-      multiBranch: j['multi_branch'] as bool? ?? false,
+      multiBranch: j['multi_branch'] == true ||
+          j['multi_branch'] == 1 ||
+          j['multi_branch']?.toString() == 'true',
     );
   }
 }

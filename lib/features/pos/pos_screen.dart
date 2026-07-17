@@ -91,7 +91,12 @@ class _PosScreenState extends State<PosScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _syncCoordinator ??= context.read<SyncCoordinator>();
+    final sync = context.read<SyncCoordinator>();
+    if (!identical(_syncCoordinator, sync)) {
+      _syncCoordinator?.removeListener(_onSyncChanged);
+      _syncCoordinator = sync;
+      _syncCoordinator!.addListener(_onSyncChanged);
+    }
     final visitIdStr = GoRouterState.of(context).uri.queryParameters['visit_id'];
     final visitId = int.tryParse(visitIdStr ?? '');
     if (visitId != null && visitId != _lastLoadedVisitId && !_loadingVisit) {
@@ -99,6 +104,16 @@ class _PosScreenState extends State<PosScreen> {
         if (mounted) unawaited(_loadVisitFromQuery());
       });
     }
+  }
+
+  void _onSyncChanged() {
+    if (!mounted) return;
+    final sync = _syncCoordinator;
+    if (sync == null || sync.isSyncing) return;
+    final branchId = context.read<AuthSession>().currentBranchId;
+    if (branchId == null) return;
+    unawaited(_executeSearch(_search.text));
+    unawaited(_refreshLocalCatalogCount(branchId));
   }
 
   @override
@@ -111,8 +126,11 @@ class _PosScreenState extends State<PosScreen> {
       final branchId = auth.currentBranchId;
       if (branchId != null) {
         _syncCoordinator ??= context.read<SyncCoordinator>();
+        _syncCoordinator!.addListener(_onSyncChanged);
         _syncCoordinator!.startPosSyncLoop(branchId);
         unawaited(_refreshLocalCatalogCount(branchId));
+        // Load catalog into the list immediately (online refresh + local).
+        unawaited(_executeSearch(''));
       }
       if (useWebLikeShell(context)) {
         _searchFocus.requestFocus();
@@ -379,6 +397,7 @@ class _PosScreenState extends State<PosScreen> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _syncCoordinator?.removeListener(_onSyncChanged);
     _syncCoordinator?.stopPosSyncLoop();
     _searchFocus.removeListener(_onSearchFocusChanged);
     _search.dispose();

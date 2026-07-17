@@ -24,6 +24,7 @@ class SyncCoordinator extends ChangeNotifier {
   bool _posLoopActive = false;
   Timer? _posTimer;
   int? _posBranchId;
+  final Set<int> _posFullSyncedBranches = {};
   String? _lastError;
   int _localProductCount = 0;
 
@@ -34,9 +35,15 @@ class SyncCoordinator extends ChangeNotifier {
   void startPosSyncLoop(int? branchId) {
     if (branchId == null) return;
     _posBranchId = branchId;
-    if (_posLoopActive) return;
+    if (_posLoopActive) {
+      // Branch switched while POS is open — force a full rebuild.
+      if (!_posFullSyncedBranches.contains(branchId)) {
+        unawaited(_syncPosCatalog(branchId, forceFull: true));
+      }
+      return;
+    }
     _posLoopActive = true;
-    unawaited(_syncPosCatalog(branchId));
+    unawaited(_syncPosCatalog(branchId, forceFull: true));
     _posTimer?.cancel();
     _posTimer = Timer.periodic(const Duration(seconds: 120), (_) {
       final id = _posBranchId;
@@ -60,6 +67,7 @@ class SyncCoordinator extends ChangeNotifier {
       final id = branchId ?? _posBranchId;
       if (id != null) {
         await _productSync.syncForBranch(id, forceFull: forceFullCatalog);
+        if (forceFullCatalog) _posFullSyncedBranches.add(id);
         _localProductCount = await _productSync.localCount(id);
       }
       await _customerSync.syncAll();
@@ -75,16 +83,18 @@ class SyncCoordinator extends ChangeNotifier {
 
   Future<void> onReconnect(int? branchId) async {
     try {
-      await syncAll(branchId: branchId);
+      await syncAll(branchId: branchId, forceFullCatalog: true);
     } catch (_) {
       // Surface via lastError; callers may show snackbar.
     }
   }
 
-  Future<void> _syncPosCatalog(int branchId) async {
+  Future<void> _syncPosCatalog(int branchId, {bool forceFull = false}) async {
     if (_syncing) return;
     try {
-      await _productSync.syncForBranch(branchId);
+      final doFull = forceFull || !_posFullSyncedBranches.contains(branchId);
+      await _productSync.syncForBranch(branchId, forceFull: doFull);
+      _posFullSyncedBranches.add(branchId);
       _localProductCount = await _productSync.localCount(branchId);
       notifyListeners();
     } catch (e) {

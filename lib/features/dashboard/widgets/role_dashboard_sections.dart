@@ -21,20 +21,22 @@ class CashierDashboardSection extends StatefulWidget {
 }
 
 class _CashierDashboardSectionState extends State<CashierDashboardSection> {
-  late Future<DashboardData> _shiftFuture;
+  Future<DashboardData>? _shiftFuture;
 
   void _loadShiftStats() {
     final auth = context.read<AuthSession>();
-    _shiftFuture = context.read<AppServices>().reports.dashboard(
-          branchId: auth.currentBranchId,
-        );
-    setState(() {});
+    setState(() {
+      _shiftFuture = context.read<AppServices>().reports.dashboard(
+            branchId: auth.currentBranchId,
+          );
+    });
   }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       _loadShiftStats();
       context.read<VisitBillingQueueNotifier>().startPolling(
             context.read<AppServices>().emr,
@@ -52,7 +54,8 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
         FutureBuilder<DashboardData>(
           future: _shiftFuture,
           builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
+            if (_shiftFuture == null ||
+                snap.connectionState != ConnectionState.done) {
               return const Padding(
                 padding: EdgeInsets.only(bottom: 20),
                 child: SizedBox(
