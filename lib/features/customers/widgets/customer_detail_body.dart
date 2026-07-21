@@ -215,75 +215,10 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
                   label: const Text('Treatment Advance'),
                 ),
               ],
-              const Divider(height: 24),
+              const SizedBox(height: 20),
+              _petsSection(context, pets: pets, canCreate: canCreate, canEdit: canEdit),
+              const SizedBox(height: 20),
               _invoicesSection(context),
-              const Divider(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Pets',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                  if (canCreate)
-                    TextButton.icon(
-                      onPressed: () => _openPetForm(),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Add Pet'),
-                    ),
-                ],
-              ),
-              if (pets.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.pets_outlined,
-                          size: 40, color: AppTheme.textSecondary),
-                      const SizedBox(height: 8),
-                      Text(
-                        'No pets yet',
-                        style: TextStyle(color: AppTheme.textSecondary),
-                      ),
-                      if (canCreate) ...[
-                        const SizedBox(height: 8),
-                        OutlinedButton(
-                          onPressed: () => _openPetForm(),
-                          child: const Text('Add first pet'),
-                        ),
-                      ],
-                    ],
-                  ),
-                )
-              else
-                ...pets.map(
-                  (p) => Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.pets),
-                            title: Text(p.name),
-                            subtitle: Text(_petSubtitle(p)),
-                            trailing: canEdit
-                                ? IconButton(
-                                    tooltip: 'Edit pet',
-                                    icon: const Icon(Icons.edit_outlined),
-                                    onPressed: () => _openPetForm(pet: p),
-                                  )
-                                : null,
-                          ),
-                          EmrPetHub(petId: p.id, petName: p.name),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
             ],
           ),
         );
@@ -291,49 +226,164 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
     );
   }
 
+  Widget _sectionHeader(
+    BuildContext context, {
+    required String title,
+    String? trailing,
+    Widget? action,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleMedium),
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    trailing,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (action != null) action,
+      ],
+    );
+  }
+
+  Widget _petsSection(
+    BuildContext context, {
+    required List<Pet> pets,
+    required bool canCreate,
+    required bool canEdit,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionHeader(
+          context,
+          title: 'Pets',
+          trailing: pets.isEmpty ? null : '${pets.length}',
+          action: canCreate
+              ? TextButton.icon(
+                  onPressed: () => _openPetForm(),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add Pet'),
+                )
+              : null,
+        ),
+        const SizedBox(height: 8),
+        if (pets.isEmpty)
+          _EmptyBlock(
+            icon: Icons.pets_outlined,
+            message: 'No pets yet',
+            actionLabel: canCreate ? 'Add first pet' : null,
+            onAction: canCreate ? () => _openPetForm() : null,
+          )
+        else
+          ...pets.map((p) => _petCard(p, canEdit: canEdit)),
+      ],
+    );
+  }
+
+  Widget _petCard(Pet p, {required bool canEdit}) {
+    final subtitle = _petSubtitle(p);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.pets, color: AppTheme.primary, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        p.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.35,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (canEdit)
+                  IconButton(
+                    tooltip: 'Edit pet',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    onPressed: () => _openPetForm(pet: p),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            const SizedBox(height: 10),
+            EmrPetHub(petId: p.id),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _invoicesSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Invoices',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            if (!_invoicesLoading && _invoices.isNotEmpty)
-              Text(
-                '${_invoices.length} shown',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-          ],
+        _sectionHeader(
+          context,
+          title: 'Invoices',
+          trailing: !_invoicesLoading && _invoices.isNotEmpty
+              ? '${_invoices.length}'
+              : null,
         ),
         if (!_invoicesLoading && _invoices.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _StatChip(
-                label: 'Points earned',
-                value: '$_totalPointsEarned pts',
-                color: AppTheme.warning,
-              ),
-              if (_totalPointsRedeemed > 0)
-                _StatChip(
-                  label: 'Points redeemed',
-                  value: '$_totalPointsRedeemed pts',
-                  color: AppTheme.primary,
-                ),
-            ],
+          const SizedBox(height: 10),
+          _LoyaltySummaryBar(
+            earned: _totalPointsEarned,
+            redeemed: _totalPointsRedeemed,
           ),
         ],
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (_invoicesLoading)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
@@ -354,12 +404,9 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
             ),
           )
         else if (_invoices.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Text(
-              'No invoices for this customer yet.',
-              style: TextStyle(color: AppTheme.textSecondary),
-            ),
+          const _EmptyBlock(
+            icon: Icons.receipt_long_outlined,
+            message: 'No invoices for this customer yet.',
           )
         else
           ..._invoices.map(_invoiceTile),
@@ -368,103 +415,228 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
   }
 
   Widget _invoiceTile(Invoice inv) {
+    final statusColor = _invoiceStatusColor(inv.status);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => context.push('/invoices/${inv.id}'),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          child: Column(
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      inv.invoiceNumber.isNotEmpty
-                          ? inv.invoiceNumber
-                          : 'Invoice #${inv.id}',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _invoiceStatusColor(inv.status).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      inv.status.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: _invoiceStatusColor(inv.status),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                inv.displayDate.isNotEmpty ? inv.displayDate : '—',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: Icon(Icons.receipt_long_rounded, color: statusColor, size: 20),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '₹${inv.totalAmount.toStringAsFixed(2)}',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            inv.invoiceNumber.isNotEmpty
+                                ? inv.invoiceNumber
+                                : 'Invoice #${inv.id}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13.5,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            inv.status.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  if (inv.dueAmount > 0)
+                    const SizedBox(height: 4),
                     Text(
-                      'Due ₹${inv.dueAmount.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.danger,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(
-                    Icons.stars_rounded,
-                    size: 16,
-                    color: AppTheme.warning.withValues(alpha: 0.9),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Earned ${inv.loyaltyPointsEarned} pts',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.warning,
-                    ),
-                  ),
-                  if (inv.loyaltyPointsRedeemed > 0) ...[
-                    const SizedBox(width: 12),
-                    Text(
-                      'Redeemed ${inv.loyaltyPointsRedeemed}',
+                      inv.displayDate.isNotEmpty ? inv.displayDate : '—',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppTheme.textSecondary,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text(
+                          '₹${inv.totalAmount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (inv.dueAmount > 0) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            'Due ₹${inv.dueAmount.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.danger,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                        const Spacer(),
+                        Icon(
+                          Icons.stars_rounded,
+                          size: 14,
+                          color: AppTheme.warning.withValues(alpha: 0.9),
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '+${inv.loyaltyPointsEarned}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.warning,
+                          ),
+                        ),
+                        if (inv.loyaltyPointsRedeemed > 0) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            '−${inv.loyaltyPointsRedeemed}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
-                ],
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(left: 4, top: 10),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: AppTheme.textSecondary,
+                ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LoyaltySummaryBar extends StatelessWidget {
+  const _LoyaltySummaryBar({required this.earned, required this.redeemed});
+
+  final int earned;
+  final int redeemed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.warning.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.stars_rounded,
+            size: 18,
+            color: AppTheme.warning.withValues(alpha: 0.95),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Points earned  $earned pts',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.warning,
+              ),
+            ),
+          ),
+          if (redeemed > 0)
+            Text(
+              'Redeemed $redeemed',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyBlock extends StatelessWidget {
+  const _EmptyBlock({
+    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 36, color: AppTheme.textSecondary),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppTheme.textSecondary),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 10),
+            OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
       ),
     );
   }
