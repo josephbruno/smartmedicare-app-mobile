@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/models/customer.dart';
 import '../../emr/emr_pet_hub.dart';
 import 'pet_form_sheet.dart';
+import 'advance_payment_sheet.dart';
 
 /// Reusable customer detail (list pane or full page).
 class CustomerDetailBody extends StatefulWidget {
@@ -125,6 +126,40 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
                   ),
                 ),
               ],
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _StatChip(
+                    label: 'Advance',
+                    value: '₹${c.advanceBalance.toStringAsFixed(0)}',
+                    color: AppTheme.accent,
+                  ),
+                  _StatChip(
+                    label: 'Loyalty',
+                    value: '${c.loyaltyPoints} pts',
+                    color: AppTheme.warning,
+                  ),
+                  if ((c.creditLimit ?? 0) > 0)
+                    _StatChip(
+                      label: 'Credit limit',
+                      value: '₹${c.creditLimit!.toStringAsFixed(0)}',
+                      color: AppTheme.textSecondary,
+                    ),
+                ],
+              ),
+              if (canEdit) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final ok = await showAdvancePaymentSheet(context, customer: c);
+                    if (ok && mounted) setState(_reload);
+                  },
+                  icon: const Icon(Icons.account_balance_wallet_outlined),
+                  label: const Text('Treatment Advance'),
+                ),
+              ],
               const Divider(height: 24),
               Row(
                 children: [
@@ -196,6 +231,38 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
           ),
         );
       },
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  const _StatChip({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.9))),
+          Text(value,
+              style: TextStyle(fontWeight: FontWeight.w700, color: color)),
+        ],
+      ),
     );
   }
 }

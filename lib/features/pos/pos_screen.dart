@@ -378,6 +378,7 @@ class _PosScreenState extends State<PosScreen> {
       productDao: context.read<ProductLocalDao>(),
       branchId: context.read<AuthSession>().currentBranchId,
       customerPhone: cart.customer?.phone,
+      customer: cart.customer,
     );
 
     if (!completed || !mounted) return;
@@ -489,6 +490,39 @@ class _PosScreenState extends State<PosScreen> {
                     customer!.phone,
                     style: TextStyle(fontSize: _fs(12), color: AppTheme.textSecondary),
                   ),
+                if (customer != null) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      if (customer.advanceBalance > 0)
+                        _PosBalanceChip(
+                          label: 'Adv ₹${customer.advanceBalance.toStringAsFixed(0)}',
+                          color: AppTheme.accent,
+                          large: _desktop,
+                        ),
+                      if (customer.loyaltyPoints > 0)
+                        _PosBalanceChip(
+                          label: '${customer.loyaltyPoints} pts',
+                          color: AppTheme.warning,
+                          large: _desktop,
+                        ),
+                      if ((customer.creditLimit ?? 0) > 0)
+                        _PosBalanceChip(
+                          label: 'Limit ₹${customer.creditLimit!.toStringAsFixed(0)}',
+                          color: AppTheme.textSecondary,
+                          large: _desktop,
+                        ),
+                      if ((customer.outstandingBalance ?? 0) > 0)
+                        _PosBalanceChip(
+                          label: 'Due ₹${customer.outstandingBalance!.toStringAsFixed(0)}',
+                          color: AppTheme.danger,
+                          large: _desktop,
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -1292,6 +1326,40 @@ class _CustomerSearchDelegate extends SearchDelegate<Customer?> {
           },
         );
       },
+    );
+  }
+}
+
+class _PosBalanceChip extends StatelessWidget {
+  const _PosBalanceChip({
+    required this.label,
+    required this.color,
+    this.large = false,
+  });
+
+  final String label;
+  final Color color;
+  final bool large;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: large ? 8 : 6,
+        vertical: large ? 4 : 2,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: large ? 12 : 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
     );
   }
 }

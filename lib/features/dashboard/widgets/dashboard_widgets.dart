@@ -104,6 +104,7 @@ class DashboardStatCard extends StatelessWidget {
     required this.icon,
     required this.color,
     this.trend,
+    this.onTap,
   });
 
   final String title;
@@ -112,10 +113,11 @@ class DashboardStatCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final List<double>? trend;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final card = Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -192,6 +194,16 @@ class DashboardStatCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+
+    if (onTap == null) return card;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: card,
       ),
     );
   }

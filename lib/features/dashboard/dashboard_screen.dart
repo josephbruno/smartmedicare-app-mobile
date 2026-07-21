@@ -158,7 +158,7 @@ class _ManagerDashboardContent extends StatelessWidget {
             children: [
               _header(),
               const SizedBox(height: 22),
-              _wrapGrid(w, statCols, spacing, _statCards()),
+              _wrapGrid(w, statCols, spacing, _statCards(context)),
               const SizedBox(height: 30),
               if (d.branches != null && d.branches!.isNotEmpty)
                 _branchAndSummary(context, wide: wide, width: w, spacing: spacing)
@@ -201,7 +201,7 @@ class _ManagerDashboardContent extends StatelessWidget {
     );
   }
 
-  List<Widget> _statCards() {
+  List<Widget> _statCards(BuildContext context) {
     return [
       DashboardStatCard(
         title: "TODAY'S SALES",
@@ -226,6 +226,7 @@ class _ManagerDashboardContent extends StatelessWidget {
         icon: Icons.warning_amber_rounded,
         color: d.lowStockCount > 0 ? AppTheme.warning : AppTheme.accent,
         trend: syntheticTrend(d.lowStockCount),
+        onTap: () => context.go('/stock-alerts'),
       ),
       DashboardStatCard(
         title: 'OUTSTANDING DUES',

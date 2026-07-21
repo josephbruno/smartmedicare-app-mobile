@@ -54,6 +54,8 @@ class Customer {
     this.gender,
     this.gstin,
     this.creditLimit,
+    this.loyaltyPoints = 0,
+    this.advanceBalance = 0,
     this.whatsappOpted,
     this.notes,
     required this.isActive,
@@ -74,6 +76,8 @@ class Customer {
   final String? gender;
   final String? gstin;
   final double? creditLimit;
+  final int loyaltyPoints;
+  final double advanceBalance;
   final bool? whatsappOpted;
   final String? notes;
   final bool isActive;
@@ -102,6 +106,8 @@ class Customer {
       gender: j['gender']?.toString(),
       gstin: j['gstin']?.toString(),
       creditLimit: numOrNull(j['credit_limit']),
+      loyaltyPoints: intOrNull(j['loyalty_points']) ?? 0,
+      advanceBalance: numOrNull(j['advance_balance']) ?? 0,
       whatsappOpted: j['whatsapp_opted'] as bool?,
       notes: j['notes']?.toString(),
       isActive: j['is_active'] as bool? ?? true,
@@ -124,10 +130,40 @@ class Customer {
         if (gender != null) 'gender': gender,
         if (gstin != null) 'gstin': gstin,
         if (creditLimit != null) 'credit_limit': creditLimit,
+        'loyalty_points': loyaltyPoints,
+        'advance_balance': advanceBalance,
         if (whatsappOpted != null) 'whatsapp_opted': whatsappOpted,
         if (notes != null) 'notes': notes,
         'is_active': isActive,
         if (outstandingBalance != null)
           'outstanding_balance': outstandingBalance,
       };
+
+  Customer copyWith({
+    double? advanceBalance,
+    int? loyaltyPoints,
+    double? outstandingBalance,
+  }) =>
+      Customer(
+        id: id,
+        name: name,
+        email: email,
+        phone: phone,
+        alternatePhone: alternatePhone,
+        address: address,
+        city: city,
+        state: state,
+        pincode: pincode,
+        dob: dob,
+        gender: gender,
+        gstin: gstin,
+        creditLimit: creditLimit,
+        loyaltyPoints: loyaltyPoints ?? this.loyaltyPoints,
+        advanceBalance: advanceBalance ?? this.advanceBalance,
+        whatsappOpted: whatsappOpted,
+        notes: notes,
+        isActive: isActive,
+        outstandingBalance: outstandingBalance ?? this.outstandingBalance,
+        pets: pets,
+      );
 }

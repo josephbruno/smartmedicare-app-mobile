@@ -248,7 +248,8 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
   add('POS Billing', '/pos', Icons.point_of_sale_outlined,
       visible: () => can(AppPermissions.invoicesCreate), keywords: ['sale', 'checkout', 'bill']);
   add('Invoices', '/invoices', Icons.receipt_long_outlined, visible: () => can(AppPermissions.invoicesView));
-  add('Customers', '/customers', Icons.people_outline, visible: () => can(AppPermissions.customersView));
+  add('Customers', '/customers', Icons.people_outline, visible: () => can(AppPermissions.customersView),
+      keywords: ['advance', 'loyalty', 'credit limit', 'treatment advance']);
   add('Patient list', '/patients', Icons.pets_outlined, visible: () => can(AppPermissions.petsView));
   add('Appointments', '/emr/appointments', Icons.event_outlined,
       visible: () => can(AppPermissions.patientAppointmentsView));
@@ -260,6 +261,12 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
       visible: () => can(AppPermissions.emrRemindersView));
   add('Products', '/products', Icons.inventory_2_outlined, visible: () => can(AppPermissions.productsView));
   add('Inventory', '/inventory', Icons.warehouse_outlined, visible: () => can(AppPermissions.inventoryView));
+  add('Stock Alerts', '/stock-alerts', Icons.notification_important_outlined,
+      visible: () => can(AppPermissions.inventoryView),
+      keywords: ['low stock', 'expiry', 'reorder', 'near expiry']);
+  add('Stock Ageing', '/stock-ageing', Icons.hourglass_bottom_outlined,
+      visible: () => can(AppPermissions.inventoryView),
+      keywords: ['dead stock', 'slow moving']);
   add('Purchases', '/purchases', Icons.shopping_bag_outlined, visible: () => can(AppPermissions.purchasesView));
   add('Expenses', '/expenses', Icons.payments_outlined, visible: () => can(AppPermissions.expensesView));
   add('Sales report', '/reports/sales', Icons.bar_chart_outlined,

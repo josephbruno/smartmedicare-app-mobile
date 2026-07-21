@@ -841,8 +841,11 @@ List<_MenuItem> _menuItems(AuthSession auth) {
   addSection('INVENTORY', [
     if (can('products.view'))
       _MenuItem(label: 'Products', icon: Icons.inventory_2_outlined, path: '/products'),
-    if (can('inventory.view'))
+    if (can('inventory.view')) ...[
       _MenuItem(label: 'Inventory', icon: Icons.warehouse_outlined, path: '/inventory'),
+      _MenuItem(label: 'Stock Alerts', icon: Icons.notification_important_outlined, path: '/stock-alerts'),
+      _MenuItem(label: 'Stock Ageing', icon: Icons.hourglass_bottom_outlined, path: '/stock-ageing'),
+    ],
     if (can('inventory.transfer'))
       _MenuItem(label: 'Stock Transfers', icon: Icons.swap_horiz_outlined, path: '/stock-transfers'),
   ]);
@@ -891,6 +894,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/invoices')) return 'Invoices';
   if (path.startsWith('/products')) return 'Products';
   if (path.startsWith('/inventory')) return 'Inventory';
+  if (path.startsWith('/stock-alerts')) return 'Stock Alerts';
   if (path.startsWith('/stock-ageing')) return 'Stock Ageing';
   if (path.startsWith('/stock-transfers')) return 'Stock Transfers';
   if (path.startsWith('/purchases')) return 'Purchases';

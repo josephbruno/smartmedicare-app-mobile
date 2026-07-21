@@ -33,6 +33,7 @@ import '../../features/emr/visit_list_screen.dart';
 import '../../features/expenses/expenses_screen.dart';
 import '../../features/inventory/inventory_screen.dart';
 import '../../features/inventory/stock_ageing_screen.dart';
+import '../../features/inventory/stock_alerts_screen.dart';
 import '../../features/inventory/stock_transfer_detail_screen.dart';
 import '../../features/inventory/stock_transfer_form_screen.dart';
 import '../../features/inventory/stock_transfer_list_screen.dart';
@@ -86,7 +87,9 @@ GoRouter createAppRouter({
         return denied;
       }
     }
-    if (path.startsWith('/inventory') || path.startsWith('/stock-ageing')) {
+    if (path.startsWith('/inventory') ||
+        path.startsWith('/stock-ageing') ||
+        path.startsWith('/stock-alerts')) {
       if (need(AppPermissions.inventoryView)) return denied;
     }
     if (path.startsWith('/purchases')) {
@@ -317,6 +320,11 @@ GoRouter createAppRouter({
             path: '/inventory',
             name: 'Inventory',
             builder: (c, s) => const InventoryScreen(),
+          ),
+          GoRoute(
+            path: '/stock-alerts',
+            name: 'StockAlerts',
+            builder: (c, s) => const StockAlertsScreen(),
           ),
           GoRoute(
             path: '/stock-ageing',

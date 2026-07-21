@@ -448,9 +448,16 @@ class PosCartNotifier extends ChangeNotifier {
       'is_igst': isIgst,
       if (notes.isNotEmpty) 'notes': notes,
       if (offlineId != null) 'offline_id': offlineId,
+      if (loyaltyPointsToRedeem > 0)
+        'loyalty_points_redeemed': loyaltyPointsToRedeem.round(),
       'items': items.map((e) => e.toJson()).toList(),
       'payments': payments.map((e) => e.toJson()).toList(),
     };
+  }
+
+  void setLoyaltyPointsToRedeem(double points) {
+    loyaltyPointsToRedeem = points < 0 ? 0 : points;
+    notifyListeners();
   }
 }
 

@@ -82,6 +82,7 @@ class _BranchManagerDashboardSectionState extends State<BranchManagerDashboardSe
                     icon: Icons.warning_amber_rounded,
                     color: AppTheme.warning,
                     trend: const [],
+                    onTap: () => context.go('/stock-alerts'),
                   ),
                 ),
                 SizedBox(

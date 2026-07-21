@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
+import '../models/advance_transaction.dart';
 import '../models/api_response.dart';
 import '../models/customer.dart';
 
@@ -100,6 +101,73 @@ class CustomerService {
       return parseEnvelopeData(
         res,
         (data) => Pet.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<({List<AdvanceTransaction> items, double advanceBalance})>
+      listAdvances(int customerId, {int page = 1}) async {
+    try {
+      final res = await _client.get(
+        '/customers/$customerId/advances',
+        queryParameters: {'page': page, 'per_page': 30},
+      );
+      final map = responseAsMap(res);
+      final meta = map['meta'] is Map
+          ? Map<String, dynamic>.from(map['meta'] as Map)
+          : <String, dynamic>{};
+      final items = listFromData(map['data'], AdvanceTransaction.fromJson);
+      return (
+        items: items,
+        advanceBalance: numOrNull(meta['advance_balance']) ?? 0,
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<({AdvanceTransaction txn, double advanceBalance})> recordAdvance(
+    int customerId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final res =
+          await _client.post('/customers/$customerId/advances', data: body);
+      final map = responseAsMap(res);
+      final meta = map['meta'] is Map
+          ? Map<String, dynamic>.from(map['meta'] as Map)
+          : <String, dynamic>{};
+      final txn = AdvanceTransaction.fromJson(
+        Map<String, dynamic>.from(map['data'] as Map),
+      );
+      return (
+        txn: txn,
+        advanceBalance: numOrNull(meta['advance_balance']) ?? 0,
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<({AdvanceTransaction txn, double advanceBalance})> refundAdvance(
+    int customerId,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final res = await _client
+          .post('/customers/$customerId/advances/refund', data: body);
+      final map = responseAsMap(res);
+      final meta = map['meta'] is Map
+          ? Map<String, dynamic>.from(map['meta'] as Map)
+          : <String, dynamic>{};
+      final txn = AdvanceTransaction.fromJson(
+        Map<String, dynamic>.from(map['data'] as Map),
+      );
+      return (
+        txn: txn,
+        advanceBalance: numOrNull(meta['advance_balance']) ?? 0,
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);

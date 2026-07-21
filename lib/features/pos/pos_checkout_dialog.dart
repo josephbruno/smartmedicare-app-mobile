@@ -12,6 +12,7 @@ import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/local/offline_invoice_queue.dart';
 import '../../data/local/product_local_dao.dart';
+import '../../data/models/customer.dart';
 import '../../data/models/invoice.dart';
 import 'package:uuid/uuid.dart';
 
@@ -28,16 +29,19 @@ Future<bool> showPosCheckoutDialog({
   ProductLocalDao? productDao,
   int? branchId,
   String? customerPhone,
+  Customer? customer,
 }) async {
   final phoneController = TextEditingController(text: customerPhone ?? '');
   final paidController = TextEditingController(text: grandTotal.toStringAsFixed(2));
   final upiRefController = TextEditingController();
+  final loyaltyController = TextEditingController();
 
   Invoice? activeInvoice;
   String paymentMode = 'cash';
   bool paymentSaved = false;
   bool recordingPayment = false;
   bool sending = false;
+  bool applyAdvance = (customer?.advanceBalance ?? 0) > 0;
   var completed = false;
 
   try {
@@ -76,7 +80,15 @@ Future<bool> showPosCheckoutDialog({
 
             double paymentAmount() {
               final due = billDue();
-              if (paymentMode == 'upi') return due;
+              if (paymentMode == 'upi' ||
+                  paymentMode == 'card' ||
+                  paymentMode == 'credit') {
+                return due;
+              }
+              if (paymentMode == 'advance') {
+                final avail = customer?.advanceBalance ?? 0;
+                return avail >= due ? due : avail;
+              }
               final tendered = tenderedAmount();
               if (tendered <= 0) return 0;
               return tendered >= due ? due : tendered;
@@ -96,6 +108,30 @@ Future<bool> showPosCheckoutDialog({
               return tendered < due ? due - tendered : 0;
             }
 
+            String? creditLimitWarning() {
+              if (customer == null) return null;
+              final limit = customer.creditLimit ?? 0;
+              if (limit <= 0) return null;
+              final outstanding = customer.outstandingBalance ?? 0;
+              final unpaid = paymentMode == 'credit'
+                  ? billDue()
+                  : (paymentMode == 'cash'
+                      ? balanceDue()
+                      : (paymentAmount() < billDue()
+                          ? billDue() - paymentAmount()
+                          : 0));
+              final projected = outstanding + unpaid;
+              if (projected > limit) {
+                return 'Credit limit ₹${limit.toStringAsFixed(0)} exceeded '
+                    '(would be ₹${projected.toStringAsFixed(0)}). Collect payment or raise limit.';
+              }
+              if (projected > limit * 0.8) {
+                return 'Approaching credit limit ₹${limit.toStringAsFixed(0)} '
+                    '(outstanding will be ₹${projected.toStringAsFixed(0)}).';
+              }
+              return null;
+            }
+
             Future<void> maybeAutoPrintReceipt() async {
               if (!paymentSaved || activeInvoice == null || printItems.isEmpty) {
                 return;
@@ -111,8 +147,24 @@ Future<bool> showPosCheckoutDialog({
 
             Future<void> confirmCheckout() async {
               if (recordingPayment || paymentSaved) return;
+              final warn = creditLimitWarning();
+              if (warn != null && warn.contains('exceeded')) {
+                AppMessenger.show(context,
+                  SnackBar(content: Text(warn), backgroundColor: AppTheme.danger),
+                );
+                return;
+              }
+              if (paymentMode == 'advance' &&
+                  (customer?.advanceBalance ?? 0) <= 0) {
+                AppMessenger.show(context,
+                  const SnackBar(content: Text('No advance balance available')),
+                );
+                return;
+              }
+              final loyaltyPts =
+                  int.tryParse(loyaltyController.text.trim()) ?? 0;
               final amount = paymentAmount();
-              if (amount <= 0) {
+              if (paymentMode != 'credit' && amount <= 0 && loyaltyPts <= 0) {
                 AppMessenger.show(context,
                   const SnackBar(content: Text('Enter a valid payment amount')),
                 );
@@ -121,21 +173,40 @@ Future<bool> showPosCheckoutDialog({
               setState(() => recordingPayment = true);
               try {
                 final payload = Map<String, dynamic>.from(invoicePayload);
-                payload['payments'] = [
-                  {
+                if (loyaltyPts > 0) {
+                  payload['loyalty_points_redeemed'] = loyaltyPts;
+                }
+                // Auto-apply remaining advance for visit invoices unless paying purely by advance
+                if (applyAdvance &&
+                    paymentMode != 'advance' &&
+                    (customer?.advanceBalance ?? 0) > 0) {
+                  payload['apply_advance'] = true;
+                } else if (paymentMode == 'advance') {
+                  payload['apply_advance'] = false;
+                }
+
+                final payments = <Map<String, dynamic>>[];
+                if (paymentMode == 'advance') {
+                  payments.add({'mode': 'advance', 'amount': amount});
+                } else if (paymentMode == 'credit') {
+                  // Leave unpaid — credit sale
+                } else {
+                  payments.add({
                     'mode': paymentMode,
                     'amount': amount,
-                    if (paymentMode == 'upi' &&
+                    if ((paymentMode == 'upi' || paymentMode == 'card') &&
                         upiRefController.text.trim().isNotEmpty)
                       'reference': upiRefController.text.trim(),
-                  },
-                ];
+                    if (paymentMode == 'cash') 'tendered_amount': tenderedAmount(),
+                  });
+                }
+                payload['payments'] = payments;
 
                 if (isOnline) {
                   final created = await services.billing.create(payload);
                   if (!context.mounted) return;
                   activeInvoice = created;
-                  paymentSaved = created.dueAmount <= 0.009;
+                  paymentSaved = created.dueAmount <= 0.009 || paymentMode == 'credit';
                 } else {
                   const uuid = Uuid();
                   final offlineId = uuid.v4();
@@ -495,6 +566,73 @@ Future<bool> showPosCheckoutDialog({
                       payModeTile('upi', 'UPI', Icons.qr_code_2_rounded),
                     ],
                   ),
+                  SizedBox(height: largeUi ? 10 : 8),
+                  Row(
+                    children: [
+                      payModeTile('card', 'Card', Icons.credit_card_outlined),
+                      SizedBox(width: largeUi ? 14 : 10),
+                      payModeTile('credit', 'Credit', Icons.schedule_outlined),
+                    ],
+                  ),
+                  if ((customer?.advanceBalance ?? 0) > 0) ...[
+                    SizedBox(height: largeUi ? 10 : 8),
+                    Row(
+                      children: [
+                        payModeTile(
+                          'advance',
+                          'Advance ₹${customer!.advanceBalance.toStringAsFixed(0)}',
+                          Icons.account_balance_wallet_outlined,
+                        ),
+                      ],
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        'Also auto-apply advance on this bill',
+                        style: TextStyle(fontSize: alertFs(13)),
+                      ),
+                      value: applyAdvance && paymentMode != 'advance',
+                      onChanged: paymentSaved || paymentMode == 'advance'
+                          ? null
+                          : (v) => setState(() => applyAdvance = v),
+                    ),
+                  ],
+                  if ((customer?.loyaltyPoints ?? 0) > 0) ...[
+                    SizedBox(height: largeUi ? 10 : 8),
+                    TextField(
+                      controller: loyaltyController,
+                      enabled: !paymentSaved,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText:
+                            'Redeem loyalty points (max ${customer!.loyaltyPoints})',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (creditLimitWarning() != null) ...[
+                    SizedBox(height: largeUi ? 10 : 8),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: creditLimitWarning()!.contains('exceeded')
+                            ? AppTheme.danger.withValues(alpha: 0.1)
+                            : AppTheme.warning.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        creditLimitWarning()!,
+                        style: TextStyle(
+                          fontSize: alertFs(12),
+                          color: creditLimitWarning()!.contains('exceeded')
+                              ? AppTheme.danger
+                              : AppTheme.warning,
+                        ),
+                      ),
+                    ),
+                  ],
                   if (largeUi)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
@@ -541,6 +679,39 @@ Future<bool> showPosCheckoutDialog({
                     ),
                     SizedBox(height: largeUi ? 14 : 10),
                     buildPaymentSummary(),
+                  ] else if (paymentMode == 'credit') ...[
+                    Container(
+                      padding: EdgeInsets.all(largeUi ? 16 : 12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.warning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Credit sale — full amount ₹${billDue().toStringAsFixed(2)} due later',
+                        style: TextStyle(
+                          fontSize: alertFs(14),
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.warning,
+                        ),
+                      ),
+                    ),
+                  ] else if (paymentMode == 'advance') ...[
+                    Container(
+                      padding: EdgeInsets.all(largeUi ? 16 : 12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Apply advance ₹${paymentAmount().toStringAsFixed(2)} '
+                        '(available ₹${(customer?.advanceBalance ?? 0).toStringAsFixed(2)})',
+                        style: TextStyle(
+                          fontSize: alertFs(14),
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.accent,
+                        ),
+                      ),
+                    ),
                   ] else ...[
                     Container(
                       padding: EdgeInsets.all(largeUi ? 16 : 12),
@@ -549,7 +720,7 @@ Future<bool> showPosCheckoutDialog({
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        'UPI Amount: ₹${billDue().toStringAsFixed(2)}',
+                        '${paymentMode.toUpperCase()} Amount: ₹${billDue().toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: alertFs(16),
                           fontWeight: FontWeight.w800,
@@ -563,7 +734,7 @@ Future<bool> showPosCheckoutDialog({
                       enabled: !paymentSaved,
                       style: TextStyle(fontSize: alertFs(14)),
                       decoration: InputDecoration(
-                        labelText: 'UPI Reference (optional)',
+                        labelText: 'Reference (optional)',
                         labelStyle: TextStyle(fontSize: alertFs(14)),
                         filled: true,
                         fillColor: Colors.white,
@@ -1217,5 +1388,6 @@ Future<bool> showPosCheckoutDialog({
     phoneController.dispose();
     paidController.dispose();
     upiRefController.dispose();
+    loyaltyController.dispose();
   }
 }
