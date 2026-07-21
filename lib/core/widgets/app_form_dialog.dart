@@ -173,16 +173,13 @@ class AppFormFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final buttonStyle = ButtonStyle(
-      minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
-      fixedSize: const WidgetStatePropertyAll(Size.fromHeight(48)),
-      padding: const WidgetStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 16),
-      ),
+      minimumSize: const WidgetStatePropertyAll(Size(64, 52)),
+      padding: const WidgetStatePropertyAll(EdgeInsets.all(8)),
       shape: WidgetStatePropertyAll(
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       textStyle: const WidgetStatePropertyAll(
-        TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
       ),
     );
 

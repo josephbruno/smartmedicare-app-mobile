@@ -169,6 +169,91 @@ class StockAgeingItem {
   }
 }
 
+class MonthlyAgeingRow {
+  MonthlyAgeingRow({
+    required this.productId,
+    required this.name,
+    this.sku,
+    required this.reorderLevel,
+    required this.purchasePrice,
+    required this.sellingPrice,
+    required this.currentStock,
+    required this.openingStock,
+    required this.closingStock,
+    required this.totalSold,
+    required this.dailyStock,
+    required this.isDeadStock,
+    this.categoryName,
+    this.unitAbbrev,
+  });
+
+  final int productId;
+  final String name;
+  final String? sku;
+  final double reorderLevel;
+  final double purchasePrice;
+  final double sellingPrice;
+  final double currentStock;
+  final double openingStock;
+  final double closingStock;
+  final double totalSold;
+  final Map<String, double> dailyStock;
+  final bool isDeadStock;
+  final String? categoryName;
+  final String? unitAbbrev;
+
+  bool hasSnapshot(String date) => dailyStock.containsKey(date);
+
+  double? stockOn(String date) => dailyStock[date];
+
+  factory MonthlyAgeingRow.fromJson(Map<String, dynamic> j) {
+    final category = mapOrNull(j['category']);
+    final unit = mapOrNull(j['unit']);
+    final dailyRaw = j['daily_stock'];
+    final dailyStock = <String, double>{};
+    if (dailyRaw is Map) {
+      for (final entry in dailyRaw.entries) {
+        final qty = numOrNull(entry.value);
+        if (qty != null) {
+          dailyStock[entry.key.toString()] = qty;
+        }
+      }
+    }
+    return MonthlyAgeingRow(
+      productId: intOrNull(j['product_id']) ?? 0,
+      name: j['name']?.toString() ?? '',
+      sku: j['sku']?.toString(),
+      reorderLevel: numOrNull(j['reorder_level']) ?? 0,
+      purchasePrice: numOrNull(j['purchase_price']) ?? 0,
+      sellingPrice: numOrNull(j['selling_price']) ?? 0,
+      currentStock: numOrNull(j['current_stock']) ?? 0,
+      openingStock: numOrNull(j['opening_stock']) ?? 0,
+      closingStock: numOrNull(j['closing_stock']) ?? 0,
+      totalSold: numOrNull(j['total_sold']) ?? 0,
+      dailyStock: dailyStock,
+      isDeadStock: j['is_dead_stock'] as bool? ?? false,
+      categoryName: category?['name']?.toString(),
+      unitAbbrev: unit?['abbreviation']?.toString(),
+    );
+  }
+}
+
+class MonthlySnapshotResult {
+  MonthlySnapshotResult({
+    required this.rows,
+    required this.dateRange,
+    required this.month,
+    required this.monthLabel,
+    this.meta,
+  });
+
+  final List<MonthlyAgeingRow> rows;
+  final List<String> dateRange;
+  final String month;
+  final String monthLabel;
+  final PaginationMeta? meta;
+}
+
 class InventoryListSummary {
   InventoryListSummary({
     required this.totalItems,

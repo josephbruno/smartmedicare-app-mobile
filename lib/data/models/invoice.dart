@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../json_helpers.dart';
 import 'api_response.dart';
 import 'customer.dart';
@@ -92,6 +94,9 @@ class InvoicePayment {
     required this.amount,
     required this.paymentDate,
     this.referenceNumber,
+    this.notes,
+    this.tenderedAmount,
+    this.changeReturn,
   });
 
   final int id;
@@ -99,14 +104,58 @@ class InvoicePayment {
   final double amount;
   final String paymentDate;
   final String? referenceNumber;
+  final String? notes;
+  /// Cash received from customer (when tendered > applied amount).
+  final double? tenderedAmount;
+  /// Change handed back by cashier.
+  final double? changeReturn;
 
-  factory InvoicePayment.fromJson(Map<String, dynamic> j) => InvoicePayment(
-        id: intOrNull(j['id']) ?? 0,
-        paymentMode: j['payment_mode']?.toString() ?? '',
-        amount: numOrNull(j['amount']) ?? 0,
-        paymentDate: formatApiDate(j['payment_date']?.toString()),
-        referenceNumber: j['reference_number']?.toString(),
-      );
+  bool get hasCashTenderDetail =>
+      tenderedAmount != null &&
+      tenderedAmount! > 0 &&
+      (changeReturn ?? 0) > 0;
+
+  factory InvoicePayment.fromJson(Map<String, dynamic> j) {
+    double? tendered = numOrNull(j['tendered_amount']);
+    double? change = numOrNull(j['change_return']);
+    String? notesRaw;
+
+    final rawNotes = j['notes'];
+    if (rawNotes is Map) {
+      final meta = Map<String, dynamic>.from(rawNotes);
+      tendered ??= numOrNull(meta['tendered_amount']);
+      change ??= numOrNull(meta['change_return']);
+    } else if (rawNotes != null) {
+      final text = rawNotes.toString().trim();
+      if (text.startsWith('{')) {
+        try {
+          final decoded = jsonDecode(text);
+          if (decoded is Map) {
+            final meta = Map<String, dynamic>.from(decoded);
+            tendered ??= numOrNull(meta['tendered_amount']);
+            change ??= numOrNull(meta['change_return']);
+          } else {
+            notesRaw = text;
+          }
+        } catch (_) {
+          notesRaw = text;
+        }
+      } else if (text.isNotEmpty) {
+        notesRaw = text;
+      }
+    }
+
+    return InvoicePayment(
+      id: intOrNull(j['id']) ?? 0,
+      paymentMode: j['payment_mode']?.toString() ?? '',
+      amount: numOrNull(j['amount']) ?? 0,
+      paymentDate: formatApiDate(j['payment_date']?.toString()),
+      referenceNumber: j['reference_number']?.toString(),
+      notes: notesRaw,
+      tenderedAmount: tendered,
+      changeReturn: change,
+    );
+  }
 }
 
 class Invoice {

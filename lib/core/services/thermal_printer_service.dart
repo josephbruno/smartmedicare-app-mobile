@@ -191,6 +191,10 @@ class ThermalPrinterService {
   }
 
   static pw.Widget _buildTotals(Invoice invoice) {
+    final cashPayments = (invoice.payments ?? const <InvoicePayment>[])
+        .where((p) => p.hasCashTenderDetail)
+        .toList();
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.end,
       children: [
@@ -205,6 +209,14 @@ class ThermalPrinterService {
           '₹${invoice.totalAmount.toStringAsFixed(2)}',
           style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
         ),
+        if (cashPayments.isNotEmpty) ...[
+          pw.SizedBox(height: 4),
+          pw.Divider(borderStyle: pw.BorderStyle.dashed, height: 1),
+          for (final p in cashPayments) ...[
+            _buildTotalRow('Cash received', p.tenderedAmount!),
+            _buildTotalRow('Change given', p.changeReturn!),
+          ],
+        ],
       ],
     );
   }

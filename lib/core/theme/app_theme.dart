@@ -37,8 +37,6 @@ class AppTheme {
     // Default icon size: 24 on mobile, larger on web & desktop for legibility.
     final double defaultIconSize = desktop ? 30 : 24;
     final double appBarIconSize = desktop ? 30 : 22;
-    final double dialogMaxWidth =
-        desktop ? AppConfig.desktopDialogMaxWidth : 280;
 
     return base.copyWith(
       dialogTheme: DialogThemeData(
@@ -47,6 +45,9 @@ class AppTheme {
         backgroundColor: surface,
         surfaceTintColor: surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        constraints: BoxConstraints(
+          maxWidth: desktop ? AppConfig.desktopDialogMaxWidth : 400,
+        ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: surface,
@@ -110,45 +111,29 @@ class AppTheme {
           borderSide: const BorderSide(color: danger, width: 2),
         ),
       ),
+      // Shared across Elevated / Filled / Outlined so buttons stay tappable and
+      // never look undersized. Padding is at least 8dp on every side.
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          elevation: 0,
-          backgroundColor: primary,
-          foregroundColor: Colors.white,
-          // Only enforce a minimum height, not width. Using Size.fromHeight
-          // here would set width to infinity and crash buttons placed in a Row.
-          minimumSize: const Size(0, 52),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(
-            fontFamily: 'Roboto',
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.2,
-          ),
-        ),
+        style: _primaryButtonStyle(background: primary, foreground: Colors.white),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: _primaryButtonStyle(background: primary, foreground: Colors.white),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: primary,
-          side: const BorderSide(color: primary, width: 1.5),
-          // Only enforce a minimum height, not width. Using Size.fromHeight
-          // here would set width to infinity and crash buttons placed in a Row.
-          minimumSize: const Size(0, 52),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(
-            fontFamily: 'Roboto',
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.2,
+        style: _primaryButtonStyle(
+          foreground: primary,
+        ).copyWith(
+          side: const WidgetStatePropertyAll(
+            BorderSide(color: primary, width: 1.5),
           ),
+          backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primary,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          minimumSize: const Size(48, 40),
+          padding: const EdgeInsets.all(8),
           textStyle: const TextStyle(
             fontFamily: 'Roboto',
             fontSize: 14,
@@ -207,6 +192,37 @@ class AppTheme {
           letterSpacing: 0.5,
         ),
       ),
+    );
+  }
+
+  /// Primary action button look (Filled / Elevated). Min height keeps buttons
+  /// comfortable; [padding] is at least 8dp on every side app-wide.
+  static ButtonStyle _primaryButtonStyle({
+    Color? background,
+    required Color foreground,
+  }) {
+    return ButtonStyle(
+      elevation: const WidgetStatePropertyAll(0),
+      backgroundColor: background != null
+          ? WidgetStatePropertyAll(background)
+          : null,
+      foregroundColor: WidgetStatePropertyAll(foreground),
+      // Avoid Size.fromHeight — infinite width breaks buttons in a Row.
+      minimumSize: const WidgetStatePropertyAll(Size(64, 52)),
+      padding: const WidgetStatePropertyAll(EdgeInsets.all(8)),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      textStyle: const WidgetStatePropertyAll(
+        TextStyle(
+          fontFamily: 'Roboto',
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
+        ),
+      ),
+      visualDensity: VisualDensity.standard,
+      tapTargetSize: MaterialTapTargetSize.padded,
     );
   }
 }

@@ -156,12 +156,16 @@ void main() {
             'payment_mode': 'cash',
             'amount': 1180,
             'payment_date': '2026-06-01',
+            'notes': '{"tendered_amount":1500,"change_return":320}',
           },
         ],
       });
 
       expect(inv.items?.single.productName, 'Dog Food');
       expect(inv.payments?.single.paymentMode, 'cash');
+      expect(inv.payments?.single.tenderedAmount, 1500);
+      expect(inv.payments?.single.changeReturn, 320);
+      expect(inv.payments?.single.hasCashTenderDetail, isTrue);
       expect(inv.totalGst, 180);
     });
   });
@@ -196,6 +200,31 @@ void main() {
       expect(row.inventoryId, 3);
       expect(row.categoryName, 'Grooming');
       expect(row.daysSinceLastSale, 45);
+    });
+
+    test('parses monthly snapshot row', () {
+      final row = MonthlyAgeingRow.fromJson({
+        'product_id': 12,
+        'name': 'Dog Bone',
+        'sku': 'DOG-B-001',
+        'reorder_level': 5,
+        'purchase_price': 40,
+        'selling_price': 80,
+        'current_stock': 3,
+        'opening_stock': 3,
+        'closing_stock': 3,
+        'total_sold': 0,
+        'daily_stock': {'2026-07-21': 3},
+        'is_dead_stock': true,
+        'category': {'name': 'Dog Food'},
+        'unit': {'abbreviation': 'pcs'},
+      });
+
+      expect(row.productId, 12);
+      expect(row.categoryName, 'Dog Food');
+      expect(row.hasSnapshot('2026-07-21'), isTrue);
+      expect(row.stockOn('2026-07-21'), 3);
+      expect(row.hasSnapshot('2026-07-01'), isFalse);
     });
   });
 

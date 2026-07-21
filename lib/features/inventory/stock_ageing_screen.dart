@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/responsive/desktop_layout_helper.dart';
-import '../../core/widgets/paginated_data_table.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/inventory.dart';
 
@@ -15,15 +15,103 @@ class StockAgeingScreen extends StatefulWidget {
 }
 
 class _StockAgeingScreenState extends State<StockAgeingScreen> {
-  List<StockAgeingItem> _items = [];
+  static const _productColWidth = 180.0;
+  static const _dayColWidth = 48.0;
+  static const _rowHeight = 56.0;
+  static const _headerHeight = 52.0;
+
+  static const _border = Color(0xFFE4E9F0);
+  static const _headerBg = Color(0xFFF5F7FA);
+  static const _todayBg = Color(0xFFF0FAF5);
+  static const _todayHeaderBg = Color(0xFFE8F5E9);
+  static const _todayBorder = Color(0xFF18A058);
+  static const _weekendBg = Color(0xFFFAFAFA);
+  static const _lowStockBg = Color(0xFFFFF3CD);
+  static const _lowStockFg = Color(0xFFAD6800);
+  static const _missingFg = Color(0xFFB0B8C8);
+  static const _metaFg = Color(0xFF8B98B8);
+
+  late final List<_MonthOption> _monthOptions;
+  late String _selectedMonth;
+
+  List<MonthlyAgeingRow> _rows = [];
+  List<String> _dateRange = [];
+  String _monthLabel = '';
   bool _loading = false;
   String? _error;
-  String _filter = 'all';
+
+  final _hHeader = ScrollController();
+  final _hBody = ScrollController();
+  final _vLeft = ScrollController();
+  final _vRight = ScrollController();
+  bool _syncingH = false;
+  bool _syncingV = false;
 
   @override
   void initState() {
     super.initState();
+    _monthOptions = _buildMonthOptions();
+    _selectedMonth = _monthOptions.first.value;
+    _monthLabel = _monthOptions.first.label;
+    _hHeader.addListener(_onHHeader);
+    _hBody.addListener(_onHBody);
+    _vLeft.addListener(_onVLeft);
+    _vRight.addListener(_onVRight);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _hHeader.removeListener(_onHHeader);
+    _hBody.removeListener(_onHBody);
+    _vLeft.removeListener(_onVLeft);
+    _vRight.removeListener(_onVRight);
+    _hHeader.dispose();
+    _hBody.dispose();
+    _vLeft.dispose();
+    _vRight.dispose();
+    super.dispose();
+  }
+
+  List<_MonthOption> _buildMonthOptions() {
+    final now = DateTime.now();
+    final opts = <_MonthOption>[];
+    for (var i = 0; i < 13; i++) {
+      final d = DateTime(now.year, now.month - i, 1);
+      opts.add(_MonthOption(
+        value: DateFormat('yyyy-MM').format(d),
+        label: DateFormat('MMMM yyyy').format(d),
+      ));
+    }
+    return opts;
+  }
+
+  void _onHHeader() {
+    if (_syncingH || !_hBody.hasClients) return;
+    _syncingH = true;
+    _hBody.jumpTo(_hHeader.offset);
+    _syncingH = false;
+  }
+
+  void _onHBody() {
+    if (_syncingH || !_hHeader.hasClients) return;
+    _syncingH = true;
+    _hHeader.jumpTo(_hBody.offset);
+    _syncingH = false;
+  }
+
+  void _onVLeft() {
+    if (_syncingV || !_vRight.hasClients) return;
+    _syncingV = true;
+    _vRight.jumpTo(_vLeft.offset);
+    _syncingV = false;
+  }
+
+  void _onVRight() {
+    if (_syncingV || !_vLeft.hasClients) return;
+    _syncingV = true;
+    _vLeft.jumpTo(_vRight.offset);
+    _syncingV = false;
   }
 
   Future<void> _load() async {
@@ -32,8 +120,22 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
       _error = null;
     });
     try {
-      final list = await context.read<AppServices>().inventory.ageing();
-      if (mounted) setState(() => _items = list);
+      final result = await context.read<AppServices>().inventory.monthlySnapshot(
+            month: _selectedMonth,
+          );
+      if (!mounted) return;
+      setState(() {
+        _rows = result.rows;
+        _dateRange = result.dateRange;
+        _monthLabel = result.monthLabel.isNotEmpty
+            ? result.monthLabel
+            : _monthOptions
+                .firstWhere(
+                  (o) => o.value == _selectedMonth,
+                  orElse: () => _MonthOption(value: _selectedMonth, label: _selectedMonth),
+                )
+                .label;
+      });
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -41,22 +143,39 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
     }
   }
 
-  List<StockAgeingItem> get _filtered {
-    if (_filter == 'all') return _items;
-    return _items.where((item) {
-      final days = item.daysSinceLastSale ?? 0;
-      if (_filter == 'critical') return days > 60;
-      if (_filter == 'warning') return days > 30 && days <= 60;
-      if (_filter == 'normal') return days <= 30;
-      return true;
-    }).toList();
+  String get _todayKey => DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+  bool _isToday(String date) => date == _todayKey;
+
+  bool _isWeekend(String date) {
+    final d = DateTime.tryParse(date);
+    if (d == null) return false;
+    return d.weekday == DateTime.saturday || d.weekday == DateTime.sunday;
   }
 
-  Color _urgencyColor(StockAgeingItem item) {
-    final days = item.daysSinceLastSale ?? 0;
-    if (days > 60) return AppTheme.danger;
-    if (days > 30) return AppTheme.warning;
-    return AppTheme.accent;
+  String _fmtDay(String date) {
+    final d = DateTime.tryParse(date);
+    if (d == null) return '';
+    return DateFormat('EEE').format(d);
+  }
+
+  String _fmtShortDate(String date) {
+    final d = DateTime.tryParse(date);
+    if (d == null) return date;
+    return DateFormat('dd MMM').format(d);
+  }
+
+  String _stockLabel(MonthlyAgeingRow row, String date) {
+    final qty = row.stockOn(date);
+    if (qty == null) return '-';
+    if (qty == qty.roundToDouble()) return qty.toStringAsFixed(0);
+    return qty.toString();
+  }
+
+  bool _isLowStock(MonthlyAgeingRow row, String date) {
+    final qty = row.stockOn(date);
+    if (qty == null) return false;
+    return qty > 0 && row.reorderLevel > 0 && qty <= row.reorderLevel;
   }
 
   @override
@@ -72,7 +191,7 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildFilters(),
+        _buildHeader(compact: compact),
         Expanded(child: _buildBody(compact: compact)),
       ],
     );
@@ -93,42 +212,151 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
     return body;
   }
 
-  Widget _buildFilters() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
+  Widget _buildHeader({required bool compact}) {
+    Widget monthDropdown({required bool expanded}) {
+      final dropdown = DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedMonth,
+          isExpanded: true,
+          isDense: true,
+          borderRadius: BorderRadius.circular(10),
+          items: _monthOptions
+              .map(
+                (o) => DropdownMenuItem(
+                  value: o.value,
+                  child: Text(o.label, overflow: TextOverflow.ellipsis),
+                ),
+              )
+              .toList(),
+          selectedItemBuilder: (context) => _monthOptions
+              .map(
+                (o) => Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(o.label, overflow: TextOverflow.ellipsis, maxLines: 1),
+                ),
+              )
+              .toList(),
+          onChanged: _loading
+              ? null
+              : (v) {
+                  if (v == null) return;
+                  setState(() => _selectedMonth = v);
+                  _load();
+                },
+        ),
+      );
+
+      final field = InputDecorator(
+        decoration: InputDecoration(
+          isDense: true,
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: _border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: _border),
+          ),
+        ),
+        child: dropdown,
+      );
+
+      if (expanded) return field;
+      return SizedBox(width: 160, child: field);
+    }
+
+    final refreshButton = OutlinedButton.icon(
+      onPressed: _loading ? null : _load,
+      icon: _loading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.refresh_rounded, size: 18),
+      label: const Text('Refresh'),
+    );
+
+    final monthLabel = Text(
+      _monthLabel,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: _todayBorder,
+      ),
+    );
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 16, compact ? 12 : 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _filterChip('All', 'all'),
-          const SizedBox(width: 8),
-          _filterChip('Critical (>60d)', 'critical'),
-          const SizedBox(width: 8),
-          _filterChip('Warning (>30d)', 'warning'),
-          const SizedBox(width: 8),
-          _filterChip('Normal', 'normal'),
-          const SizedBox(width: 16),
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded), tooltip: 'Refresh'),
+          Text(
+            'Daily Stock Count',
+            style: TextStyle(
+              fontSize: compact ? 18 : 20,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'End-of-day stock count for each product',
+            style: TextStyle(fontSize: 12, color: _metaFg),
+          ),
+          const SizedBox(height: 12),
+          if (compact) ...[
+            monthDropdown(expanded: true),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [monthLabel, refreshButton],
+            ),
+          ] else
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                monthDropdown(expanded: false),
+                monthLabel,
+                refreshButton,
+              ],
+            ),
         ],
       ),
     );
   }
 
-  Widget _filterChip(String label, String value) {
-    return FilterChip(
-      label: Text(label),
-      selected: _filter == value,
-      onSelected: (_) => setState(() => _filter = value),
-    );
-  }
-
   Widget _buildBody({required bool compact}) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
+    if (_loading && _rows.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 12),
+            Text('Loading stock data…', style: TextStyle(color: _metaFg)),
+          ],
+        ),
+      );
+    }
+
+    if (_error != null && _rows.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_error!, textAlign: TextAlign.center),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(_error!, textAlign: TextAlign.center),
+            ),
             const SizedBox(height: 12),
             FilledButton(onPressed: _load, child: const Text('Retry')),
           ],
@@ -136,128 +364,273 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
       );
     }
 
-    final items = _filtered;
-    if (items.isEmpty) {
-      return const Center(child: Text('No stock ageing data'));
-    }
-
-    if (compact) {
-      return ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: items.length,
-        itemBuilder: (_, i) => _mobileTile(items[i]),
+    if (_rows.isEmpty) {
+      return const Center(
+        child: Text(
+          'No inventory data found for this branch.',
+          style: TextStyle(color: _metaFg, fontSize: 14),
+        ),
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final metrics = ResponsiveTableMetrics.fromFlexWidths(
-          context,
-          flexes: const [3, 1, 1, 1],
-          maxWidth: constraints.maxWidth,
-        );
+    final productWidth = compact ? 140.0 : _productColWidth;
+    final dayWidth = compact ? 40.0 : _dayColWidth;
+    final datesWidth = _dateRange.length * dayWidth;
 
-        return SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: metrics.horizontalPadding,
-            vertical: 16,
-          ),
-          child: ResponsiveTableContainer(
-            metrics: metrics,
-            child: _dataTable(items, metrics.tableWidth),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _mobileTile(StockAgeingItem item) {
-    final color = _urgencyColor(item);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        title: Text(item.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-        subtitle: Text(
-          'Stock ${item.currentStock.toStringAsFixed(0)} · ${item.daysSinceLastSale ?? 0} days',
-          style: TextStyle(color: color),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(compact ? 8 : 16, 8, compact ? 8 : 16, 16),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _border),
         ),
-        trailing: Text(
-          '₹${item.stockValue.toStringAsFixed(0)}',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Column(
+            children: [
+              SizedBox(
+                height: _headerHeight,
+                child: Row(
+                  children: [
+                    _productHeader(productWidth),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: _hHeader,
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: datesWidth,
+                          height: _headerHeight,
+                          child: Row(
+                            children: [
+                              for (final date in _dateRange)
+                                _dayHeader(date, dayWidth),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, thickness: 2, color: _border),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: productWidth,
+                      child: ListView.builder(
+                        controller: _vLeft,
+                        itemExtent: _rowHeight,
+                        itemCount: _rows.length,
+                        itemBuilder: (_, i) => _productCell(_rows[i], productWidth),
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: _hBody,
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: datesWidth,
+                          child: ListView.builder(
+                            controller: _vRight,
+                            itemExtent: _rowHeight,
+                            itemCount: _rows.length,
+                            itemBuilder: (_, i) => SizedBox(
+                              width: datesWidth,
+                              height: _rowHeight,
+                              child: Row(
+                                children: [
+                                  for (final date in _dateRange)
+                                    _dayCell(_rows[i], date, dayWidth),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _dataTable(List<StockAgeingItem> items, double tableWidth) {
-    return SizedBox(
-      width: tableWidth,
-      child: Table(
-        columnWidths: const {
-          0: FlexColumnWidth(3),
-          1: FlexColumnWidth(1),
-          2: FlexColumnWidth(1),
-          3: FlexColumnWidth(1),
-        },
-        border: TableBorder.all(color: const Color(0xFFE2E8F0)),
-        children: [
-          TableRow(
-            decoration: BoxDecoration(color: Colors.grey.shade100),
+  Widget _productHeader(double width) {
+    return Container(
+      width: width,
+      height: _headerHeight,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
+        color: _headerBg,
+        border: Border(right: BorderSide(color: Color(0xFFD4DBE8), width: 2)),
+      ),
+      child: const Text(
+        'Product',
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 11,
+          color: Color(0xFF6B7A96),
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+
+  Widget _dayHeader(String date, double width) {
+    final today = _isToday(date);
+    final weekend = _isWeekend(date);
+    return Container(
+      width: width,
+      height: _headerHeight,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: today
+            ? _todayHeaderBg
+            : weekend
+                ? _weekendBg
+                : _headerBg,
+        border: Border(
+          right: BorderSide(color: today ? _todayBorder : const Color(0xFFE8ECF0)),
+          left: today ? const BorderSide(color: _todayBorder, width: 2) : BorderSide.none,
+        ),
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _headerCell('Product'),
-              _headerCell('Stock', align: TextAlign.center),
-              _headerCell('Days idle', align: TextAlign.center),
-              _headerCell('Value', align: TextAlign.right),
+              Text(
+                _fmtDay(date),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  color: today ? _todayBorder : const Color(0xFF6B7A96),
+                  height: 1.1,
+                ),
+              ),
+              Text(
+                _fmtShortDate(date),
+                style: TextStyle(
+                  fontSize: 9,
+                  color: today ? _todayBorder : _metaFg,
+                  height: 1.1,
+                ),
+              ),
             ],
           ),
-          ...items.map((item) {
-            final color = _urgencyColor(item);
-            return TableRow(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      if (item.sku != null)
-                        Text(item.sku!, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Center(child: Text(item.currentStock.toStringAsFixed(0))),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Center(
-                    child: Text(
-                      '${item.daysSinceLastSale ?? 0}',
-                      style: TextStyle(color: color, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    '₹${item.stockValue.toStringAsFixed(0)}',
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            );
-          }),
+        ),
+      ),
+    );
+  }
+
+  Widget _productCell(MonthlyAgeingRow row, double width) {
+    final metaParts = <String>[
+      if (row.sku != null && row.sku!.isNotEmpty) row.sku!,
+      if (row.categoryName != null && row.categoryName!.isNotEmpty) row.categoryName!,
+    ];
+    return Container(
+      width: width,
+      height: _rowHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          right: BorderSide(color: Color(0xFFD4DBE8), width: 2),
+          bottom: BorderSide(color: Color(0xFFF0F2F5)),
+        ),
+      ),
+      alignment: Alignment.centerLeft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            row.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              color: Color(0xFF1A1F2E),
+              height: 1.2,
+            ),
+          ),
+          if (metaParts.isNotEmpty)
+            Text(
+              metaParts.join(' '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 10, color: _metaFg, height: 1.2),
+            ),
         ],
       ),
     );
   }
 
-  Widget _headerCell(String text, {TextAlign align = TextAlign.left}) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Text(text, textAlign: align, style: const TextStyle(fontWeight: FontWeight.bold)),
+  Widget _dayCell(MonthlyAgeingRow row, String date, double width) {
+    final today = _isToday(date);
+    final weekend = _isWeekend(date);
+    final missing = !row.hasSnapshot(date);
+    final low = _isLowStock(row, date);
+
+    Color? bg;
+    if (low) {
+      bg = _lowStockBg;
+    } else if (today) {
+      bg = _todayBg;
+    } else if (weekend) {
+      bg = _weekendBg;
+    }
+
+    Color fg = const Color(0xFF1A1F2E);
+    FontWeight weight = FontWeight.w500;
+    if (missing) {
+      fg = _missingFg;
+    } else if (low) {
+      fg = _lowStockFg;
+      weight = FontWeight.w700;
+    }
+
+    return Container(
+      width: width,
+      height: _rowHeight,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border(
+          bottom: const BorderSide(color: Color(0xFFF0F2F5)),
+          right: BorderSide(color: today ? _todayBorder : const Color(0xFFF0F2F5)),
+          left: today ? const BorderSide(color: _todayBorder, width: 2) : BorderSide.none,
+        ),
+      ),
+      child: Text(
+        _stockLabel(row, date),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: weight,
+          color: fg,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
     );
   }
+}
+
+class _MonthOption {
+  const _MonthOption({required this.value, required this.label});
+
+  final String value;
+  final String label;
 }

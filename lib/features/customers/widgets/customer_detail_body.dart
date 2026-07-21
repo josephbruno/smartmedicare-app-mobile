@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app_services.dart';
@@ -6,6 +7,7 @@ import '../../../core/services/permission_service.dart';
 import '../../../core/session/auth_session.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/customer.dart';
+import '../../../data/models/invoice.dart';
 import '../../emr/emr_pet_hub.dart';
 import 'pet_form_sheet.dart';
 import 'advance_payment_sheet.dart';
@@ -23,6 +25,9 @@ class CustomerDetailBody extends StatefulWidget {
 
 class _CustomerDetailBodyState extends State<CustomerDetailBody> {
   late Future<Customer> _future;
+  List<Invoice> _invoices = [];
+  bool _invoicesLoading = false;
+  String? _invoicesError;
 
   @override
   void initState() {
@@ -38,6 +43,32 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
 
   void _reload() {
     _future = context.read<AppServices>().customers.get(widget.id);
+    _loadInvoices();
+  }
+
+  Future<void> _loadInvoices() async {
+    setState(() {
+      _invoicesLoading = true;
+      _invoicesError = null;
+    });
+    try {
+      final result = await context.read<AppServices>().billing.listPaginated(
+            page: 1,
+            perPage: 20,
+            customerId: widget.id,
+          );
+      if (!mounted) return;
+      setState(() {
+        _invoices = result.items;
+        _invoicesLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _invoicesError = e.toString();
+        _invoicesLoading = false;
+      });
+    }
   }
 
   Future<void> _openPetForm({Pet? pet}) async {
@@ -69,6 +100,26 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
     ].join(', ');
   }
 
+  Color _invoiceStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'paid':
+        return AppTheme.accent;
+      case 'partial':
+      case 'confirmed':
+        return AppTheme.warning;
+      case 'cancelled':
+        return AppTheme.danger;
+      default:
+        return AppTheme.textSecondary;
+    }
+  }
+
+  int get _totalPointsEarned =>
+      _invoices.fold(0, (sum, i) => sum + i.loyaltyPointsEarned);
+
+  int get _totalPointsRedeemed =>
+      _invoices.fold(0, (sum, i) => sum + i.loyaltyPointsRedeemed);
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthSession>();
@@ -91,7 +142,11 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
         final pets = c.pets ?? const <Pet>[];
 
         return RefreshIndicator(
-          onRefresh: () async => setState(_reload),
+          onRefresh: () async {
+            setState(_reload);
+            await _future;
+            await _loadInvoices();
+          },
           child: ListView(
             padding: EdgeInsets.all(widget.compact ? 12 : 16),
             children: [
@@ -160,6 +215,8 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
                   label: const Text('Treatment Advance'),
                 ),
               ],
+              const Divider(height: 24),
+              _invoicesSection(context),
               const Divider(height: 24),
               Row(
                 children: [
@@ -231,6 +288,184 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
           ),
         );
       },
+    );
+  }
+
+  Widget _invoicesSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Invoices',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            if (!_invoicesLoading && _invoices.isNotEmpty)
+              Text(
+                '${_invoices.length} shown',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+          ],
+        ),
+        if (!_invoicesLoading && _invoices.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _StatChip(
+                label: 'Points earned',
+                value: '$_totalPointsEarned pts',
+                color: AppTheme.warning,
+              ),
+              if (_totalPointsRedeemed > 0)
+                _StatChip(
+                  label: 'Points redeemed',
+                  value: '$_totalPointsRedeemed pts',
+                  color: AppTheme.primary,
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 8),
+        if (_invoicesLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          )
+        else if (_invoicesError != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              children: [
+                Text(
+                  _invoicesError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppTheme.danger, fontSize: 13),
+                ),
+                TextButton(onPressed: _loadInvoices, child: const Text('Retry')),
+              ],
+            ),
+          )
+        else if (_invoices.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              'No invoices for this customer yet.',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          )
+        else
+          ..._invoices.map(_invoiceTile),
+      ],
+    );
+  }
+
+  Widget _invoiceTile(Invoice inv) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => context.push('/invoices/${inv.id}'),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      inv.invoiceNumber.isNotEmpty
+                          ? inv.invoiceNumber
+                          : 'Invoice #${inv.id}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _invoiceStatusColor(inv.status).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      inv.status.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: _invoiceStatusColor(inv.status),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                inv.displayDate.isNotEmpty ? inv.displayDate : '—',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '₹${inv.totalAmount.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (inv.dueAmount > 0)
+                    Text(
+                      'Due ₹${inv.dueAmount.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.danger,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(
+                    Icons.stars_rounded,
+                    size: 16,
+                    color: AppTheme.warning.withValues(alpha: 0.9),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Earned ${inv.loyaltyPointsEarned} pts',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.warning,
+                    ),
+                  ),
+                  if (inv.loyaltyPointsRedeemed > 0) ...[
+                    const SizedBox(width: 12),
+                    Text(
+                      'Redeemed ${inv.loyaltyPointsRedeemed}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

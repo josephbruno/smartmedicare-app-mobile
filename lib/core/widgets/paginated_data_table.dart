@@ -155,6 +155,7 @@ class AppPaginatedTable<T> extends StatefulWidget {
     required this.loadPage,
     required this.columns,
     this.onRowTap,
+    this.isRowSelected,
     this.mobileItemBuilder,
     this.perPage = 20,
     this.emptyMessage = 'No records found',
@@ -166,6 +167,8 @@ class AppPaginatedTable<T> extends StatefulWidget {
   final PaginatedLoad<T> loadPage;
   final List<TableColumnDef<T>> columns;
   final void Function(T item)? onRowTap;
+  /// When true, the row is drawn with a selected highlight.
+  final bool Function(T item)? isRowSelected;
   /// Optional custom list tile for mobile. Defaults to a card built from [columns].
   final Widget Function(BuildContext context, T item)? mobileItemBuilder;
   final int perPage;
@@ -392,14 +395,18 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
     final titleColumn = labeledColumns.isNotEmpty ? labeledColumns.first : null;
     final detailColumns =
         labeledColumns.length > 1 ? labeledColumns.sublist(1) : <TableColumnDef<T>>[];
+    final selected = widget.isRowSelected?.call(item) ?? false;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       elevation: 0,
-      color: Colors.white,
+      color: selected ? AppTheme.primary.withValues(alpha: 0.08) : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
+        side: BorderSide(
+          color: selected ? AppTheme.primary : const Color(0xFFE2E8F0),
+          width: selected ? 1.5 : 1,
+        ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -500,8 +507,18 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
                 .toList(),
           ),
           ..._items.map((item) {
+            final selected = widget.isRowSelected?.call(item) ?? false;
             return TableRow(
-              decoration: const BoxDecoration(color: Colors.white),
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppTheme.primary.withValues(alpha: 0.1)
+                    : Colors.white,
+                border: selected
+                    ? const Border(
+                        left: BorderSide(color: AppTheme.primary, width: 3),
+                      )
+                    : null,
+              ),
               children: widget.columns.map((c) {
                 final cell = Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

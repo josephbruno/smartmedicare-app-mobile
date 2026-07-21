@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../app_services.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_form_dialog.dart';
 import '../../../data/models/advance_transaction.dart';
 import '../../../data/models/customer.dart';
 
@@ -13,29 +14,118 @@ Future<bool> showAdvancePaymentSheet(
   required Customer customer,
   int? visitId,
 }) async {
-  final result = await showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (ctx) => _AdvancePaymentSheet(
-      customer: customer,
-      visitId: visitId,
-    ),
-  );
+  final bool? result;
+  if (useCenteredFormDialog(context)) {
+    result = await showAppDialog<bool>(
+      context: context,
+      builder: (ctx) => _AdvancePaymentDialog(
+        customer: customer,
+        visitId: visitId,
+      ),
+    );
+  } else {
+    result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _AdvancePaymentBottomSheet(
+        customer: customer,
+        visitId: visitId,
+      ),
+    );
+  }
   return result == true;
 }
 
-class _AdvancePaymentSheet extends StatefulWidget {
-  const _AdvancePaymentSheet({required this.customer, this.visitId});
+class _AdvancePaymentDialog extends StatelessWidget {
+  const _AdvancePaymentDialog({required this.customer, this.visitId});
 
   final Customer customer;
   final int? visitId;
 
   @override
-  State<_AdvancePaymentSheet> createState() => _AdvancePaymentSheetState();
+  Widget build(BuildContext context) {
+    final screenH = MediaQuery.sizeOf(context).height;
+    final dialogH = (screenH * 0.85).clamp(420.0, 640.0);
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      alignment: Alignment.center,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: SizedBox(
+        width: 480,
+        height: dialogH,
+        child: _AdvancePaymentBody(
+          customer: customer,
+          visitId: visitId,
+          showHandle: false,
+          onClose: () => Navigator.pop(context),
+        ),
+      ),
+    );
+  }
 }
 
-class _AdvancePaymentSheetState extends State<_AdvancePaymentSheet>
+class _AdvancePaymentBottomSheet extends StatelessWidget {
+  const _AdvancePaymentBottomSheet({required this.customer, this.visitId});
+
+  final Customer customer;
+  final int? visitId;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final sheetH = (MediaQuery.sizeOf(context).height * 0.88).clamp(420.0, 720.0);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Material(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          clipBehavior: Clip.antiAlias,
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: sheetH,
+              child: _AdvancePaymentBody(
+                customer: customer,
+                visitId: visitId,
+                showHandle: true,
+                onClose: () => Navigator.pop(context),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdvancePaymentBody extends StatefulWidget {
+  const _AdvancePaymentBody({
+    required this.customer,
+    required this.onClose,
+    this.visitId,
+    this.showHandle = false,
+  });
+
+  final Customer customer;
+  final int? visitId;
+  final VoidCallback onClose;
+  final bool showHandle;
+
+  @override
+  State<_AdvancePaymentBody> createState() => _AdvancePaymentBodyState();
+}
+
+class _AdvancePaymentBodyState extends State<_AdvancePaymentBody>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   final _amount = TextEditingController();
@@ -50,6 +140,9 @@ class _AdvancePaymentSheetState extends State<_AdvancePaymentSheet>
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
+    _tabs.addListener(() {
+      if (!_tabs.indexIsChanging) setState(() {});
+    });
     _balance = widget.customer.advanceBalance;
     _loadHistory();
   }
@@ -62,6 +155,9 @@ class _AdvancePaymentSheetState extends State<_AdvancePaymentSheet>
     _notes.dispose();
     super.dispose();
   }
+
+  bool get _isHistoryTab => _tabs.index == 2;
+  bool get _isRefundTab => _tabs.index == 1;
 
   Future<void> _loadHistory() async {
     try {
@@ -124,70 +220,76 @@ class _AdvancePaymentSheetState extends State<_AdvancePaymentSheet>
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.viewInsetsOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.72,
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            Container(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.showHandle) ...[
+          const SizedBox(height: 10),
+          Center(
+            child: Container(
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.black26,
-                borderRadius: BorderRadius.circular(2),
+                color: const Color(0xFFCBD5E1),
+                borderRadius: BorderRadius.circular(99),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Treatment Advance',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  Text(
-                    '₹${_balance.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.accent,
-                      fontSize: 18,
-                    ),
-                  ),
-                ],
+          ),
+        ],
+        Padding(
+          padding: EdgeInsets.fromLTRB(20, widget.showHandle ? 12 : 16, 8, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Treatment Advance',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
               ),
-            ),
-            TabBar(
-              controller: _tabs,
-              tabs: const [
-                Tab(text: 'Receive'),
-                Tab(text: 'Refund'),
-                Tab(text: 'History'),
-              ],
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabs,
-                children: [
-                  _form(refund: false),
-                  _form(refund: true),
-                  _historyList(),
-                ],
+              Text(
+                '₹${_balance.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.accent,
+                  fontSize: 18,
+                ),
               ),
-            ),
+              IconButton(
+                tooltip: 'Close',
+                onPressed: widget.onClose,
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+        ),
+        TabBar(
+          controller: _tabs,
+          tabs: const [
+            Tab(text: 'Receive'),
+            Tab(text: 'Refund'),
+            Tab(text: 'History'),
           ],
         ),
-      ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabs,
+            children: [
+              _formFields(refund: false),
+              _formFields(refund: true),
+              _historyList(),
+            ],
+          ),
+        ),
+        if (!_isHistoryTab) _footer(),
+      ],
     );
   }
 
-  Widget _form({required bool refund}) {
+  Widget _formFields({required bool refund}) {
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
       children: [
         TextField(
           controller: _amount,
@@ -197,7 +299,6 @@ class _AdvancePaymentSheetState extends State<_AdvancePaymentSheet>
           ],
           decoration: InputDecoration(
             labelText: refund ? 'Refund amount (₹)' : 'Advance amount (₹)',
-            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
@@ -205,7 +306,6 @@ class _AdvancePaymentSheetState extends State<_AdvancePaymentSheet>
           value: _mode,
           decoration: const InputDecoration(
             labelText: 'Payment mode',
-            border: OutlineInputBorder(),
           ),
           items: const [
             DropdownMenuItem(value: 'cash', child: Text('Cash')),
@@ -222,7 +322,6 @@ class _AdvancePaymentSheetState extends State<_AdvancePaymentSheet>
           controller: _ref,
           decoration: const InputDecoration(
             labelText: 'Reference (optional)',
-            border: OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 12),
@@ -231,21 +330,34 @@ class _AdvancePaymentSheetState extends State<_AdvancePaymentSheet>
           maxLines: 2,
           decoration: InputDecoration(
             labelText: refund ? 'Refund notes' : 'Notes (e.g. surgery advance)',
-            border: const OutlineInputBorder(),
           ),
         ),
-        const SizedBox(height: 20),
-        FilledButton(
-          onPressed: _busy ? null : () => _submit(refund: refund),
-          child: _busy
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(refund ? 'Refund Advance' : 'Record Advance'),
-        ),
       ],
+    );
+  }
+
+  Widget _footer() {
+    final refund = _isRefundTab;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+        color: Colors.white,
+      ),
+      child: FilledButton(
+        onPressed: _busy ? null : () => _submit(refund: refund),
+        child: _busy
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(refund ? 'Refund Advance' : 'Record Advance'),
+      ),
     );
   }
 
@@ -263,7 +375,6 @@ class _AdvancePaymentSheetState extends State<_AdvancePaymentSheet>
             ? AppTheme.accent
             : (t.type == 'refund' ? AppTheme.danger : AppTheme.warning);
         return ListTile(
-          dense: true,
           title: Text(
             '${t.type.toUpperCase()} · ₹${t.amount.toStringAsFixed(2)}',
             style: TextStyle(color: color, fontWeight: FontWeight.w600),

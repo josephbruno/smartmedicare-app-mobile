@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/network/api_exception.dart';
 import '../json_helpers.dart';
 import '../models/inventory.dart';
 import '../models/api_response.dart';
@@ -59,6 +60,44 @@ class InventoryService {
       return parseEnvelopeData(
         res,
         (data) => listFromData(data, StockAgeingItem.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<MonthlySnapshotResult> monthlySnapshot({
+    required String month,
+    int page = 1,
+    int perPage = 100,
+  }) async {
+    try {
+      final res = await _client.get(
+        '/inventory/monthly-snapshot',
+        queryParameters: {
+          'month': month,
+          'page': page,
+          'per_page': perPage.clamp(1, 100),
+        },
+      );
+      final map = responseAsMap(res);
+      final ok = map['success'] as bool? ?? true;
+      if (!ok) {
+        throw ApiException(map['message']?.toString() ?? 'Request failed');
+      }
+      final dateRange = (map['date_range'] is List)
+          ? (map['date_range'] as List).map((e) => e.toString()).toList()
+          : <String>[];
+      return MonthlySnapshotResult(
+        rows: listFromData(map['data'], MonthlyAgeingRow.fromJson),
+        dateRange: dateRange,
+        month: map['month']?.toString() ?? month,
+        monthLabel: map['month_label']?.toString() ?? month,
+        meta: map['meta'] is Map
+            ? PaginationMeta.fromJson(
+                Map<String, dynamic>.from(map['meta'] as Map),
+              )
+            : null,
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);

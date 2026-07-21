@@ -41,10 +41,12 @@ class BillingService {
     String? search,
     String? dateFrom,
     String? dateTo,
+    int? customerId,
   }) async {
     final query = <String, dynamic>{
       'page': page,
       'per_page': perPage,
+      if (customerId != null) 'customer_id': customerId,
       if (search != null && search.isNotEmpty) 'search': search,
       if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
       if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,

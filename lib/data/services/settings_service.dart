@@ -34,6 +34,20 @@ class ShopService {
       ApiClient.throwFromDio(e);
     }
   }
+
+  Future<Shop> updateSettings(Map<String, dynamic> settings) async {
+    try {
+      final res = await _client.put('/shop/settings', data: {
+        'settings': settings,
+      });
+      return parseEnvelopeData(
+        res,
+        (data) => Shop.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
 }
 
 class BranchService {

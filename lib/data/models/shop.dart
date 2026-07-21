@@ -11,6 +11,7 @@ class Shop {
     required this.currency,
     required this.timezone,
     required this.isActive,
+    this.settings,
   });
 
   final int id;
@@ -24,6 +25,7 @@ class Shop {
   final String currency;
   final String timezone;
   final bool isActive;
+  final ShopSettings? settings;
 
   factory Shop.fromJson(Map<String, dynamic> j) => Shop(
         id: (j['id'] as num?)?.toInt() ?? 0,
@@ -37,6 +39,9 @@ class Shop {
         currency: j['currency']?.toString() ?? 'INR',
         timezone: j['timezone']?.toString() ?? 'Asia/Kolkata',
         isActive: j['is_active'] as bool? ?? true,
+        settings: j['settings'] is Map
+            ? ShopSettings.fromJson(Map<String, dynamic>.from(j['settings'] as Map))
+            : null,
       );
 }
 
@@ -122,13 +127,19 @@ class Branch {
 
 class ShopSettings {
   ShopSettings({
-    required this.currency,
-    required this.timezone,
-    required this.invoicePrefix,
-    required this.invoiceStartNumber,
-    required this.enableLoyalty,
-    required this.enableGst,
-    required this.defaultGstRate,
+    this.currency = 'INR',
+    this.timezone = 'Asia/Kolkata',
+    this.invoicePrefix = 'INV',
+    this.invoiceStartNumber = 1,
+    this.enableLoyalty = false,
+    this.loyaltyEarnPerAmount = 100,
+    this.loyaltyRedeemPerPoint = 0.25,
+    this.loyaltyRedemptionMinPoints = 100,
+    this.loyaltyMaxRedeemPercent = 10,
+    this.enableGst = true,
+    this.defaultGstRate = 18,
+    this.thermalWidth = 80,
+    this.showMrpOnInvoice = true,
   });
 
   final String currency;
@@ -136,17 +147,82 @@ class ShopSettings {
   final String invoicePrefix;
   final int invoiceStartNumber;
   final bool enableLoyalty;
+  /// ₹ spent to earn 1 point (maps to loyalty_programs.earn_per_amount).
+  final double loyaltyEarnPerAmount;
+  /// ₹ value of 1 point when redeeming.
+  final double loyaltyRedeemPerPoint;
+  final int loyaltyRedemptionMinPoints;
+  final double loyaltyMaxRedeemPercent;
   final bool enableGst;
   final double defaultGstRate;
+  final int thermalWidth;
+  final bool showMrpOnInvoice;
 
-  factory ShopSettings.fromJson(Map<String, dynamic> j) => ShopSettings(
-        currency: j['currency']?.toString() ?? 'INR',
-        timezone: j['timezone']?.toString() ?? 'Asia/Kolkata',
-        invoicePrefix: j['invoice_prefix']?.toString() ?? 'INV',
-        invoiceStartNumber:
-            (j['invoice_start_number'] as num?)?.toInt() ?? 1,
-        enableLoyalty: j['enable_loyalty'] as bool? ?? false,
-        enableGst: j['enable_gst'] as bool? ?? true,
-        defaultGstRate: (j['default_gst_rate'] as num?)?.toDouble() ?? 18,
+  factory ShopSettings.fromJson(Map<String, dynamic> j) {
+    double earn = (j['loyalty_earn_per_amount'] as num?)?.toDouble() ?? 0;
+    if (earn <= 0) {
+      final ppr = (j['loyalty_points_per_rupee'] as num?)?.toDouble() ?? 0;
+      earn = ppr > 0 ? (1 / ppr) : 100;
+    }
+    return ShopSettings(
+      currency: j['currency']?.toString() ?? 'INR',
+      timezone: j['timezone']?.toString() ?? 'Asia/Kolkata',
+      invoicePrefix: j['invoice_prefix']?.toString() ?? 'INV',
+      invoiceStartNumber: (j['invoice_start_number'] as num?)?.toInt() ?? 1,
+      enableLoyalty: j['enable_loyalty'] as bool? ?? false,
+      loyaltyEarnPerAmount: earn,
+      loyaltyRedeemPerPoint:
+          (j['loyalty_redeem_per_point'] as num?)?.toDouble() ?? 0.25,
+      loyaltyRedemptionMinPoints:
+          (j['loyalty_redemption_min_points'] as num?)?.toInt() ?? 100,
+      loyaltyMaxRedeemPercent:
+          (j['loyalty_max_redeem_percent'] as num?)?.toDouble() ?? 10,
+      enableGst: j['enable_gst'] as bool? ?? true,
+      defaultGstRate: (j['default_gst_rate'] as num?)?.toDouble() ?? 18,
+      thermalWidth: (j['thermal_width'] as num?)?.toInt() ?? 80,
+      showMrpOnInvoice: j['show_mrp_on_invoice'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'currency': currency,
+        'timezone': timezone,
+        'invoice_prefix': invoicePrefix,
+        'invoice_start_number': invoiceStartNumber,
+        'enable_loyalty': enableLoyalty,
+        'loyalty_earn_per_amount': loyaltyEarnPerAmount,
+        'loyalty_redeem_per_point': loyaltyRedeemPerPoint,
+        'loyalty_redemption_min_points': loyaltyRedemptionMinPoints,
+        'loyalty_max_redeem_percent': loyaltyMaxRedeemPercent,
+        'enable_gst': enableGst,
+        'default_gst_rate': defaultGstRate,
+        'thermal_width': thermalWidth,
+        'show_mrp_on_invoice': showMrpOnInvoice,
+      };
+
+  ShopSettings copyWith({
+    bool? enableLoyalty,
+    double? loyaltyEarnPerAmount,
+    double? loyaltyRedeemPerPoint,
+    int? loyaltyRedemptionMinPoints,
+    double? loyaltyMaxRedeemPercent,
+  }) =>
+      ShopSettings(
+        currency: currency,
+        timezone: timezone,
+        invoicePrefix: invoicePrefix,
+        invoiceStartNumber: invoiceStartNumber,
+        enableLoyalty: enableLoyalty ?? this.enableLoyalty,
+        loyaltyEarnPerAmount: loyaltyEarnPerAmount ?? this.loyaltyEarnPerAmount,
+        loyaltyRedeemPerPoint:
+            loyaltyRedeemPerPoint ?? this.loyaltyRedeemPerPoint,
+        loyaltyRedemptionMinPoints:
+            loyaltyRedemptionMinPoints ?? this.loyaltyRedemptionMinPoints,
+        loyaltyMaxRedeemPercent:
+            loyaltyMaxRedeemPercent ?? this.loyaltyMaxRedeemPercent,
+        enableGst: enableGst,
+        defaultGstRate: defaultGstRate,
+        thermalWidth: thermalWidth,
+        showMrpOnInvoice: showMrpOnInvoice,
       );
 }

@@ -89,6 +89,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                   perPage: perPage,
                   search: search.length >= 2 ? search : null,
                 ),
+            isRowSelected: (c) => c.id == _selectedId,
             onRowTap: (c) {
               if (_splitPane) {
                 setState(() => _selectedId = c.id);
