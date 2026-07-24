@@ -8,7 +8,7 @@ import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/inventory.dart';
 import '../../data/models/shop.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 class _LineRow {
   int? productId;
   final TextEditingController qty = TextEditingController();
@@ -181,7 +181,7 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
           ),
           const SizedBox(height: 16),
-          DropdownButtonFormField<int>(
+          AppDropdownButtonFormField<int>(
             value: _toBranchId,
             decoration: InputDecoration(
               labelText: 'Send to branch *',
@@ -335,7 +335,7 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
         children: [
           Expanded(
             flex: 3,
-            child: DropdownButtonFormField<int>(
+            child: AppDropdownButtonFormField<int>(
               value: row.productId,
               isExpanded: true,
               decoration: InputDecoration(

@@ -11,7 +11,7 @@ import '../../core/theme/app_theme.dart';
 import '../../data/models/product.dart';
 import '../../data/models/purchase.dart';
 import '../../data/models/shop.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 class _LineItem {
   int? productId;
   final TextEditingController batch = TextEditingController();
@@ -479,7 +479,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
     final branch = !_isSuperAdmin
         ? null
-        : DropdownButtonFormField<int>(
+        : AppDropdownButtonFormField<int>(
             key: ValueKey('branch-$_branchId'),
             value: _branches.any((b) => b.id == _branchId) ? _branchId : null,
             isExpanded: true,
@@ -494,7 +494,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
             onChanged: (v) => setState(() => _branchId = v),
           );
 
-    final supplier = DropdownButtonFormField<int>(
+    final supplier = AppDropdownButtonFormField<int>(
       key: ValueKey('supplier-$_supplierId'),
       value: _supplierId,
       isExpanded: true,
@@ -607,7 +607,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     final options = _productsForRow(idx);
     final wide = MediaQuery.sizeOf(context).width >= 900;
 
-    final productField = DropdownButtonFormField<int>(
+    final productField = AppDropdownButtonFormField<int>(
       key: ValueKey('product-$idx-${item.productId}'),
       value: item.productId,
       isExpanded: true,
@@ -811,7 +811,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       ],
     );
 
-    final mode = DropdownButtonFormField<String>(
+    final mode = AppDropdownButtonFormField<String>(
       key: ValueKey('pay-$_paymentMode'),
       value: _paymentMode,
       decoration: _fieldDec('Payment Mode'),

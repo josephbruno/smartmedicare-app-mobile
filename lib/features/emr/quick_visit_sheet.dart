@@ -7,7 +7,7 @@ import '../../app_services.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 /// Compact quick-visit drawer (matches web QuickVisitDrawer).
 Future<void> showQuickVisitSheet(
   BuildContext context, {
@@ -278,7 +278,7 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
                       ),
                     const SizedBox(height: 12),
                     if (_doctors.isNotEmpty)
-                      DropdownButtonFormField<int>(
+                      AppDropdownButtonFormField<int>(
                         value: _selectedDoctor?.id,
                         isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Doctor'),
@@ -320,7 +320,7 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
                     Row(
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<String>(
+                          child: AppDropdownButtonFormField<String>(
                             value: _visitType,
                             isExpanded: true,
                             decoration: const InputDecoration(labelText: 'Visit type'),

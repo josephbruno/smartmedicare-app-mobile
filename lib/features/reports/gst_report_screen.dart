@@ -12,7 +12,7 @@ import '../../data/models/invoice.dart';
 import 'report_date_range.dart';
 import 'report_formatters.dart';
 import 'widgets/report_charts.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 class GstReportScreen extends StatefulWidget {
   const GstReportScreen({super.key});
 
@@ -129,7 +129,7 @@ class _GstReportScreenState extends State<GstReportScreen> with SingleTickerProv
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           const Text('GST Report', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          DropdownButton<String>(
+          AppDropdownButton<String>(
             value: _preset,
             items: ReportDateRange.gstPresetOptions.entries
                 .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))

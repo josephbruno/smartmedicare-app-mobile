@@ -11,7 +11,7 @@ import '../../data/models/stock_transfer.dart';
 import '../../data/services/reports_service.dart';
 import 'report_date_range.dart';
 import 'report_formatters.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 class StockTransferReportScreen extends StatefulWidget {
   const StockTransferReportScreen({super.key});
 
@@ -236,7 +236,7 @@ class _StockTransferReportScreenState extends State<StockTransferReportScreen> {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              DropdownButton<String>(
+              AppDropdownButton<String>(
                 value: _preset == 'custom' ? null : _preset,
                 hint: Text(_preset == 'custom' ? _range.label : 'Period'),
                 items: ReportDateRange.presetOptions.entries
@@ -251,7 +251,7 @@ class _StockTransferReportScreenState extends State<StockTransferReportScreen> {
                 icon: const Icon(Icons.date_range, size: 18),
                 label: Text('${_range.fromYmd} → ${_range.toYmd}'),
               ),
-              DropdownButton<String?>(
+              AppDropdownButton<String?>(
                 value: _status,
                 hint: const Text('All statuses'),
                 items: const [
@@ -268,7 +268,7 @@ class _StockTransferReportScreenState extends State<StockTransferReportScreen> {
                   });
                 },
               ),
-              DropdownButton<int?>(
+              AppDropdownButton<int?>(
                 value: _fromBranchId,
                 hint: const Text('From branch'),
                 items: [
@@ -284,7 +284,7 @@ class _StockTransferReportScreenState extends State<StockTransferReportScreen> {
                   });
                 },
               ),
-              DropdownButton<int?>(
+              AppDropdownButton<int?>(
                 value: _toBranchId,
                 hint: const Text('To branch'),
                 items: [

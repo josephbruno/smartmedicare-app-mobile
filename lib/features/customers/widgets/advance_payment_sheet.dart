@@ -8,7 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_form_dialog.dart';
 import '../../../data/models/advance_transaction.dart';
 import '../../../data/models/customer.dart';
-
+import '../../../core/widgets/app_dropdown.dart';
 Future<bool> showAdvancePaymentSheet(
   BuildContext context, {
   required Customer customer,
@@ -302,7 +302,7 @@ class _AdvancePaymentBodyState extends State<_AdvancePaymentBody>
           ),
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
+        AppDropdownButtonFormField<String>(
           value: _mode,
           decoration: const InputDecoration(
             labelText: 'Payment mode',

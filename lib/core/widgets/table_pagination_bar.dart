@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../responsive/desktop_layout_helper.dart';
 import '../theme/app_theme.dart';
 import '../../data/models/api_response.dart';
+import 'app_dropdown.dart';
 
 class TablePaginationBar extends StatelessWidget {
   const TablePaginationBar({
@@ -94,7 +95,7 @@ class TablePaginationBar extends StatelessWidget {
                 if (onPerPageChanged != null) ...[
                   const Text('Rows', style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
                   const SizedBox(width: 8),
-                  DropdownButton<int>(
+                  AppDropdownButton<int>(
                     value: perPageOptions.contains(perPage) ? perPage : perPageOptions.first,
                     underline: const SizedBox.shrink(),
                     items: perPageOptions

@@ -6,7 +6,7 @@ import '../../app_services.dart';
 import '../../core/responsive/desktop_layout_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/inventory.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 class StockAgeingScreen extends StatefulWidget {
   const StockAgeingScreen({super.key});
 
@@ -215,10 +215,9 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
   Widget _buildHeader({required bool compact}) {
     Widget monthDropdown({required bool expanded}) {
       final dropdown = DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
+        child: AppDropdownButton<String>(
           value: _selectedMonth,
           isExpanded: true,
-          isDense: true,
           borderRadius: BorderRadius.circular(10),
           items: _monthOptions
               .map(
@@ -248,10 +247,9 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
 
       final field = InputDecorator(
         decoration: InputDecoration(
-          isDense: true,
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: const BorderSide(color: _border),

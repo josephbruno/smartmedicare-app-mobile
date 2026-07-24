@@ -9,6 +9,7 @@ import '../../core/app_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/product.dart';
+import '../../core/widgets/app_dropdown.dart';
 
 class ProductFormScreen extends StatefulWidget {
   const ProductFormScreen({super.key, this.productId});
@@ -262,7 +263,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       textInputAction: TextInputAction.next,
       decoration: _dec('HSN Code', hint: 'HSN code for GST'),
     );
-    final unitField = DropdownButtonFormField<int?>(
+    final unitField = AppDropdownButtonFormField<int?>(
       value: _units.any((u) => u.id == _unitId) ? _unitId : null,
       decoration: _dec('Unit', hint: 'Select unit'),
       items: [
@@ -276,7 +277,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       ],
       onChanged: (v) => setState(() => _unitId = v),
     );
-    final categoryField = DropdownButtonFormField<int?>(
+    final categoryField = AppDropdownButtonFormField<int?>(
       value: _categories.any((c) => c.id == _categoryId) ? _categoryId : null,
       decoration: _dec('Category', hint: 'Select category'),
       items: [
@@ -287,7 +288,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       ],
       onChanged: (v) => setState(() => _categoryId = v),
     );
-    final brandField = DropdownButtonFormField<int?>(
+    final brandField = AppDropdownButtonFormField<int?>(
       value: _brands.any((b) => b.id == _brandId) ? _brandId : null,
       decoration: _dec('Brand', hint: 'Select brand'),
       items: [
@@ -378,7 +379,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
       decoration: _dec('MRP (₹) *', hint: '0.00'),
     );
-    final gstField = DropdownButtonFormField<double>(
+    final gstField = AppDropdownButtonFormField<double>(
       value: _gstRate,
       decoration: _dec('GST Rate (%)'),
       items: _gstRates

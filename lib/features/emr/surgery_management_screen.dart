@@ -8,7 +8,7 @@ import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/emr.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 class SurgeryManagementScreen extends StatefulWidget {
   const SurgeryManagementScreen({super.key, required this.petId});
 
@@ -62,7 +62,7 @@ class _SurgeryManagementScreenState extends State<SurgeryManagementScreen> {
               decoration: appFormFieldDecoration('Surgery name *'),
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
+            AppDropdownButtonFormField<String>(
               value: status,
               decoration: appFormFieldDecoration('Status'),
               items: const [
@@ -74,7 +74,7 @@ class _SurgeryManagementScreenState extends State<SurgeryManagementScreen> {
             ),
             if (_doctors.isNotEmpty) ...[
               const SizedBox(height: 16),
-              DropdownButtonFormField<int?>(
+              AppDropdownButtonFormField<int?>(
                 value: surgeonId,
                 decoration: appFormFieldDecoration('Surgeon'),
                 items: [

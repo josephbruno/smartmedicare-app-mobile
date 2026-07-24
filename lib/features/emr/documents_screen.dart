@@ -11,7 +11,7 @@ import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/emr.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 class DocumentsScreen extends StatefulWidget {
   const DocumentsScreen({super.key, required this.petId});
 
@@ -61,7 +61,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         builder: (ctx, setDialog) => Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            DropdownButtonFormField<String>(
+            AppDropdownButtonFormField<String>(
               value: docType,
               decoration: appFormFieldDecoration('Document type'),
               items: _docTypes

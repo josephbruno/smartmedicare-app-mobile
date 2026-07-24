@@ -19,7 +19,7 @@ import '../../core/widgets/app_logo.dart';
 import '../../data/local/offline_invoice_queue.dart';
 import '../../data/models/shop.dart';
 import 'widgets/offline_queue_sheet.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 /// Web-like shell (sidebar + header) on tablet/desktop; mobile uses drawer + optional bottom nav.
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.child});
@@ -601,7 +601,7 @@ class _DesktopShellState extends State<_DesktopShell> {
                                   child: SizedBox(
                                       height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)))
                               : DropdownButtonHideUnderline(
-                                  child: DropdownButton<int>(
+                                  child: AppDropdownButton<int>(
                                     isExpanded: true,
                                     icon: const Icon(Icons.keyboard_arrow_down_rounded),
                                     value: widget.auth.currentBranchId,

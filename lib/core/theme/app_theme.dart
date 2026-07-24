@@ -81,7 +81,7 @@ class AppTheme {
         fillColor: const Color(0xFFF8FAFC),
         floatingLabelBehavior: FloatingLabelBehavior.always,
         alignLabelWithHint: true,
-        contentPadding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        contentPadding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
         hintStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 14),
         labelStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
         floatingLabelStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 13, fontWeight: FontWeight.w600),

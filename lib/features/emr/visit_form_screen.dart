@@ -297,6 +297,39 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     return parts.isEmpty ? '' : parts.last.trim();
   }
 
+  void _setComplaintText(String value) {
+    _complaint.text = value;
+    _complaint.selection =
+        TextSelection.collapsed(offset: _complaint.text.length);
+  }
+
+  /// Comma-separated complaints ready for the API (no trailing empty segment).
+  String get _complaintForApi => _complaint.text
+      .split(',')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .join(', ');
+
+  /// Finalize current term and append `, ` so the next complaint can be typed.
+  void _commitComplaintTerm([String? _]) {
+    final text = _complaint.text.trimRight();
+    if (text.isEmpty) return;
+
+    final q = _complaintSearchTerm(text);
+    if (q.isEmpty) {
+      // Already ends with a comma — keep a trailing space for the next term.
+      _setComplaintText(text.endsWith(',') ? '$text ' : '$text, ');
+    } else {
+      final lastComma = text.lastIndexOf(',');
+      final committed = lastComma < 0
+          ? q
+          : '${text.substring(0, lastComma + 1).trimRight()} $q';
+      _setComplaintText('$committed, ');
+    }
+    setState(() {});
+    _searchComplaints('');
+  }
+
   Future<void> _searchComplaints(String text) async {
     final q = _complaintSearchTerm(text);
     try {
@@ -309,25 +342,24 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void _applyComplaintSuggestion(String complaint) {
     final text = _complaint.text;
     final q = _complaintSearchTerm(text);
+    String next;
     if (text.trim().isEmpty) {
-      _complaint.text = complaint;
+      next = complaint;
     } else if (q.isNotEmpty &&
         complaint.toLowerCase().startsWith(q.toLowerCase())) {
       // Replace the in-progress typed segment with the selected template.
       final lastComma = text.lastIndexOf(',');
       if (lastComma < 0) {
-        _complaint.text = complaint;
+        next = complaint;
       } else {
-        _complaint.text =
-            '${text.substring(0, lastComma + 1).trimRight()} $complaint';
+        next = '${text.substring(0, lastComma + 1).trimRight()} $complaint';
       }
     } else if (q.isEmpty) {
-      _complaint.text = '${text.trimRight()} $complaint';
+      next = '${text.trimRight()} $complaint';
     } else {
-      _complaint.text = '${text.trimRight()}, $complaint';
+      next = '${text.trimRight()}, $complaint';
     }
-    _complaint.selection =
-        TextSelection.collapsed(offset: _complaint.text.length);
+    _setComplaintText('${next.trimRight()}, ');
     setState(() {});
     _searchComplaints('');
   }
@@ -471,7 +503,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       'service_charge': serviceCharge,
       if (serviceCharge > 0 && _serviceChargeProductId != null)
         'service_charge_product_id': _serviceChargeProductId,
-      if (_complaint.text.trim().isNotEmpty) 'chief_complaint': _complaint.text.trim(),
+      if (_complaintForApi.isNotEmpty) 'chief_complaint': _complaintForApi,
       if (_clinicalNotes.text.trim().isNotEmpty) 'clinical_notes': _clinicalNotes.text.trim(),
       if (_followUpNotes.text.trim().isNotEmpty) 'follow_up_notes': _followUpNotes.text.trim(),
       if (_temp.text.isNotEmpty) 'temperature': double.tryParse(_temp.text),
@@ -746,73 +778,30 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
               ),
             ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () async {
-                    final d = await showDatePicker(
-                      context: context,
-                      initialDate: _visitDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2100),
-                    );
-                    if (d != null) setState(() => _visitDate = d);
-                  },
-                  child: Row(
-                    children: [
-                      const Icon(Icons.calendar_today, size: 18),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          _visitDate.toIso8601String().substring(0, 10),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () async {
-                    final t = await showTimePicker(
-                      context: context,
-                      initialTime: _visitTime,
-                    );
-                    if (t != null) setState(() => _visitTime = t);
-                  },
-                  child: Row(
-                    children: [
-                      const Icon(Icons.access_time, size: 18),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          _visitTime.format(context),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 16),
           Text('Chief complaint',
               style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
-          TextField(
-            controller: _complaint,
-            maxLines: 2,
-            decoration: const InputDecoration(
-              hintText: 'Type to search or add complaints...',
+          Focus(
+            onKeyEvent: (node, event) {
+              if (event is! KeyDownEvent) return KeyEventResult.ignored;
+              if (event.logicalKey != LogicalKeyboardKey.enter &&
+                  event.logicalKey != LogicalKeyboardKey.numpadEnter) {
+                return KeyEventResult.ignored;
+              }
+              _commitComplaintTerm();
+              return KeyEventResult.handled;
+            },
+            child: TextField(
+              controller: _complaint,
+              maxLines: 2,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                hintText: 'Type to search or add complaints...',
+              ),
+              onChanged: _searchComplaints,
+              onSubmitted: _commitComplaintTerm,
             ),
-            onChanged: _searchComplaints,
           ),
           if (_complaintSuggestions.isNotEmpty) ...[
             const SizedBox(height: 8),

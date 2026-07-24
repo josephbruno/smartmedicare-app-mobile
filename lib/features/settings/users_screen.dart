@@ -14,7 +14,7 @@ import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
 import '../../data/models/shop.dart';
 import '../../data/models/user.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
 
@@ -1168,7 +1168,7 @@ class _RoleDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
+    return AppDropdownButtonFormField<String>(
       value: value,
       isExpanded: true,
       decoration: const InputDecoration(
@@ -1231,7 +1231,7 @@ class _BranchDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<int?>(
+    return AppDropdownButtonFormField<int?>(
       value: value,
       isExpanded: true,
       decoration: const InputDecoration(

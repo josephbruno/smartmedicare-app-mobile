@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../../app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 class AppointmentFormScreen extends StatefulWidget {
   const AppointmentFormScreen({super.key, this.appointmentId});
 
@@ -215,7 +215,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
               ),
             ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
+          AppDropdownButtonFormField<String>(
             value: _appointmentType,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Appointment type'),
@@ -231,7 +231,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           ),
           if (_isEdit) ...[
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
+            AppDropdownButtonFormField<String>(
               value: _status,
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Status'),
@@ -248,7 +248,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           ],
           const SizedBox(height: 12),
           if (_doctors.isNotEmpty)
-            DropdownButtonFormField<int>(
+            AppDropdownButtonFormField<int>(
               value: _selectedDoctor?.id,
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Doctor'),

@@ -12,7 +12,7 @@ import '../../data/models/shop.dart';
 import 'report_date_range.dart';
 import 'report_formatters.dart';
 import 'widgets/report_charts.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 class SalesReportScreen extends StatefulWidget {
   const SalesReportScreen({super.key});
 
@@ -200,7 +200,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
           const SizedBox(width: 8),
-          DropdownButton<String>(
+          AppDropdownButton<String>(
             value: _preset == 'custom' ? null : _preset,
             hint: Text(_preset == 'custom' ? _range.label : 'Period'),
             items: ReportDateRange.presetOptions.entries
@@ -215,7 +215,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             icon: const Icon(Icons.date_range, size: 18),
             label: Text('${_range.fromYmd} → ${_range.toYmd}'),
           ),
-          DropdownButton<int?>(
+          AppDropdownButton<int?>(
             value: branchValue,
             items: _branchOptions
                 .map(
