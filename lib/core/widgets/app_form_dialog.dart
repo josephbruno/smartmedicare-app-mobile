@@ -50,7 +50,9 @@ class AppFormDialogShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.88;
+    final size = MediaQuery.sizeOf(context);
+    final maxHeight = size.height * 0.88;
+    final width = maxWidth.clamp(280.0, size.width - 48);
 
     return Dialog(
       backgroundColor: Colors.white,
@@ -60,11 +62,11 @@ class AppFormDialogShell extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: maxWidth,
+          maxWidth: width,
           maxHeight: maxHeight,
         ),
         child: SizedBox(
-          width: maxWidth,
+          width: width,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -236,44 +238,69 @@ Future<T?> showAppAlertForm<T>({
   required Widget content,
   required List<Widget> actions,
   double maxWidth = 480,
+  String? subtitle,
+  IconData icon = Icons.edit_outlined,
 }) {
   return showAppDialog<T>(
     context: context,
     builder: (ctx) {
+      final screenW = MediaQuery.sizeOf(ctx).width;
       final screenH = MediaQuery.sizeOf(ctx).height;
-      return AlertDialog(
+      final width = (maxWidth).clamp(280.0, screenW - 48);
+
+      return Dialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         alignment: Alignment.center,
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        titlePadding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
-        contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Close',
-              onPressed: () => Navigator.pop(ctx),
-              icon: const Icon(Icons.close_rounded),
-            ),
-          ],
-        ),
-        content: ConstrainedBox(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: maxWidth,
-            maxHeight: screenH * 0.7,
+            maxWidth: width,
+            maxHeight: screenH * 0.88,
           ),
-          child: SingleChildScrollView(child: content),
+          child: SizedBox(
+            width: width,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _FormHeader(
+                  title: title,
+                  subtitle: subtitle,
+                  icon: icon,
+                  onClose: () => Navigator.pop(ctx),
+                ),
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: content,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                  ),
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < actions.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 12),
+                        Expanded(
+                          flex: i == actions.length - 1 && actions.length > 1
+                              ? 2
+                              : 1,
+                          child: actions[i],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        actions: actions,
       );
     },
   );
