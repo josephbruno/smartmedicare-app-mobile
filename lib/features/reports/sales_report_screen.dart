@@ -55,6 +55,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         services.billing.listForReport(
           dateFrom: _range.fromYmd,
           dateTo: _range.toYmd,
+          withItems: true,
           withPayments: true,
         ),
         services.branches.list(),
@@ -289,6 +290,23 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     final crossCount = ResponsiveLayout.isMobile(context) ? 1 : 2;
     final isOverall = _selectedBranchId == null;
 
+    // Product type sales (Product / Service / Medicine) for the selected date range.
+    const typeOrder = ['product', 'service', 'medicine'];
+    final byProductType = <String, double>{
+      for (final t in typeOrder) t: 0,
+    };
+    for (final inv in invoices) {
+      for (final item in inv.items ?? const <InvoiceItem>[]) {
+        final key = typeOrder.contains(item.productType) ? item.productType : 'product';
+        byProductType[key] = (byProductType[key] ?? 0) + item.totalAmount;
+      }
+    }
+    final productTypeEntries = typeOrder
+        .map((t) => MapEntry(t, byProductType[t] ?? 0))
+        .where((e) => e.value > 0)
+        .toList();
+    final hasProductTypeSales = productTypeEntries.isNotEmpty;
+
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -380,6 +398,35 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             ),
             const SizedBox(height: 12),
             _BranchSummaryTable(rows: branchSeries),
+          ],
+          const SizedBox(height: 16),
+          ReportSectionCard(
+            title: 'Product type sales',
+            trailing: Text(
+              _range.label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            height: 280,
+            child: hasProductTypeSales
+                ? ReportBarChart(
+                    labels: productTypeEntries.map((e) => productTypeLabel(e.key)).toList(),
+                    series: [
+                      (
+                        name: 'Sales',
+                        color: AppTheme.primary,
+                        values: productTypeEntries.map((e) => e.value).toList(),
+                      ),
+                    ],
+                  )
+                : const ReportEmptyChart(message: 'No line-item sales in this period.'),
+          ),
+          if (hasProductTypeSales) ...[
+            const SizedBox(height: 12),
+            _ProductTypeSummaryTable(rows: productTypeEntries),
           ],
           const SizedBox(height: 16),
           GridView.count(
@@ -604,6 +651,97 @@ class _BranchSummaryTable extends StatelessWidget {
                       style: TextStyle(
                         color: row.due > 0 ? AppTheme.danger : AppTheme.textSecondary,
                       ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductTypeSummaryTable extends StatelessWidget {
+  const _ProductTypeSummaryTable({required this.rows});
+
+  final List<MapEntry<String, double>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = rows.fold<double>(0, (s, e) => s + e.value);
+    return ReportSectionCard(
+      title: 'Product type summary',
+      child: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'Type',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'Sales',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'Share',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          for (final row in rows) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      productTypeLabel(row.key),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      formatReportCurrency(row.value),
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      total <= 0
+                          ? '—'
+                          : formatReportPercent((row.value / total) * 100),
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(color: AppTheme.textSecondary),
                     ),
                   ),
                 ],

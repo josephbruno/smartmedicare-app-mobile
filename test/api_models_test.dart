@@ -145,6 +145,7 @@ void main() {
             'id': 1,
             'product_id': 9,
             'product_name': 'Dog Food',
+            'product_type': 'product',
             'quantity': 2,
             'unit_price': 500,
             'total_amount': 1000,
@@ -162,6 +163,8 @@ void main() {
       });
 
       expect(inv.items?.single.productName, 'Dog Food');
+      expect(inv.items?.single.productType, 'product');
+      expect(inv.items?.single.productTypeLabel, 'Product');
       expect(inv.payments?.single.paymentMode, 'cash');
       expect(inv.payments?.single.tenderedAmount, 1500);
       expect(inv.payments?.single.changeReturn, 320);

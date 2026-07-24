@@ -29,6 +29,19 @@ String paymentModeLabel(String mode) {
 String titleCaseStatus(String status) =>
     status.split('_').map((p) => p.isEmpty ? p : '${p[0].toUpperCase()}${p.substring(1)}').join(' ');
 
+String productTypeLabel(String type) {
+  switch (type) {
+    case 'service':
+      return 'Service';
+    case 'medicine':
+      return 'Medicine';
+    case 'product':
+      return 'Product';
+    default:
+      return titleCaseStatus(type);
+  }
+}
+
 String shortDateLabel(String ymd) {
   try {
     final d = DateTime.parse(ymd);

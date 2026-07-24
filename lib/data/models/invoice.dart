@@ -38,6 +38,7 @@ class InvoiceItem {
     required this.id,
     required this.productId,
     required this.productName,
+    this.productType = 'product',
     this.hsnCode,
     this.batchId,
     required this.quantity,
@@ -55,6 +56,8 @@ class InvoiceItem {
   final int id;
   final int productId;
   final String productName;
+  /// One of: product | service | medicine
+  final String productType;
   final String? hsnCode;
   final int? batchId;
   final double quantity;
@@ -68,10 +71,39 @@ class InvoiceItem {
   final double igstAmount;
   final double totalAmount;
 
-  factory InvoiceItem.fromJson(Map<String, dynamic> j) => InvoiceItem(
+  String get productTypeLabel {
+    switch (productType) {
+      case 'service':
+        return 'Service';
+      case 'medicine':
+        return 'Medicine';
+      default:
+        return 'Product';
+    }
+  }
+
+  factory InvoiceItem.fromJson(Map<String, dynamic> j) {
+    String type = j['product_type']?.toString() ?? '';
+    if (type.isEmpty) {
+      final product = j['product'];
+      if (product is Map) {
+        type = product['product_type']?.toString() ?? '';
+        if (type.isEmpty) {
+          if (product['is_service'] == true) {
+            type = 'service';
+          } else if (product['is_medicine'] == true) {
+            type = 'medicine';
+          }
+        }
+      }
+    }
+    if (type.isEmpty) type = 'product';
+
+    return InvoiceItem(
         id: intOrNull(j['id']) ?? 0,
         productId: intOrNull(j['product_id']) ?? 0,
         productName: j['product_name']?.toString() ?? '',
+        productType: type,
         hsnCode: j['hsn_code']?.toString(),
         batchId: intOrNull(j['batch_id']),
         quantity: numOrNull(j['quantity']) ?? 0,
@@ -85,6 +117,7 @@ class InvoiceItem {
         igstAmount: numOrNull(j['igst_amount']) ?? 0,
         totalAmount: numOrNull(j['total_amount']) ?? 0,
       );
+  }
 }
 
 class InvoicePayment {
