@@ -17,6 +17,7 @@ class CustomerFormScreen extends StatefulWidget {
 }
 
 class _CustomerFormScreenState extends State<CustomerFormScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _phone = TextEditingController();
   final _email = TextEditingController();
@@ -33,6 +34,13 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   String? _gender;
   bool _whatsappOpted = true;
   bool _saving = false;
+  AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
+
+  static final _namePattern = RegExp(r'^[A-Za-z]+(?: [A-Za-z]+)*$');
+  static final _emailPattern = RegExp(
+    r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$',
+  );
+  static final _indiaPhonePattern = RegExp(r'^[6-9]\d{9}$');
 
   @override
   void dispose() {
@@ -55,6 +63,33 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
         hintText: hint,
         floatingLabelBehavior: FloatingLabelBehavior.always,
       );
+
+  String? _validateName(String? value) {
+    final name = (value ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (name.isEmpty) return 'Name is required';
+    if (!_namePattern.hasMatch(name)) {
+      return 'Name can only contain letters and spaces';
+    }
+    return null;
+  }
+
+  String? _validatePhone(String? value) {
+    final phone = (value ?? '').trim();
+    if (phone.isEmpty) return 'Phone is required';
+    if (!_indiaPhonePattern.hasMatch(phone)) {
+      return 'Enter a valid 10-digit Indian mobile number';
+    }
+    return null;
+  }
+
+  String? _validateEmail(String? value) {
+    final email = (value ?? '').trim();
+    if (email.isEmpty) return null;
+    if (!_emailPattern.hasMatch(email)) {
+      return 'Enter a valid email address';
+    }
+    return null;
+  }
 
   String _formatDob(DateTime? date) {
     if (date == null) return '';
@@ -81,23 +116,15 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   }
 
   Future<void> _save() async {
-    final name = _name.text.trim();
-    final phone = _phone.text.trim();
-    if (name.isEmpty || phone.isEmpty) {
-      AppMessenger.error(context, 'Name and phone are required.');
-      return;
-    }
-    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(phone)) {
-      AppMessenger.error(context, 'Enter a valid 10-digit mobile number.');
-      return;
-    }
+    final form = _formKey.currentState;
+    if (form == null) return;
 
+    setState(() => _autovalidateMode = AutovalidateMode.onUserInteraction);
+    if (!form.validate()) return;
+
+    final name = _name.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+    final phone = _phone.text.trim();
     final email = _nullIfEmpty(_email.text);
-    if (email != null &&
-        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
-      AppMessenger.error(context, 'Enter a valid email address.');
-      return;
-    }
 
     double? creditLimit;
     final creditText = _creditLimit.text.trim();
@@ -173,26 +200,36 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     final wide = AppConfig.usesLargeUiScale ||
         MediaQuery.sizeOf(context).width >= AppConfig.mobileCompactBreakpoint;
 
-    final nameField = TextField(
+    final nameField = TextFormField(
       controller: _name,
       textCapitalization: TextCapitalization.words,
       textInputAction: TextInputAction.next,
+      autovalidateMode: _autovalidateMode,
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z ]')),
+        LengthLimitingTextInputFormatter(150),
+      ],
+      validator: _validateName,
       decoration: _dec('Full Name *', hint: 'Customer name'),
     );
-    final phoneField = TextField(
+    final phoneField = TextFormField(
       controller: _phone,
       keyboardType: TextInputType.phone,
+      textInputAction: TextInputAction.next,
+      autovalidateMode: _autovalidateMode,
       inputFormatters: [
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(10),
       ],
-      textInputAction: TextInputAction.next,
-      decoration: _dec('Phone *', hint: '10-digit mobile number'),
+      validator: _validatePhone,
+      decoration: _dec('Phone *', hint: '10-digit Indian mobile'),
     );
-    final emailField = TextField(
+    final emailField = TextFormField(
       controller: _email,
       keyboardType: TextInputType.emailAddress,
       textInputAction: TextInputAction.next,
+      autovalidateMode: _autovalidateMode,
+      validator: _validateEmail,
       decoration: _dec('Email', hint: 'email@example.com'),
     );
     final altPhoneField = TextField(
@@ -428,7 +465,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(title: const Text('New customer')),
-      body: ListView(
+      body: Form(
+        key: _formKey,
+        autovalidateMode: _autovalidateMode,
+        child: ListView(
         padding: EdgeInsets.fromLTRB(wide ? 24 : 16, 16, wide ? 24 : 16, 32),
         children: [
           Card(
@@ -473,6 +513,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
