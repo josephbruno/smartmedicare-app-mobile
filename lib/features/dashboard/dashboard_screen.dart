@@ -8,6 +8,7 @@ import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/app_config.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_date_range_picker.dart';
 import '../../data/models/dashboard_data.dart';
 import 'dashboard_view_model.dart';
 import 'widgets/dashboard_widgets.dart';
@@ -310,7 +311,7 @@ class _ManagerDashboardContent extends StatelessWidget {
         '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d, y').format(now)}';
     return OutlinedButton.icon(
       onPressed: () async {
-        final picked = await showDateRangePicker(
+        final picked = await showAppDateRangePicker(
           context: context,
           firstDate: DateTime(now.year - 2),
           lastDate: DateTime(now.year + 1),

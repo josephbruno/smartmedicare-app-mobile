@@ -1064,14 +1064,14 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: Padding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          flex: 3,
                           child: TextField(
                             decoration: const InputDecoration(
                               labelText: 'Treatment name',
@@ -1081,19 +1081,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                             onChanged: _searchTreatments,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 1,
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              labelText: 'Price',
-                              isDense: true,
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            controller: t.priceCtrl,
-                          ),
-                        ),
                         IconButton(
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                           icon: Icon(
                             Icons.inventory_2_outlined,
                             size: 20,
@@ -1118,6 +1108,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                           },
                         ),
                         IconButton(
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                           icon: const Icon(Icons.close, color: AppTheme.danger),
                           onPressed: () {
                             final row = _treatments.removeAt(i);
@@ -1128,9 +1120,18 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      decoration: const InputDecoration(
+                        labelText: 'Price (₹)',
+                        isDense: true,
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      controller: t.priceCtrl,
+                    ),
                     if (_treatmentSuggestions.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 6),
+                        padding: const EdgeInsets.only(top: 8),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Wrap(
@@ -1216,14 +1217,14 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: Padding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          flex: 3,
                           child: TextField(
                             decoration: const InputDecoration(
                               labelText: 'Medicine name',
@@ -1233,19 +1234,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                             onChanged: _searchMedicines,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 1,
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              labelText: 'Price',
-                              isDense: true,
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            controller: m.priceCtrl,
-                          ),
-                        ),
                         IconButton(
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                           icon: Icon(
                             Icons.medication_outlined,
                             size: 20,
@@ -1271,6 +1262,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                           },
                         ),
                         IconButton(
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                           icon: const Icon(Icons.close, color: AppTheme.danger),
                           onPressed: () {
                             final row = _medicines.removeAt(i);
@@ -1283,7 +1276,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     ),
                     if (_medicineSuggestions.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 6),
+                        padding: const EdgeInsets.only(top: 8),
                         child: Wrap(
                           spacing: 6,
                           runSpacing: 6,
@@ -1309,36 +1302,59 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                           }).toList(),
                         ),
                       ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
+                    TextField(
+                      decoration: const InputDecoration(
+                        labelText: 'Price (₹)',
+                        isDense: true,
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      controller: m.priceCtrl,
+                    ),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(
                           child: TextField(
-                            decoration: const InputDecoration(labelText: 'Dosage', isDense: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Dosage',
+                              isDense: true,
+                            ),
                             controller: m.dosageCtrl,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: TextField(
-                            decoration: const InputDecoration(labelText: 'Frequency', isDense: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Frequency',
+                              isDense: true,
+                            ),
                             controller: m.freqCtrl,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 88,
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
                           child: TextField(
-                            decoration: const InputDecoration(labelText: 'Days', isDense: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Days',
+                              isDense: true,
+                            ),
                             keyboardType: TextInputType.number,
                             controller: m.daysCtrl,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 88,
+                        const SizedBox(width: 10),
+                        Expanded(
                           child: TextField(
-                            decoration: const InputDecoration(labelText: 'Qty', isDense: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Qty',
+                              isDense: true,
+                            ),
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             controller: m.qtyCtrl,
                           ),
@@ -1347,7 +1363,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     ),
                     if (_dosageSuggestions.isNotEmpty || _frequencySuggestions.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 6),
+                        padding: const EdgeInsets.only(top: 8),
                         child: Wrap(
                           spacing: 6,
                           runSpacing: 6,

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_date_range_picker.dart';
 import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
 import '../../data/models/invoice.dart';
@@ -29,7 +30,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
 
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
-    final range = await showDateRangePicker(
+    final range = await showAppDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: now.add(const Duration(days: 365)),
