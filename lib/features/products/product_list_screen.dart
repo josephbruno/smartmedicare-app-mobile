@@ -10,8 +10,21 @@ import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
 import '../../data/models/product.dart';
 
-class ProductListScreen extends StatelessWidget {
+class ProductListScreen extends StatefulWidget {
   const ProductListScreen({super.key});
+
+  @override
+  State<ProductListScreen> createState() => _ProductListScreenState();
+}
+
+class _ProductListScreenState extends State<ProductListScreen> {
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,6 +32,7 @@ class ProductListScreen extends StatelessWidget {
     final auth = context.watch<AuthSession>();
     final canCreate = auth.hasPermission(AppPermissions.productsCreate);
     final canEdit = auth.hasPermission(AppPermissions.productsEdit);
+    final search = _search.text.trim();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -27,28 +41,49 @@ class ProductListScreen extends StatelessWidget {
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Row(
+            child: Column(
               children: [
-                const Expanded(
-                  child: Text(
-                    'Products',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                  ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Products',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    if (canCreate)
+                      FilledButton.icon(
+                        onPressed: () => context.go('/products/new'),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('New Product'),
+                      ),
+                  ],
                 ),
-                if (canCreate)
-                  FilledButton.icon(
-                    onPressed: () => context.go('/products/new'),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('New Product'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _search,
+                  decoration: const InputDecoration(
+                    hintText: 'Search products by name or SKU…',
+                    prefixIcon: Icon(Icons.search, size: 20),
+                    isDense: true,
                   ),
+                  onSubmitted: (_) => setState(() {}),
+                ),
               ],
             ),
           ),
           Expanded(
             child: AppPaginatedTable<Product>(
-              emptyMessage: 'No products yet. Click New Product to add your first product.',
+              key: ValueKey(search),
+              emptyMessage: search.length >= 2
+                  ? 'No products match your search.'
+                  : 'No products yet. Click New Product to add your first product.',
               loadPage: ({required page, required perPage}) =>
-                  services.products.listPaginated(page: page, perPage: perPage),
+                  services.products.listPaginated(
+                    page: page,
+                    perPage: perPage,
+                    search: search.length >= 2 ? search : null,
+                  ),
               onRowTap: canEdit ? (p) => context.go('/products/${p.id}/edit') : null,
               columns: const [
                 TableColumnDef(label: 'Product', flex: 2, cellBuilder: _nameCell),
