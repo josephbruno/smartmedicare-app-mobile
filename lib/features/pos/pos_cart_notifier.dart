@@ -343,7 +343,8 @@ class PosCartNotifier extends ChangeNotifier {
         nameOverride: label,
         mergeExisting: mergeExisting,
         isServiceCharge: isServiceCharge,
-        batchId: isServiceCharge ? -visit.id : null,
+        // Do not use a fake/negative batch id — invoices API rejects it.
+        batchId: null,
       );
       if (result == 'out_of_stock') {
         skipped.add('$label (out of stock)');

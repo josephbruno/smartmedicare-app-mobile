@@ -368,7 +368,9 @@ class CartItem {
         'product_name': productName,
         if (barcode != null) 'barcode': barcode,
         if (hsnCode != null) 'hsn_code': hsnCode,
-        if (batchId != null) 'batch_id': batchId,
+        // Only real catalog batches — visit service-charge uses a negative
+        // sentinel locally and must not be sent to the invoices API.
+        if (batchId != null && batchId! > 0) 'batch_id': batchId,
         'quantity': quantity,
         'unit_price': unitPrice,
         'discount_percent': discountPercent,
