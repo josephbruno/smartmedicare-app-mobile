@@ -22,11 +22,7 @@ class DashboardScreen extends StatelessWidget {
     final auth = context.watch<AuthSession>();
 
     if (auth.hasRole(AppRoles.cashier) && AppConfig.isCashierPlatform) {
-      return const SingleChildScrollView(
-        physics: AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(24, 24, 24, 36),
-        child: CashierDashboardSection(),
-      );
+      return const CashierDashboardSection();
     }
 
     if (auth.hasRole(AppRoles.doctor)) {
