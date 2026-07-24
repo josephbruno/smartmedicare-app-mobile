@@ -61,6 +61,13 @@ class _AppShellState extends State<AppShell> {
             activeIcon: Icons.medical_services_rounded,
             location: '/emr/visits',
           ),
+        if (auth.hasPermission(AppPermissions.customersView))
+          const _NavDest(
+            label: 'Patients',
+            icon: Icons.pets_outlined,
+            activeIcon: Icons.pets_rounded,
+            location: '/patients',
+          ),
         if (auth.hasPermission(AppPermissions.emrRemindersView))
           const _NavDest(
             label: 'Reminders',

@@ -28,7 +28,7 @@ class DashboardScreen extends StatelessWidget {
     if (auth.hasRole(AppRoles.doctor)) {
       return const SingleChildScrollView(
         physics: AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(24, 24, 24, 36),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 28),
         child: DoctorDashboardSection(),
       );
     }

@@ -963,118 +963,133 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 3,
-                child: _selectedPet == null
-                    ? TextField(
-                        decoration: InputDecoration(
-                          labelText: 'Search patient (pet or owner)',
-                          suffixIcon: _searchingPets
-                              ? const Padding(
-                                  padding: EdgeInsets.all(12),
-                                  child: SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  ),
-                                )
-                              : const Icon(Icons.search),
-                        ),
-                        onChanged: _searchPets,
-                      )
-                    : InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: 'Patient',
-                          suffixIcon: _isEdit
-                              ? null
-                              : IconButton(
-                                  icon: const Icon(Icons.close, size: 20),
-                                  tooltip: 'Clear patient',
-                                  onPressed: () => setState(() {
-                                    _selectedPet = null;
-                                    _petSummary = null;
-                                  }),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 640;
+              final patientField = _selectedPet == null
+                  ? TextField(
+                      decoration: InputDecoration(
+                        labelText: 'Search patient (pet or owner)',
+                        suffixIcon: _searchingPets
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
                                 ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.pets, size: 18, color: AppTheme.primary),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _selectedPet!.displayLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ],
-                        ),
+                              )
+                            : const Icon(Icons.search),
                       ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: AppDropdownButtonFormField<String>(
-                  value: _visitType,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Visit type'),
-                  selectedItemBuilder: (context) => _visitTypes
-                      .map(
-                        (t) => Text(
-                          t,
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      )
-                      .toList(),
-                  items: _visitTypes
-                      .map(
-                        (t) => DropdownMenuItem(
-                          value: t,
-                          child: Text(t, overflow: TextOverflow.ellipsis, maxLines: 1),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() => _visitType = v ?? 'consultation'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: TextField(
-                  controller: _serviceCharge,
-                  decoration: InputDecoration(
-                    labelText: 'Service charge (₹)',
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.inventory_2_outlined, size: 22),
-                      tooltip: 'Link service product (for GST)',
-                      onPressed: () async {
-                        final p = await _pickProduct(
-                          type: 'service',
-                          allowCreateService: true,
-                          initial: _serviceChargeProductName ?? 'consultation',
-                        );
-                        if (p != null) {
-                          setState(() {
-                            _serviceChargeProductId = p.id;
-                            _serviceChargeProductName = p.name;
-                            if (_serviceCharge.text.trim().isEmpty) {
-                              _serviceCharge.text = p.sellingPrice.toString();
-                            }
-                          });
-                        }
-                      },
-                    ),
+                      onChanged: _searchPets,
+                    )
+                  : InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'Patient',
+                        suffixIcon: _isEdit
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.close, size: 20),
+                                tooltip: 'Clear patient',
+                                onPressed: () => setState(() {
+                                  _selectedPet = null;
+                                  _petSummary = null;
+                                }),
+                              ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.pets, size: 18, color: AppTheme.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _selectedPet!.displayLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+
+              final visitTypeField = AppDropdownButtonFormField<String>(
+                value: _visitType,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Visit type'),
+                selectedItemBuilder: (context) => _visitTypes
+                    .map(
+                      (t) => Text(
+                        t,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )
+                    .toList(),
+                items: _visitTypes
+                    .map(
+                      (t) => DropdownMenuItem(
+                        value: t,
+                        child: Text(t, overflow: TextOverflow.ellipsis, maxLines: 1),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => _visitType = v ?? 'consultation'),
+              );
+
+              final serviceChargeField = TextField(
+                controller: _serviceCharge,
+                decoration: InputDecoration(
+                  labelText: 'Service charge (₹)',
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.inventory_2_outlined, size: 22),
+                    tooltip: 'Link service product (for GST)',
+                    onPressed: () async {
+                      final p = await _pickProduct(
+                        type: 'service',
+                        allowCreateService: true,
+                        initial: _serviceChargeProductName ?? 'consultation',
+                      );
+                      if (p != null) {
+                        setState(() {
+                          _serviceChargeProductId = p.id;
+                          _serviceChargeProductName = p.name;
+                          if (_serviceCharge.text.trim().isEmpty) {
+                            _serviceCharge.text = p.sellingPrice.toString();
+                          }
+                        });
+                      }
+                    },
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
-              ),
-            ],
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              );
+
+              if (narrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    patientField,
+                    const SizedBox(height: 12),
+                    visitTypeField,
+                    const SizedBox(height: 12),
+                    serviceChargeField,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 3, child: patientField),
+                  const SizedBox(width: 12),
+                  Expanded(flex: 2, child: visitTypeField),
+                  const SizedBox(width: 12),
+                  Expanded(flex: 2, child: serviceChargeField),
+                ],
+              );
+            },
           ),
           if (_selectedPet == null)
             ..._petResults.map(
@@ -1210,10 +1225,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           const SizedBox(height: 16),
           Text('Vitals', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 520;
+              final fields = [
+                TextField(
                   controller: _temp,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
@@ -1221,10 +1237,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     isDense: true,
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
+                TextField(
                   controller: _weight,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
@@ -1232,10 +1245,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     isDense: true,
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
+                TextField(
                   controller: _heartRate,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
@@ -1243,10 +1253,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     isDense: true,
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
+                TextField(
                   controller: _respiratoryRate,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
@@ -1254,8 +1261,37 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     isDense: true,
                   ),
                 ),
-              ),
-            ],
+              ];
+              if (narrow) {
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: fields[0]),
+                        const SizedBox(width: 8),
+                        Expanded(child: fields[1]),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(child: fields[2]),
+                        const SizedBox(width: 8),
+                        Expanded(child: fields[3]),
+                      ],
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  for (var i = 0; i < fields.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    Expanded(child: fields[i]),
+                  ],
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
           Text('Diagnoses', style: Theme.of(context).textTheme.titleSmall),

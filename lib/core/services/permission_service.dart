@@ -121,6 +121,37 @@ abstract class AppRoles {
     AppPermissions.patientAppointmentsCreate,
     AppPermissions.discountsApply,
   ];
+
+  /// Default doctor permissions (mirrors RolePermissionSeeder).
+  static const List<String> doctorPermissions = [
+    AppPermissions.customersView,
+    AppPermissions.customersCreate,
+    AppPermissions.customersEdit,
+    AppPermissions.petsView,
+    AppPermissions.petsCreate,
+    AppPermissions.petsEdit,
+    AppPermissions.invoicesView,
+    AppPermissions.invoicesCreate,
+    AppPermissions.paymentsView,
+    AppPermissions.productsView,
+    AppPermissions.inventoryView,
+    AppPermissions.emrVisitsView,
+    AppPermissions.emrVisitsCreate,
+    AppPermissions.emrVisitsEdit,
+    AppPermissions.emrDewormingView,
+    AppPermissions.emrDewormingCreate,
+    AppPermissions.emrSurgeriesView,
+    AppPermissions.emrSurgeriesCreate,
+    AppPermissions.emrLabReportsView,
+    AppPermissions.emrLabReportsUpload,
+    AppPermissions.emrDocumentsView,
+    AppPermissions.emrDocumentsUpload,
+    AppPermissions.emrRemindersView,
+    AppPermissions.patientAppointmentsView,
+    AppPermissions.patientAppointmentsCreate,
+    AppPermissions.patientAppointmentsEdit,
+    AppPermissions.patientAppointmentsCancel,
+  ];
 }
 
 /// Permission service for checking user permissions and roles.

@@ -68,6 +68,9 @@ class AuthSession extends ChangeNotifier {
     if (perms.isEmpty && hasRole(AppRoles.cashier)) {
       return AppRoles.cashierPermissions.contains(permission);
     }
+    if (perms.isEmpty && hasRole(AppRoles.doctor)) {
+      return AppRoles.doctorPermissions.contains(permission);
+    }
     return false;
   }
 
@@ -84,9 +87,7 @@ class AuthSession extends ChangeNotifier {
       if (hasPermission(AppPermissions.invoicesView)) return '/invoices';
       if (hasPermission(AppPermissions.customersView)) return '/customers';
     }
-    if (hasRole(AppRoles.doctor)) {
-      if (hasPermission(AppPermissions.emrVisitsView)) return '/emr/visits';
-    }
+    // Doctors land on the clinical dashboard (open visits / holds / shortcuts).
     return '/dashboard';
   }
 

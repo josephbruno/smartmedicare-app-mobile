@@ -1013,10 +1013,11 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    trailing: FilledButton.tonal(
+                    trailing: TextButton(
                       onPressed: () => context.push('/emr/visits/${v.id}/edit'),
                       child: const Text('Continue'),
                     ),
+                    onTap: () => context.push('/emr/visits/${v.id}'),
                   ),
                 );
               }).toList(),
@@ -1050,10 +1051,11 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
                   child: ListTile(
                     title: Text(v.pet?.name ?? v.visitNumber),
                     subtitle: Text('${v.visitNumber} · awaiting send to cashier'),
-                    trailing: FilledButton.tonal(
+                    trailing: TextButton(
                       onPressed: () => context.push('/emr/visits/${v.id}/edit'),
                       child: const Text('Edit'),
                     ),
+                    onTap: () => context.push('/emr/visits/${v.id}'),
                   ),
                 );
               }).toList(),
