@@ -11,7 +11,7 @@ import '../../emr/visit_billing_queue_notifier.dart';
 import '../../emr/widgets/visit_billing_queue_panel.dart';
 import 'dashboard_widgets.dart';
 
-/// Branch manager ops view: branch KPIs, billing queue, today\'s appointments.
+/// Branch manager ops view: branch KPIs and billing queue.
 class BranchManagerDashboardSection extends StatefulWidget {
   const BranchManagerDashboardSection({super.key});
 
@@ -88,11 +88,11 @@ class _BranchManagerDashboardSectionState extends State<BranchManagerDashboardSe
                 SizedBox(
                   width: 200,
                   child: DashboardStatCard(
-                    title: 'APPOINTMENTS',
-                    value: '${d.todayAppointments.count}',
-                    subtitle: 'Scheduled today',
-                    icon: Icons.event_rounded,
-                    color: const Color(0xFF0EA5E9),
+                    title: 'OUTSTANDING',
+                    value: '₹${d.outstandingDues.toStringAsFixed(0)}',
+                    subtitle: 'Unpaid balance',
+                    icon: Icons.account_balance_wallet_outlined,
+                    color: d.outstandingDues > 0 ? AppTheme.danger : AppTheme.accent,
                     trend: const [],
                   ),
                 ),

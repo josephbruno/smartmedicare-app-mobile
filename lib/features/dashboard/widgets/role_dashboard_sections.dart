@@ -109,13 +109,6 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
           color: AppTheme.primary,
           onTap: () => context.go('/customers'),
         ),
-      if (auth.hasPermission(AppPermissions.patientAppointmentsView))
-        _CashierAction(
-          icon: Icons.event_available_rounded,
-          label: 'Appointments',
-          color: const Color(0xFF0EA5E9),
-          onTap: () => context.go('/emr/appointments'),
-        ),
       if (auth.hasPermission(AppPermissions.productsView))
         _CashierAction(
           icon: Icons.inventory_2_outlined,
@@ -325,15 +318,6 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
         icon: Icons.calendar_month_rounded,
         color: const Color(0xFF6366F1),
       ),
-      if (auth.hasPermission(AppPermissions.patientAppointmentsView))
-        _CashierMetric(
-          label: 'Appointments',
-          value: '${d.todayAppointments.count}',
-          hint: 'Scheduled today',
-          icon: Icons.event_rounded,
-          color: const Color(0xFF0EA5E9),
-          onTap: () => context.go('/emr/appointments'),
-        ),
       if (auth.hasPermission(AppPermissions.inventoryView))
         _CashierMetric(
           label: 'Low stock',
@@ -895,7 +879,7 @@ class _CashierInvoiceRow extends StatelessWidget {
   }
 }
 
-/// Doctor-focused home: today\'s schedule and visits on hold.
+/// Doctor-focused home: open visits, bills on hold, and clinical shortcuts.
 class DoctorDashboardSection extends StatefulWidget {
   const DoctorDashboardSection({super.key});
 
@@ -904,8 +888,9 @@ class DoctorDashboardSection extends StatefulWidget {
 }
 
 class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
-  late Future<List<PatientAppointment>> _appointmentsFuture;
+  late Future<List<PetVisit>> _openFuture;
   late Future<List<PetVisit>> _holdFuture;
+  late Future<List<PetVisit>> _readyFuture;
 
   @override
   void initState() {
@@ -920,8 +905,10 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
 
   void _reload() {
     final emr = context.read<AppServices>().emr;
-    _appointmentsFuture = emr.todayAppointments();
+    _openFuture = emr.listVisitsPaginated(status: 'open', perPage: 15).then((r) => r.items);
     _holdFuture = emr.listVisitsPaginated(status: 'bill_on_hold', perPage: 15).then((r) => r.items);
+    _readyFuture =
+        emr.listVisitsPaginated(status: 'completed', perPage: 10).then((r) => r.items);
     setState(() {});
   }
 
@@ -931,51 +918,105 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const DashboardSectionHeader(icon: Icons.today_rounded, title: "Today's schedule"),
+        Text(
+          'Clinical workspace',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textPrimary,
+              ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Open visits, held bills, and shortcuts for your day.',
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13.5),
+        ),
+        const SizedBox(height: 20),
+        FutureBuilder<List<List<PetVisit>>>(
+          future: Future.wait([_openFuture, _holdFuture, _readyFuture]),
+          builder: (context, snap) {
+            final open = snap.data?[0] ?? const <PetVisit>[];
+            final holds = snap.data?[1] ?? const <PetVisit>[];
+            final ready = snap.data?[2] ?? const <PetVisit>[];
+            final loading = snap.connectionState != ConnectionState.done;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _DoctorStatChip(
+                  label: 'Open visits',
+                  value: loading ? '…' : '${open.length}',
+                  icon: Icons.medical_services_outlined,
+                  color: AppTheme.primary,
+                  onTap: auth.hasPermission(AppPermissions.emrVisitsView)
+                      ? () => context.go('/emr/visits')
+                      : null,
+                ),
+                _DoctorStatChip(
+                  label: 'On hold',
+                  value: loading ? '…' : '${holds.length}',
+                  icon: Icons.pause_circle_outline,
+                  color: AppTheme.warning,
+                ),
+                _DoctorStatChip(
+                  label: 'Sent to cashier',
+                  value: loading ? '…' : '${ready.length}',
+                  icon: Icons.receipt_long_outlined,
+                  color: AppTheme.accent,
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 28),
+        DashboardSectionHeader(
+          icon: Icons.pending_actions_outlined,
+          title: 'Open visits',
+          trailing: TextButton.icon(
+            onPressed: _reload,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Refresh'),
+          ),
+        ),
         const SizedBox(height: 12),
-        FutureBuilder<List<PatientAppointment>>(
-          future: _appointmentsFuture,
+        FutureBuilder<List<PetVisit>>(
+          future: _openFuture,
           builder: (context, snap) {
             if (snap.connectionState != ConnectionState.done) {
-              return const Center(child: Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(),
-              ));
+              return const LinearProgressIndicator(minHeight: 2);
             }
-            final list = snap.data ?? [];
-            if (list.isEmpty) {
-              return const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Text('No appointments scheduled for today.'),
-                ),
+            final visits = snap.data ?? [];
+            if (visits.isEmpty) {
+              return _DoctorEmptyCard(
+                icon: Icons.medical_services_outlined,
+                message: 'No open visits — start a new consultation when ready.',
               );
             }
             return Column(
-              children: list.take(8).map((a) {
-                final time = a.appointmentTime.length >= 5
-                    ? a.appointmentTime.substring(0, 5)
-                    : a.appointmentTime;
+              children: visits.take(8).map((v) {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                      child: Text(time, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Icon(Icons.pets_rounded, color: AppTheme.primary, size: 20),
                     ),
-                    title: Text(a.pet?.name ?? 'Pet #${a.petId}'),
-                    subtitle: Text('${a.status} · ${a.appointmentType}'),
-                    trailing: a.visitId != null
-                        ? TextButton(
-                            onPressed: () => context.push('/emr/visits/${a.visitId}'),
-                            child: const Text('Visit'),
-                          )
-                        : TextButton(
-                            onPressed: () => context.push(
-                              '/emr/visits/new?appointment_id=${a.id}',
-                            ),
-                            child: const Text('Start'),
-                          ),
+                    title: Text(
+                      v.pet?.name ?? v.visitNumber,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      [
+                        v.visitNumber,
+                        if (v.chiefComplaint != null && v.chiefComplaint!.isNotEmpty)
+                          v.chiefComplaint!,
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: FilledButton.tonal(
+                      onPressed: () => context.push('/emr/visits/${v.id}/edit'),
+                      child: const Text('Continue'),
+                    ),
                   ),
                 );
               }).toList(),
@@ -983,14 +1024,9 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
           },
         ),
         const SizedBox(height: 28),
-        DashboardSectionHeader(
+        const DashboardSectionHeader(
           icon: Icons.pause_circle_outline,
           title: 'Bills on hold',
-          trailing: TextButton.icon(
-            onPressed: _reload,
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text('Refresh'),
-          ),
         ),
         const SizedBox(height: 12),
         FutureBuilder<List<PetVisit>>(
@@ -1001,9 +1037,10 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
             }
             final holds = snap.data ?? [];
             if (holds.isEmpty) {
-              return const Text(
-                'No visits on hold — complete a visit to pause billing while you add items.',
-                style: TextStyle(color: AppTheme.textSecondary),
+              return _DoctorEmptyCard(
+                icon: Icons.pause_circle_outline,
+                message:
+                    'No visits on hold — complete a visit to pause billing while you add items.',
               );
             }
             return Column(
@@ -1023,12 +1060,12 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
             );
           },
         ),
-        if (auth.hasPermission(AppPermissions.emrVisitsCreate)) ...[
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
+        const SizedBox(height: 24),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            if (auth.hasPermission(AppPermissions.emrVisitsCreate))
               QuickActionCard(
                 icon: Icons.add_circle_outline,
                 label: 'New visit',
@@ -1036,17 +1073,125 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
                 color: AppTheme.accent,
                 onTap: () => context.push('/emr/visits/new'),
               ),
+            if (auth.hasPermission(AppPermissions.emrVisitsView))
               QuickActionCard(
-                icon: Icons.event_available_rounded,
-                label: 'Appointments',
-                subtitle: 'Full calendar',
+                icon: Icons.medical_services_outlined,
+                label: 'Visit records',
+                subtitle: 'All visits',
                 color: AppTheme.primary,
-                onTap: () => context.go('/emr/appointments'),
+                onTap: () => context.go('/emr/visits'),
+              ),
+            if (auth.hasPermission(AppPermissions.customersView))
+              QuickActionCard(
+                icon: Icons.pets_outlined,
+                label: 'Patients',
+                subtitle: 'Pet directory',
+                color: const Color(0xFF8B5CF6),
+                onTap: () => context.go('/patients'),
+              ),
+            if (auth.hasPermission(AppPermissions.emrRemindersView))
+              QuickActionCard(
+                icon: Icons.notifications_outlined,
+                label: 'Reminders',
+                subtitle: 'Follow-ups due',
+                color: AppTheme.warning,
+                onTap: () => context.go('/emr/reminders'),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DoctorStatChip extends StatelessWidget {
+  const _DoctorStatChip({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          width: 160,
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: color),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary),
               ),
             ],
           ),
-        ],
-      ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DoctorEmptyCard extends StatelessWidget {
+  const _DoctorEmptyCard({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Icon(icon, color: AppTheme.textSecondary, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(color: AppTheme.textSecondary, height: 1.4),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -233,14 +233,6 @@ class _ManagerDashboardContent extends StatelessWidget {
         trend: syntheticTrend(d.outstandingDues),
       ),
       DashboardStatCard(
-        title: "TODAY'S APPOINTMENTS",
-        value: '${d.todayAppointments.count}',
-        subtitle: 'Scheduled for today',
-        icon: Icons.calendar_today_rounded,
-        color: const Color(0xFF0EA5E9),
-        trend: syntheticTrend(d.todayAppointments.count),
-      ),
-      DashboardStatCard(
         title: 'UPCOMING VACCINES',
         value: '${d.upcomingVaccines}',
         subtitle: 'Due within 7 days',
@@ -410,15 +402,6 @@ class _ManagerDashboardContent extends StatelessWidget {
         subtitle: 'Add to inventory',
         color: AppTheme.accent,
         onTap: () => context.go('/products/new'),
-      ));
-    }
-    if (auth.hasPermission(AppPermissions.patientAppointmentsCreate)) {
-      actions.add(QuickActionCard(
-        icon: Icons.event_available_rounded,
-        label: 'New Appointment',
-        subtitle: 'Schedule now',
-        color: const Color(0xFF8B5CF6),
-        onTap: () => context.go('/emr/appointments/new'),
       ));
     }
     if (auth.hasPermission(AppPermissions.inventoryTransfer)) {
