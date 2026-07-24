@@ -9,7 +9,7 @@ import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
 import '../../data/models/product.dart';
 import '../../data/services/emr_master_data_service.dart';
-
+import '../../core/widgets/app_dropdown.dart';
 class VisitFormScreen extends StatefulWidget {
   const VisitFormScreen({super.key, this.visitId, this.appointmentId, this.petId});
 
@@ -289,6 +289,47 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           await context.read<AppServices>().emr.getDiagnosisSuggestions(q: q);
       if (mounted) setState(() => _diagnosisSuggestions = results);
     } catch (_) {}
+  }
+
+  /// Search uses the last comma-separated segment so multi-select typing works.
+  String _complaintSearchTerm(String text) {
+    final parts = text.split(',');
+    return parts.isEmpty ? '' : parts.last.trim();
+  }
+
+  Future<void> _searchComplaints(String text) async {
+    final q = _complaintSearchTerm(text);
+    try {
+      final results =
+          await context.read<AppServices>().emr.getComplaints(q: q.isEmpty ? null : q);
+      if (mounted) setState(() => _complaintSuggestions = results);
+    } catch (_) {}
+  }
+
+  void _applyComplaintSuggestion(String complaint) {
+    final text = _complaint.text;
+    final q = _complaintSearchTerm(text);
+    if (text.trim().isEmpty) {
+      _complaint.text = complaint;
+    } else if (q.isNotEmpty &&
+        complaint.toLowerCase().startsWith(q.toLowerCase())) {
+      // Replace the in-progress typed segment with the selected template.
+      final lastComma = text.lastIndexOf(',');
+      if (lastComma < 0) {
+        _complaint.text = complaint;
+      } else {
+        _complaint.text =
+            '${text.substring(0, lastComma + 1).trimRight()} $complaint';
+      }
+    } else if (q.isEmpty) {
+      _complaint.text = '${text.trimRight()} $complaint';
+    } else {
+      _complaint.text = '${text.trimRight()}, $complaint';
+    }
+    _complaint.selection =
+        TextSelection.collapsed(offset: _complaint.text.length);
+    setState(() {});
+    _searchComplaints('');
   }
 
   void _addDiagnosisFromSuggestion(VisitDiagnosis d) {
@@ -590,7 +631,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ),
           ],
           const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
+          AppDropdownButtonFormField<String>(
             value: _visitType,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Visit type'),
@@ -606,7 +647,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ),
           const SizedBox(height: 12),
           if (_doctors.isNotEmpty)
-            DropdownButtonFormField<int>(
+            AppDropdownButtonFormField<int>(
               value: _selectedDoctor?.id,
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Doctor'),
@@ -768,20 +809,20 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           TextField(
             controller: _complaint,
             maxLines: 2,
-            decoration: const InputDecoration(hintText: 'Reason for visit'),
+            decoration: const InputDecoration(
+              hintText: 'Type to search or add complaints...',
+            ),
+            onChanged: _searchComplaints,
           ),
           if (_complaintSuggestions.isNotEmpty) ...[
             const SizedBox(height: 8),
             Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: _complaintSuggestions.take(8).map((c) {
+              children: _complaintSuggestions.take(12).map((c) {
                 return ActionChip(
                   label: Text(c, style: const TextStyle(fontSize: 12)),
-                  onPressed: () {
-                    _complaint.text =
-                        _complaint.text.isEmpty ? c : '${_complaint.text}, $c';
-                  },
+                  onPressed: () => _applyComplaintSuggestion(c),
                 );
               }).toList(),
             ),
