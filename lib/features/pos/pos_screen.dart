@@ -13,6 +13,7 @@ import '../../core/connectivity/connectivity_notifier.dart';
 import '../../core/responsive/breakpoints.dart';
 import '../../core/responsive/desktop_layout_helper.dart';
 import '../../core/session/auth_session.dart';
+import '../emr/visit_billing_queue_notifier.dart';
 import '../emr/widgets/visit_billing_queue_panel.dart';
 import '../../data/local/offline_invoice_queue.dart';
 import '../../data/local/product_local_dao.dart';
@@ -397,6 +398,7 @@ class _PosScreenState extends State<PosScreen> {
       _loadedVisitNumber = null;
       _lastLoadedVisitId = null;
     });
+    unawaited(context.read<VisitBillingQueueNotifier>().refresh());
     final term = _search.text.trim();
     if (term.isNotEmpty) {
       await _runSearch(term, immediate: true);
