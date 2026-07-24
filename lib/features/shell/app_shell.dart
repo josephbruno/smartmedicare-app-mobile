@@ -54,13 +54,6 @@ class _AppShellState extends State<AppShell> {
           activeIcon: Icons.dashboard_rounded,
           location: '/dashboard',
         ),
-        if (auth.hasPermission(AppPermissions.patientAppointmentsView))
-          const _NavDest(
-            label: 'Appts',
-            icon: Icons.event_outlined,
-            activeIcon: Icons.event_rounded,
-            location: '/emr/appointments',
-          ),
         if (auth.hasPermission(AppPermissions.emrVisitsView))
           const _NavDest(
             label: 'Visits',
@@ -815,8 +808,9 @@ List<_MenuItem> _menuItems(AuthSession auth) {
         _MenuItem(label: 'Customers', icon: Icons.people_outline, path: '/customers'),
         _MenuItem(label: 'Patient List', icon: Icons.pets_outlined, path: '/patients'),
       ],
-      if (can('patient_appointments.view'))
-        _MenuItem(label: 'Appointments', icon: Icons.event_outlined, path: '/emr/appointments'),
+      // Appointments menu hidden for now
+      // if (can('patient_appointments.view'))
+      //   _MenuItem(label: 'Appointments', icon: Icons.event_outlined, path: '/emr/appointments'),
       if (can('emr.visits.view'))
         _MenuItem(label: 'Visit Records', icon: Icons.medical_services_outlined, path: '/emr/visits'),
       if (can('emr.reminders.view'))

@@ -251,8 +251,9 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
   add('Customers', '/customers', Icons.people_outline, visible: () => can(AppPermissions.customersView),
       keywords: ['advance', 'loyalty', 'credit limit', 'treatment advance']);
   add('Patient list', '/patients', Icons.pets_outlined, visible: () => can(AppPermissions.petsView));
-  add('Appointments', '/emr/appointments', Icons.event_outlined,
-      visible: () => can(AppPermissions.patientAppointmentsView));
+  // Appointments menu hidden for now
+  // add('Appointments', '/emr/appointments', Icons.event_outlined,
+  //     visible: () => can(AppPermissions.patientAppointmentsView));
   add('Visit records', '/emr/visits', Icons.medical_services_outlined,
       visible: () => can(AppPermissions.emrVisitsView), keywords: ['emr', 'consultation']);
   add('New visit', '/emr/visits/new', Icons.add_circle_outline,

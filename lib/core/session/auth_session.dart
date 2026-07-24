@@ -86,9 +86,6 @@ class AuthSession extends ChangeNotifier {
     }
     if (hasRole(AppRoles.doctor)) {
       if (hasPermission(AppPermissions.emrVisitsView)) return '/emr/visits';
-      if (hasPermission(AppPermissions.patientAppointmentsView)) {
-        return '/emr/appointments';
-      }
     }
     return '/dashboard';
   }
