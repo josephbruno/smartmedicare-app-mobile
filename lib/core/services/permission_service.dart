@@ -73,6 +73,7 @@ abstract class AppPermissions {
   static const String emrDocumentsView = 'emr.documents.view';
   static const String emrDocumentsUpload = 'emr.documents.upload';
   static const String emrRemindersView = 'emr.reminders.view';
+  static const String emrRemindersManage = 'emr.reminders.manage';
 
   // Appointments
   static const String patientAppointmentsView = 'patient_appointments.view';
@@ -147,6 +148,7 @@ abstract class AppRoles {
     AppPermissions.emrDocumentsView,
     AppPermissions.emrDocumentsUpload,
     AppPermissions.emrRemindersView,
+    AppPermissions.emrRemindersManage,
     AppPermissions.patientAppointmentsView,
     AppPermissions.patientAppointmentsCreate,
     AppPermissions.patientAppointmentsEdit,

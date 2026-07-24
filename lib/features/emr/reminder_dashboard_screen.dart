@@ -28,11 +28,12 @@ class _ReminderDashboardScreenState extends State<ReminderDashboardScreen> {
 
   void _reload() {
     final emr = context.read<AppServices>().emr;
-    _summaryFuture = emr.reminderDashboard();
-    final query = <String, dynamic>{'per_page': 30};
+    final query = <String, dynamic>{'per_page': 50};
     if (_statusFilter != 'all') query['status'] = _statusFilter;
     if (_typeFilter != 'all') query['type'] = _typeFilter;
+    // Load due first so ensureUpcomingReminders runs before summary counts.
     _dueFuture = emr.dueReminders(query: query);
+    _summaryFuture = _dueFuture.then((_) => emr.reminderDashboard());
   }
 
   Future<void> _sendNow(PetReminder r) async {
@@ -86,10 +87,19 @@ class _ReminderDashboardScreenState extends State<ReminderDashboardScreen> {
             FutureBuilder<ReminderSummary>(
               future: _summaryFuture,
               builder: (context, snap) {
-                if (!snap.hasData) {
+                if (snap.connectionState != ConnectionState.done) {
                   return const SizedBox(
                     height: 80,
                     child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (snap.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      '${snap.error}',
+                      style: const TextStyle(color: AppTheme.danger),
+                    ),
                   );
                 }
                 final s = snap.data!;
