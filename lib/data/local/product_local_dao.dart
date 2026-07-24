@@ -36,6 +36,7 @@ class ProductLocalDao {
           'gst_type': p.gstType,
           'track_inventory': p.trackInventory ? 1 : 0,
           'is_service': p.isService ? 1 : 0,
+          'is_medicine': p.isMedicine ? 1 : 0,
           'is_active': p.isActive ? 1 : 0,
           'reorder_level': p.reorderLevel,
           'current_stock': p.currentStock,
@@ -198,6 +199,7 @@ class ProductLocalDao {
       hasExpiry: product.hasExpiry,
       isPetFood: product.isPetFood,
       isService: product.isService,
+      isMedicine: product.isMedicine,
       isActive: product.isActive,
       currentStock: next,
       categoryName: product.categoryName,
@@ -242,6 +244,7 @@ class ProductLocalDao {
         'has_expiry': p.hasExpiry,
         'is_pet_food': p.isPetFood,
         'is_service': p.isService,
+        'is_medicine': p.isMedicine,
         'is_active': p.isActive,
         if (p.currentStock != null) 'current_stock': p.currentStock,
         if (p.categoryName != null)

@@ -52,6 +52,7 @@ class ProductListScreen extends StatelessWidget {
               onRowTap: canEdit ? (p) => context.go('/products/${p.id}/edit') : null,
               columns: const [
                 TableColumnDef(label: 'Product', flex: 2, cellBuilder: _nameCell),
+                TableColumnDef(label: 'Type', flex: 1, cellBuilder: _typeCell),
                 TableColumnDef(label: 'SKU', flex: 1, cellBuilder: _skuCell),
                 TableColumnDef(label: 'Category', flex: 1.2, cellBuilder: _categoryCell),
                 TableColumnDef(
@@ -91,6 +92,19 @@ class ProductListScreen extends StatelessWidget {
         style: const TextStyle(fontWeight: FontWeight.w600),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
+      );
+
+  static Widget _typeCell(BuildContext context, Product p) => Text(
+        p.productTypeLabel,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: p.isService
+              ? AppTheme.accent
+              : p.isMedicine
+                  ? const Color(0xFFA21CAF)
+                  : AppTheme.primary,
+        ),
       );
 
   static Widget _skuCell(BuildContext context, Product p) =>

@@ -14,20 +14,25 @@ class AppDatabase {
     final path = p.join(dir.path, 'maran_billing.db');
     _db = await openDatabase(
       path,
-      version: 2,
-      onCreate: _createV2,
+      version: 3,
+      onCreate: _createV3,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute('DROP TABLE IF EXISTS product_cache');
           await db.execute('DROP TABLE IF EXISTS customer_cache');
           await _createV2Tables(db);
         }
+        if (oldVersion < 3) {
+          await db.execute(
+            'ALTER TABLE products ADD COLUMN is_medicine INTEGER NOT NULL DEFAULT 0',
+          );
+        }
       },
     );
     return _db!;
   }
 
-  static Future<void> _createV2(Database db, int version) async {
+  static Future<void> _createV3(Database db, int version) async {
     await _createV2Tables(db);
   }
 
@@ -53,6 +58,7 @@ class AppDatabase {
         gst_type TEXT NOT NULL DEFAULT 'exclusive',
         track_inventory INTEGER NOT NULL DEFAULT 0,
         is_service INTEGER NOT NULL DEFAULT 0,
+        is_medicine INTEGER NOT NULL DEFAULT 0,
         is_active INTEGER NOT NULL DEFAULT 1,
         reorder_level INTEGER NOT NULL DEFAULT 0,
         current_stock REAL,

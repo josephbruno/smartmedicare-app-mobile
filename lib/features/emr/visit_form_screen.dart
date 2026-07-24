@@ -408,45 +408,127 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     });
   }
 
-  Future<Product?> _pickProduct({String? initial, bool servicesOnly = false}) async {
+  Future<Product?> _pickProduct({
+    String? initial,
+    String type = 'product', // product | service | medicine
+    bool allowCreateService = false,
+    double? requiredQty,
+  }) async {
     final search = TextEditingController(text: initial ?? '');
     List<Product> results = [];
+    var searching = false;
+
+    Future<List<Product>> fetch(String q) async {
+      if (q.trim().length < 2) return [];
+      return context.read<AppServices>().products.list(
+            query: {
+              'search': q.trim(),
+              'per_page': 20,
+              'is_active': 1,
+              'type': type,
+            },
+          );
+    }
+
     if ((initial ?? '').length >= 2) {
       try {
-        results = await context.read<AppServices>().products.list(
-              query: {
-                'search': initial,
-                'per_page': 20,
-                if (servicesOnly) 'type': 'service',
-              },
-            );
+        results = await fetch(initial!);
       } catch (_) {}
     }
 
     if (!mounted) return null;
+
+    final title = switch (type) {
+      'service' => 'Select service product',
+      'medicine' => 'Select medicine product',
+      _ => 'Select product',
+    };
+
     return showDialog<Product>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) {
           Future<void> runSearch(String q) async {
             if (q.length < 2) {
-              setDialog(() => results = []);
+              setDialog(() {
+                results = [];
+                searching = false;
+              });
               return;
             }
+            setDialog(() => searching = true);
             try {
-              final list = await context.read<AppServices>().products.list(
-                    query: {
-                      'search': q,
-                      'per_page': 20,
-                      if (servicesOnly) 'type': 'service',
+              final list = await fetch(q);
+              setDialog(() {
+                results = list;
+                searching = false;
+              });
+            } catch (_) {
+              setDialog(() => searching = false);
+            }
+          }
+
+          Future<void> createService() async {
+            final nameCtrl = TextEditingController(text: search.text.trim());
+            final priceCtrl = TextEditingController(text: '0');
+            final created = await showDialog<Product>(
+              context: ctx,
+              builder: (c2) => AlertDialog(
+                title: const Text('Add service product'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(labelText: 'Service name'),
+                      autofocus: true,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: priceCtrl,
+                      decoration: const InputDecoration(labelText: 'Price (₹)'),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(c2), child: const Text('Cancel')),
+                  FilledButton(
+                    onPressed: () async {
+                      final name = nameCtrl.text.trim();
+                      final price = double.tryParse(priceCtrl.text.trim()) ?? 0;
+                      if (name.isEmpty) return;
+                      try {
+                        final p = await context.read<AppServices>().products.create({
+                          'name': name,
+                          'purchase_price': 0,
+                          'selling_price': price,
+                          'mrp': price,
+                          'gst_rate': 0,
+                          'gst_type': 'exclusive',
+                          'is_service': true,
+                          'is_medicine': false,
+                          'product_type': 'service',
+                          'track_inventory': false,
+                          'is_active': true,
+                        });
+                        if (c2.mounted) Navigator.pop(c2, p);
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          AppMessenger.show(ctx, SnackBar(content: Text('$e')));
+                        }
+                      }
                     },
-                  );
-              setDialog(() => results = list);
-            } catch (_) {}
+                    child: const Text('Create'),
+                  ),
+                ],
+              ),
+            );
+            if (created != null && ctx.mounted) Navigator.pop(ctx, created);
           }
 
           return AlertDialog(
-            title: Text(servicesOnly ? 'Link service product' : 'Link product'),
+            title: Text(title),
             content: SizedBox(
               width: double.maxFinite,
               child: Column(
@@ -454,28 +536,75 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 children: [
                   TextField(
                     controller: search,
-                    decoration: const InputDecoration(hintText: 'Search products...'),
+                    decoration: InputDecoration(
+                      hintText: type == 'medicine'
+                          ? 'Search medicines...'
+                          : type == 'service'
+                              ? 'Search services...'
+                              : 'Search products...',
+                    ),
                     onChanged: runSearch,
                   ),
                   const SizedBox(height: 8),
-                  Flexible(
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: results
-                          .map(
-                            (p) => ListTile(
-                              title: Text(p.name),
-                              subtitle: Text('₹${p.sellingPrice}'),
-                              onTap: () => Navigator.pop(ctx, p),
-                            ),
-                          )
-                          .toList(),
+                  if (searching)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: results.isEmpty
+                            ? [
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 16),
+                                  child: Text(
+                                    'Type at least 2 characters to search',
+                                    style: TextStyle(color: AppTheme.textSecondary),
+                                  ),
+                                ),
+                              ]
+                            : results.map((p) {
+                                final stock = p.currentStock;
+                                final qtyNeeded = requiredQty ?? 1;
+                                final out = type == 'medicine' &&
+                                    p.trackInventory &&
+                                    (stock == null || stock < qtyNeeded);
+                                final subtitle = type == 'medicine'
+                                    ? '₹${p.sellingPrice.toStringAsFixed(2)}'
+                                        '${p.trackInventory ? ' · Stock: ${stock?.toStringAsFixed(0) ?? '0'}' : ''}'
+                                        '${out ? ' · Out of stock' : ''}'
+                                    : '₹${p.sellingPrice.toStringAsFixed(2)}'
+                                        '${p.isService ? ' · Service' : ''}';
+                                return ListTile(
+                                  enabled: !out,
+                                  title: Text(p.name),
+                                  subtitle: Text(
+                                    subtitle,
+                                    style: TextStyle(
+                                      color: out ? AppTheme.danger : AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                  trailing: out
+                                      ? const Icon(Icons.block, color: AppTheme.danger, size: 18)
+                                      : null,
+                                  onTap: out
+                                      ? null
+                                      : () => Navigator.pop(ctx, p),
+                                );
+                              }).toList(),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
             actions: [
+              if (allowCreateService && type == 'service')
+                TextButton(
+                  onPressed: createService,
+                  child: const Text('Add service'),
+                ),
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
             ],
           );
@@ -503,6 +632,36 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         const SnackBar(content: Text('Please select a patient (pet)')),
       );
       return null;
+    }
+
+    for (final t in _treatments) {
+      if (t.nameCtrl.text.trim().isEmpty) continue;
+      if (t.productId == null) {
+        AppMessenger.show(
+          context,
+          SnackBar(
+            content: Text(
+              'Link a service product for treatment "${t.nameCtrl.text.trim()}" (use the inventory icon or Add service).',
+            ),
+          ),
+        );
+        return null;
+      }
+    }
+
+    for (final m in _medicines) {
+      if (m.nameCtrl.text.trim().isEmpty) continue;
+      if (m.productId == null) {
+        AppMessenger.show(
+          context,
+          SnackBar(
+            content: Text(
+              'Link a medicine product for "${m.nameCtrl.text.trim()}" so it can be billed and stock-checked.',
+            ),
+          ),
+        );
+        return null;
+      }
     }
 
     final timeStr =
@@ -730,7 +889,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                       tooltip: 'Link service product (for GST)',
                       onPressed: () async {
                         final p = await _pickProduct(
-                          servicesOnly: true,
+                          type: 'service',
+                          allowCreateService: true,
                           initial: _serviceChargeProductName ?? 'consultation',
                         );
                         if (p != null) {
@@ -995,7 +1155,20 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               ),
               const Spacer(),
               TextButton.icon(
-                onPressed: () => setState(() => _treatments.add(_TreatmentRow())),
+                onPressed: () async {
+                  final p = await _pickProduct(
+                    type: 'service',
+                    allowCreateService: true,
+                  );
+                  if (p == null) return;
+                  setState(() {
+                    _treatments.add(_TreatmentRow(
+                      productId: p.id,
+                      name: p.name,
+                      unitPrice: p.sellingPrice,
+                    ));
+                  });
+                },
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Add'),
               ),
@@ -1004,7 +1177,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           if (_treatments.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('No treatments added',
+              child: Text('No treatments — add a service product to bill',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
             ),
           ..._treatments.asMap().entries.map((e) {
@@ -1043,10 +1216,20 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.inventory_2_outlined, size: 20),
-                          tooltip: 'Link product',
+                          icon: Icon(
+                            Icons.inventory_2_outlined,
+                            size: 20,
+                            color: t.productId != null ? AppTheme.accent : AppTheme.primary,
+                          ),
+                          tooltip: t.productId != null
+                              ? 'Service product linked'
+                              : 'Link / add service product',
                           onPressed: () async {
-                            final p = await _pickProduct(initial: t.nameCtrl.text);
+                            final p = await _pickProduct(
+                              initial: t.nameCtrl.text,
+                              type: 'service',
+                              allowCreateService: true,
+                            );
                             if (p != null) {
                               setState(() {
                                 t.productId = p.id;
@@ -1101,9 +1284,29 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             children: [
               Text('Prescriptions / Medicines',
                   style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('Medicine product + stock', style: TextStyle(fontSize: 11)),
+              ),
               const Spacer(),
               TextButton.icon(
-                onPressed: () => setState(() => _medicines.add(_MedicineRow())),
+                onPressed: () async {
+                  final p = await _pickProduct(type: 'medicine', requiredQty: 1);
+                  if (p == null) return;
+                  setState(() {
+                    final row = _MedicineRow(
+                      productId: p.id,
+                      name: p.name,
+                      unitPrice: p.sellingPrice,
+                    );
+                    _medicines.add(row);
+                  });
+                },
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Add'),
               ),
@@ -1112,7 +1315,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           if (_medicines.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('No medicines added',
+              child: Text('No medicines added — pick medicine products with stock',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
             ),
           ..._medicines.asMap().entries.map((e) {
@@ -1151,10 +1354,21 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.inventory_2_outlined, size: 20),
-                          tooltip: 'Link product',
+                          icon: Icon(
+                            Icons.medication_outlined,
+                            size: 20,
+                            color: m.productId != null ? AppTheme.accent : AppTheme.primary,
+                          ),
+                          tooltip: m.productId != null
+                              ? 'Medicine product linked'
+                              : 'Link medicine product (stock checked)',
                           onPressed: () async {
-                            final p = await _pickProduct(initial: m.nameCtrl.text);
+                            final qty = double.tryParse(m.qtyCtrl.text) ?? 1;
+                            final p = await _pickProduct(
+                              initial: m.nameCtrl.text,
+                              type: 'medicine',
+                              requiredQty: qty,
+                            );
                             if (p != null) {
                               setState(() {
                                 m.productId = p.id;

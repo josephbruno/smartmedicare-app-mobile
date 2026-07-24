@@ -27,43 +27,99 @@ class EmrPetHub extends StatelessWidget {
       if (auth.hasPermission('emr.documents.view'))
         _HubLink('Documents', Icons.folder_outlined, '/emr/pets/$petId/documents'),
       if (auth.hasPermission('emr.visits.create'))
-        _HubLink('New visit', Icons.add_circle_outline, '/emr/visits/new?pet_id=$petId'),
+        _HubLink(
+          'New visit',
+          Icons.add_circle_outline,
+          '/emr/visits/new?pet_id=$petId',
+          primary: true,
+        ),
     ];
 
     if (links.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (petName != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              petName!,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: links
-              .map(
-                (l) => ActionChip(
-                  avatar: Icon(l.icon, size: 18, color: AppTheme.primary),
-                  label: Text(l.label),
-                  onPressed: () => context.push(l.path),
+    final title = petName != null && petName!.isNotEmpty
+        ? 'More for $petName'
+        : 'Pet records';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(9),
                 ),
-              )
-              .toList(),
-        ),
-      ],
+                child: const Icon(Icons.apps_outlined, size: 17, color: AppTheme.primary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: links.map((l) {
+              if (l.primary) {
+                return FilledButton.icon(
+                  onPressed: () => context.push(l.path),
+                  icon: Icon(l.icon, size: 16),
+                  label: Text(l.label),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 40),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+              }
+              return OutlinedButton.icon(
+                onPressed: () => context.push(l.path),
+                icon: Icon(l.icon, size: 16, color: AppTheme.primary),
+                label: Text(l.label),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.textPrimary,
+                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                  backgroundColor: const Color(0xFFF8FAFC),
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _HubLink {
-  const _HubLink(this.label, this.icon, this.path);
+  const _HubLink(this.label, this.icon, this.path, {this.primary = false});
   final String label;
   final IconData icon;
   final String path;
+  final bool primary;
 }

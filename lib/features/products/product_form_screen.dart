@@ -44,7 +44,26 @@ class _ProductFormScreenState extends State<ProductFormScreen>
   bool _hasExpiry = false;
   bool _isPetFood = false;
   bool _isService = false;
+  bool _isMedicine = false;
   bool _isActive = true;
+
+  String get _productType {
+    if (_isService) return 'service';
+    if (_isMedicine) return 'medicine';
+    return 'product';
+  }
+
+  void _setProductType(String type) {
+    setState(() {
+      _isService = type == 'service';
+      _isMedicine = type == 'medicine';
+      if (_isService) {
+        _trackInventory = false;
+      } else if (_isMedicine && !_trackInventory) {
+        _trackInventory = true;
+      }
+    });
+  }
 
   List<Category> _categories = [];
   List<Brand> _brands = [];
@@ -113,6 +132,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
     _hasExpiry = p.hasExpiry;
     _isPetFood = p.isPetFood;
     _isService = p.isService;
+    _isMedicine = p.isMedicine;
     _isActive = p.isActive;
   }
 
@@ -202,6 +222,8 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         'has_expiry': _trackInventory && _hasExpiry,
         'is_pet_food': _isPetFood,
         'is_service': _isService,
+        'is_medicine': _isMedicine,
+        'product_type': _productType,
         'is_active': _isActive,
       };
 
@@ -333,13 +355,25 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         const SizedBox(height: 12),
         descField,
         const SizedBox(height: 16),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Service'),
-          subtitle: Text(_isService ? 'This is a service' : 'Physical product'),
-          value: _isService,
-          activeColor: AppTheme.primary,
-          onChanged: (v) => setState(() => _isService = v),
+        Text('Product type', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'product', label: Text('Product'), icon: Icon(Icons.inventory_2_outlined, size: 16)),
+            ButtonSegment(value: 'medicine', label: Text('Medicine'), icon: Icon(Icons.medication_outlined, size: 16)),
+            ButtonSegment(value: 'service', label: Text('Service'), icon: Icon(Icons.miscellaneous_services_outlined, size: 16)),
+          ],
+          selected: {_productType},
+          onSelectionChanged: (s) => _setProductType(s.first),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _productType == 'medicine'
+              ? 'Medicines track stock and are used on visit prescriptions.'
+              : _productType == 'service'
+                  ? 'Services have no stock and can be billed on visits directly.'
+                  : 'Standard sellable product.',
+          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,

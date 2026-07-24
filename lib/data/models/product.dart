@@ -30,6 +30,7 @@ class Product {
     required this.hasExpiry,
     required this.isPetFood,
     required this.isService,
+    required this.isMedicine,
     required this.isActive,
     this.currentStock,
     this.categoryName,
@@ -58,11 +59,32 @@ class Product {
   final bool hasExpiry;
   final bool isPetFood;
   final bool isService;
+  final bool isMedicine;
   final bool isActive;
   final double? currentStock;
   final String? categoryName;
   final String? brandName;
   final String? unitAbbrev;
+
+  String get productType {
+    if (isService) return 'service';
+    if (isMedicine) return 'medicine';
+    return 'product';
+  }
+
+  String get productTypeLabel {
+    switch (productType) {
+      case 'service':
+        return 'Service';
+      case 'medicine':
+        return 'Medicine';
+      default:
+        return 'Product';
+    }
+  }
+
+  bool get isOutOfStock =>
+      trackInventory && !isService && (currentStock == null || currentStock! <= 0);
 
   factory Product.fromJson(Map<String, dynamic> j) {
     Map<String, dynamic>? nested(String key) {
@@ -97,6 +119,7 @@ class Product {
       hasExpiry: j['has_expiry'] as bool? ?? false,
       isPetFood: j['is_pet_food'] as bool? ?? false,
       isService: j['is_service'] as bool? ?? false,
+      isMedicine: j['is_medicine'] as bool? ?? false,
       isActive: j['is_active'] as bool? ?? true,
       currentStock: numOrNull(j['current_stock']),
       categoryName: cat?['name']?.toString(),
