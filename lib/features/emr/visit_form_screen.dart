@@ -414,369 +414,17 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     String type = 'product', // product | service | medicine
     bool allowCreateService = false,
     double? requiredQty,
-  }) async {
-    final search = TextEditingController(text: initial ?? '');
-    List<Product> results = [];
-    var searching = false;
-
-    Future<List<Product>> fetch(String q) async {
-      if (q.trim().length < 2) return [];
-      return context.read<AppServices>().products.list(
-            query: {
-              'search': q.trim(),
-              'per_page': 20,
-              'is_active': 1,
-              'type': type,
-            },
-          );
-    }
-
-    if ((initial ?? '').length >= 2) {
-      try {
-        results = await fetch(initial!);
-      } catch (_) {}
-    }
-
-    if (!mounted) {
-      search.dispose();
-      return null;
-    }
-
-    final title = switch (type) {
-      'service' => 'Select service product',
-      'medicine' => 'Select medicine product',
-      _ => 'Select product',
-    };
-    final subtitle = switch (type) {
-      'service' => 'Link a billable service for GST and invoicing',
-      'medicine' => 'Link inventory so stock and billing stay in sync',
-      _ => 'Search the catalog and pick an item',
-    };
-    final icon = switch (type) {
-      'service' => Icons.medical_services_outlined,
-      'medicine' => Icons.medication_outlined,
-      _ => Icons.inventory_2_outlined,
-    };
-    final searchHint = switch (type) {
-      'medicine' => 'Search medicines...',
-      'service' => 'Search services...',
-      _ => 'Search products...',
-    };
-
-    try {
-      return await showAppDialog<Product>(
-        context: context,
-        builder: (ctx) => StatefulBuilder(
-          builder: (ctx, setDialog) {
-            Future<void> runSearch(String q) async {
-              if (q.length < 2) {
-                setDialog(() {
-                  results = [];
-                  searching = false;
-                });
-                return;
-              }
-              setDialog(() => searching = true);
-              try {
-                final list = await fetch(q);
-                setDialog(() {
-                  results = list;
-                  searching = false;
-                });
-              } catch (_) {
-                setDialog(() => searching = false);
-              }
-            }
-
-            Future<void> createService() async {
-              final nameCtrl = TextEditingController(text: search.text.trim());
-              final priceCtrl = TextEditingController(text: '0');
-              final creating = ValueNotifier<bool>(false);
-
-              try {
-                final created = await showAppAlertForm<Product>(
-                  context: ctx,
-                  title: 'Add service product',
-                  subtitle: 'Creates a catalog service for billing',
-                  icon: Icons.add_business_outlined,
-                  maxWidth: 440,
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        controller: nameCtrl,
-                        decoration: appFormFieldDecoration(
-                          'Service name *',
-                          hint: 'e.g. Consultation',
-                        ),
-                        textCapitalization: TextCapitalization.words,
-                        autofocus: true,
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: priceCtrl,
-                        decoration: appFormFieldDecoration(
-                          'Price (₹)',
-                          hint: '0.00',
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    ValueListenableBuilder<bool>(
-                      valueListenable: creating,
-                      builder: (_, busy, __) => OutlinedButton(
-                        onPressed: busy
-                            ? null
-                            : () =>
-                                Navigator.of(ctx, rootNavigator: true).pop(),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: creating,
-                      builder: (_, busy, __) => FilledButton(
-                        onPressed: busy
-                            ? null
-                            : () async {
-                                final name = nameCtrl.text.trim();
-                                final price =
-                                    double.tryParse(priceCtrl.text.trim()) ?? 0;
-                                if (name.isEmpty) {
-                                  AppMessenger.show(
-                                    ctx,
-                                    const SnackBar(
-                                      content: Text('Enter a service name'),
-                                    ),
-                                  );
-                                  return;
-                                }
-                                creating.value = true;
-                                try {
-                                  final p = await context
-                                      .read<AppServices>()
-                                      .products
-                                      .create({
-                                    'name': name,
-                                    'purchase_price': 0,
-                                    'selling_price': price,
-                                    'mrp': price,
-                                    'gst_rate': 0,
-                                    'gst_type': 'exclusive',
-                                    'is_service': true,
-                                    'is_medicine': false,
-                                    'product_type': 'service',
-                                    'track_inventory': false,
-                                    'is_active': true,
-                                  });
-                                  if (ctx.mounted) {
-                                    Navigator.of(ctx, rootNavigator: true)
-                                        .pop(p);
-                                  }
-                                } catch (e) {
-                                  creating.value = false;
-                                  if (ctx.mounted) {
-                                    AppMessenger.show(
-                                      ctx,
-                                      SnackBar(content: Text('$e')),
-                                    );
-                                  }
-                                }
-                              },
-                        child: busy
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text('Create'),
-                      ),
-                    ),
-                  ],
-                );
-                if (created != null && ctx.mounted) {
-                  Navigator.pop(ctx, created);
-                }
-              } finally {
-                creating.dispose();
-                nameCtrl.dispose();
-                priceCtrl.dispose();
-              }
-            }
-
-            return AppFormDialogShell(
-              title: title,
-              subtitle: subtitle,
-              icon: icon,
-              maxWidth: 520,
-              onClose: () => Navigator.pop(ctx),
-              body: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: search,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: searchHint,
-                      prefixIcon: const Icon(Icons.search, size: 22),
-                      suffixIcon: searching
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                            )
-                          : (search.text.isNotEmpty
-                              ? IconButton(
-                                  tooltip: 'Clear',
-                                  icon: const Icon(Icons.close, size: 20),
-                                  onPressed: () {
-                                    search.clear();
-                                    setDialog(() {
-                                      results = [];
-                                      searching = false;
-                                    });
-                                  },
-                                )
-                              : null),
-                    ),
-                    onChanged: runSearch,
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 320,
-                    child: searching && results.isEmpty
-                        ? const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : results.isEmpty
-                            ? Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Text(
-                                    search.text.trim().length < 2
-                                        ? 'Type at least 2 characters to search'
-                                        : 'No matching products found',
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: AppTheme.textSecondary,
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : ListView.separated(
-                                itemCount: results.length,
-                                separatorBuilder: (_, __) => const Divider(
-                                  height: 1,
-                                  color: Color(0xFFE2E8F0),
-                                ),
-                                itemBuilder: (_, i) {
-                                  final p = results[i];
-                                  final stock = p.currentStock;
-                                  final qtyNeeded = requiredQty ?? 1;
-                                  final out = type == 'medicine' &&
-                                      p.trackInventory &&
-                                      (stock == null || stock < qtyNeeded);
-                                  final subtitleText = type == 'medicine'
-                                      ? '₹${p.sellingPrice.toStringAsFixed(2)}'
-                                          '${p.trackInventory ? ' · Stock: ${stock?.toStringAsFixed(0) ?? '0'}' : ''}'
-                                          '${out ? ' · Out of stock' : ''}'
-                                      : '₹${p.sellingPrice.toStringAsFixed(2)}'
-                                          '${p.isService ? ' · Service' : ''}';
-                                  return ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 2,
-                                    ),
-                                    enabled: !out,
-                                    leading: CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: (out
-                                              ? AppTheme.danger
-                                              : AppTheme.primary)
-                                          .withValues(alpha: 0.12),
-                                      child: Icon(
-                                        out
-                                            ? Icons.block
-                                            : (type == 'medicine'
-                                                ? Icons.medication_outlined
-                                                : Icons.inventory_2_outlined),
-                                        size: 18,
-                                        color: out
-                                            ? AppTheme.danger
-                                            : AppTheme.primary,
-                                      ),
-                                    ),
-                                    title: Text(
-                                      p.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: out
-                                            ? AppTheme.textSecondary
-                                            : AppTheme.textPrimary,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      subtitleText,
-                                      style: TextStyle(
-                                        color: out
-                                            ? AppTheme.danger
-                                            : AppTheme.textSecondary,
-                                      ),
-                                    ),
-                                    onTap: out
-                                        ? null
-                                        : () => Navigator.pop(ctx, p),
-                                  );
-                                },
-                              ),
-                  ),
-                ],
-              ),
-              footer: Container(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
-                ),
-                child: Row(
-                  children: [
-                    if (allowCreateService && type == 'service') ...[
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: createService,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add service'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      );
-    } finally {
-      search.dispose();
-    }
+  }) {
+    if (!mounted) return Future.value(null);
+    return showAppDialog<Product>(
+      context: context,
+      builder: (ctx) => _ProductPickerDialog(
+        type: type,
+        initialQuery: initial,
+        allowCreateService: allowCreateService,
+        requiredQty: requiredQty,
+      ),
+    );
   }
 
   void _addDiagnosis(String name) {
@@ -1066,11 +714,25 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
               );
 
+              final petResultTiles = _selectedPet == null
+                  ? _petResults
+                      .map(
+                        (p) => ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(p.displayLabel),
+                          onTap: () => _selectPet(p),
+                        ),
+                      )
+                      .toList()
+                  : const <Widget>[];
+
               if (narrow) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     patientField,
+                    ...petResultTiles,
                     const SizedBox(height: 12),
                     visitTypeField,
                     const SizedBox(height: 12),
@@ -1079,26 +741,31 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 );
               }
 
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(flex: 3, child: patientField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: visitTypeField),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: serviceChargeField),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 3, child: patientField),
+                      const SizedBox(width: 12),
+                      Expanded(flex: 2, child: visitTypeField),
+                      const SizedBox(width: 12),
+                      Expanded(flex: 2, child: serviceChargeField),
+                    ],
+                  ),
+                  if (petResultTiles.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: petResultTiles,
+                      ),
+                    ),
                 ],
               );
             },
           ),
-          if (_selectedPet == null)
-            ..._petResults.map(
-              (p) => ListTile(
-                dense: true,
-                title: Text(p.displayLabel),
-                onTap: () => _selectPet(p),
-              ),
-            ),
           if (_serviceChargeProductName != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -1344,18 +1011,27 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              Text('Treatments / Procedures',
-                  style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTheme.warning.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    Text('Treatments / Procedures',
+                        style: Theme.of(context).textTheme.titleSmall),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.warning.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text('Billable',
+                          style: TextStyle(fontSize: 11)),
+                    ),
+                  ],
                 ),
-                child: const Text('Billable', style: TextStyle(fontSize: 11)),
               ),
-              const Spacer(),
               TextButton.icon(
                 onPressed: () async {
                   final p = await _pickProduct(
@@ -1443,7 +1119,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.close, color: AppTheme.danger),
-                          onPressed: () => setState(() => _treatments.removeAt(i)),
+                          onPressed: () {
+                            final row = _treatments.removeAt(i);
+                            setState(() {});
+                            WidgetsBinding.instance
+                                .addPostFrameCallback((_) => row.dispose());
+                          },
                         ),
                       ],
                     ),
@@ -1484,18 +1165,27 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           const SizedBox(height: 16),
           Row(
             children: [
-              Text('Prescriptions / Medicines',
-                  style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTheme.warning.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    Text('Prescriptions / Medicines',
+                        style: Theme.of(context).textTheme.titleSmall),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.warning.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text('Medicine product + stock',
+                          style: TextStyle(fontSize: 11)),
+                    ),
+                  ],
                 ),
-                child: const Text('Medicine product + stock', style: TextStyle(fontSize: 11)),
               ),
-              const Spacer(),
               TextButton.icon(
                 onPressed: () async {
                   final p = await _pickProduct(type: 'medicine', requiredQty: 1);
@@ -1582,7 +1272,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.close, color: AppTheme.danger),
-                          onPressed: () => setState(() => _medicines.removeAt(i)),
+                          onPressed: () {
+                            final row = _medicines.removeAt(i);
+                            setState(() {});
+                            WidgetsBinding.instance
+                                .addPostFrameCallback((_) => row.dispose());
+                          },
                         ),
                       ],
                     ),
@@ -1749,6 +1444,432 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 String _formatAmount(double value) {
   if (value == value.roundToDouble()) return value.toInt().toString();
   return value.toString();
+}
+
+class _ProductPickerDialog extends StatefulWidget {
+  const _ProductPickerDialog({
+    required this.type,
+    this.initialQuery,
+    this.allowCreateService = false,
+    this.requiredQty,
+  });
+
+  final String type;
+  final String? initialQuery;
+  final bool allowCreateService;
+  final double? requiredQty;
+
+  @override
+  State<_ProductPickerDialog> createState() => _ProductPickerDialogState();
+}
+
+class _ProductPickerDialogState extends State<_ProductPickerDialog> {
+  late final TextEditingController _search;
+  List<Product> _results = [];
+  var _searching = false;
+  var _searchSeq = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _search = TextEditingController(text: widget.initialQuery ?? '');
+    final initial = widget.initialQuery ?? '';
+    if (initial.trim().length >= 2) {
+      _runSearch(initial);
+    }
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<List<Product>> _fetch(String q) async {
+    if (q.trim().length < 2) return [];
+    return context.read<AppServices>().products.list(
+          query: {
+            'search': q.trim(),
+            'per_page': 20,
+            'is_active': 1,
+            'type': widget.type,
+          },
+        );
+  }
+
+  Future<void> _runSearch(String q) async {
+    final seq = ++_searchSeq;
+    if (q.length < 2) {
+      if (!mounted) return;
+      setState(() {
+        _results = [];
+        _searching = false;
+      });
+      return;
+    }
+    setState(() => _searching = true);
+    try {
+      final list = await _fetch(q);
+      if (!mounted || seq != _searchSeq) return;
+      setState(() {
+        _results = list;
+        _searching = false;
+      });
+    } catch (_) {
+      if (!mounted || seq != _searchSeq) return;
+      setState(() => _searching = false);
+    }
+  }
+
+  Future<void> _createService() async {
+    final created = await showAppDialog<Product>(
+      context: context,
+      builder: (ctx) => _CreateServiceDialog(
+        initialName: _search.text.trim(),
+      ),
+    );
+    if (created != null && mounted) {
+      Navigator.pop(context, created);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final type = widget.type;
+    final title = switch (type) {
+      'service' => 'Select service product',
+      'medicine' => 'Select medicine product',
+      _ => 'Select product',
+    };
+    final subtitle = switch (type) {
+      'service' => 'Link a billable service for GST and invoicing',
+      'medicine' => 'Link inventory so stock and billing stay in sync',
+      _ => 'Search the catalog and pick an item',
+    };
+    final icon = switch (type) {
+      'service' => Icons.medical_services_outlined,
+      'medicine' => Icons.medication_outlined,
+      _ => Icons.inventory_2_outlined,
+    };
+    final searchHint = switch (type) {
+      'medicine' => 'Search medicines...',
+      'service' => 'Search services...',
+      _ => 'Search products...',
+    };
+
+    return AppFormDialogShell(
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
+      maxWidth: 520,
+      onClose: () => Navigator.pop(context),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _search,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: searchHint,
+              prefixIcon: const Icon(Icons.search, size: 22),
+              suffixIcon: _searching
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : (_search.text.isNotEmpty
+                      ? IconButton(
+                          tooltip: 'Clear',
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () {
+                            _search.clear();
+                            setState(() {
+                              _results = [];
+                              _searching = false;
+                            });
+                          },
+                        )
+                      : null),
+            ),
+            onChanged: _runSearch,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 320,
+            child: _searching && _results.isEmpty
+                ? const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : _results.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            _search.text.trim().length < 2
+                                ? 'Type at least 2 characters to search'
+                                : 'No matching products found',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: _results.length,
+                        separatorBuilder: (_, __) => const Divider(
+                          height: 1,
+                          color: Color(0xFFE2E8F0),
+                        ),
+                        itemBuilder: (_, i) {
+                          final p = _results[i];
+                          final stock = p.currentStock;
+                          final qtyNeeded = widget.requiredQty ?? 1;
+                          final out = type == 'medicine' &&
+                              p.trackInventory &&
+                              (stock == null || stock < qtyNeeded);
+                          final subtitleText = type == 'medicine'
+                              ? '₹${p.sellingPrice.toStringAsFixed(2)}'
+                                  '${p.trackInventory ? ' · Stock: ${stock?.toStringAsFixed(0) ?? '0'}' : ''}'
+                                  '${out ? ' · Out of stock' : ''}'
+                              : '₹${p.sellingPrice.toStringAsFixed(2)}'
+                                  '${p.isService ? ' · Service' : ''}';
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
+                            enabled: !out,
+                            leading: CircleAvatar(
+                              radius: 18,
+                              backgroundColor: (out
+                                      ? AppTheme.danger
+                                      : AppTheme.primary)
+                                  .withValues(alpha: 0.12),
+                              child: Icon(
+                                out
+                                    ? Icons.block
+                                    : (type == 'medicine'
+                                        ? Icons.medication_outlined
+                                        : Icons.inventory_2_outlined),
+                                size: 18,
+                                color: out
+                                    ? AppTheme.danger
+                                    : AppTheme.primary,
+                              ),
+                            ),
+                            title: Text(
+                              p.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: out
+                                    ? AppTheme.textSecondary
+                                    : AppTheme.textPrimary,
+                              ),
+                            ),
+                            subtitle: Text(
+                              subtitleText,
+                              style: TextStyle(
+                                color: out
+                                    ? AppTheme.danger
+                                    : AppTheme.textSecondary,
+                              ),
+                            ),
+                            onTap: out
+                                ? null
+                                : () => Navigator.pop(context, p),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+      footer: Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+        ),
+        child: Row(
+          children: [
+            if (widget.allowCreateService && type == 'service') ...[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _createService,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add service'),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateServiceDialog extends StatefulWidget {
+  const _CreateServiceDialog({this.initialName = ''});
+
+  final String initialName;
+
+  @override
+  State<_CreateServiceDialog> createState() => _CreateServiceDialogState();
+}
+
+class _CreateServiceDialogState extends State<_CreateServiceDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _priceCtrl;
+  var _creating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initialName);
+    _priceCtrl = TextEditingController(text: '0');
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _priceCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final name = _nameCtrl.text.trim();
+    final price = double.tryParse(_priceCtrl.text.trim()) ?? 0;
+    if (name.isEmpty) {
+      AppMessenger.show(
+        context,
+        const SnackBar(content: Text('Enter a service name')),
+      );
+      return;
+    }
+    setState(() => _creating = true);
+    try {
+      final p = await context.read<AppServices>().products.create({
+        'name': name,
+        'purchase_price': 0,
+        'selling_price': price,
+        'mrp': price,
+        'gst_rate': 0,
+        'gst_type': 'exclusive',
+        'is_service': true,
+        'is_medicine': false,
+        'product_type': 'service',
+        'track_inventory': false,
+        'is_active': true,
+      });
+      if (mounted) Navigator.pop(context, p);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _creating = false);
+      AppMessenger.show(context, SnackBar(content: Text('$e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenW = MediaQuery.sizeOf(context).width;
+    final screenH = MediaQuery.sizeOf(context).height;
+    final width = 440.0.clamp(280.0, screenW - 48);
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      alignment: Alignment.center,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: width,
+          maxHeight: screenH * 0.88,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Add service product',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Creates a catalog service for billing',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _nameCtrl,
+                decoration: appFormFieldDecoration(
+                  'Service name *',
+                  hint: 'e.g. Consultation',
+                ),
+                textCapitalization: TextCapitalization.words,
+                autofocus: true,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _priceCtrl,
+                decoration: appFormFieldDecoration(
+                  'Price (₹)',
+                  hint: '0.00',
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed:
+                          _creating ? null : () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _creating ? null : _submit,
+                      child: _creating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text('Create'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _TreatmentRow {

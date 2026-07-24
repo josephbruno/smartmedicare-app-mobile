@@ -14,7 +14,7 @@ class AppDatabase {
     final path = p.join(dir.path, 'maran_billing.db');
     _db = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createV3,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -22,11 +22,14 @@ class AppDatabase {
           await db.execute('DROP TABLE IF EXISTS customer_cache');
           await _createV2Tables(db);
         }
-        if (oldVersion < 3) {
-          await db.execute(
-            'ALTER TABLE products ADD COLUMN is_medicine INTEGER NOT NULL DEFAULT 0',
-          );
+        // v3+: is_medicine (idempotent — safe if CREATE already included it)
+        if (oldVersion < 4) {
+          await _ensureProductColumns(db);
         }
+      },
+      onOpen: (db) async {
+        // Repair drifted Windows DBs where user_version advanced without ALTER.
+        await _ensureProductColumns(db);
       },
     );
     return _db!;
@@ -34,6 +37,18 @@ class AppDatabase {
 
   static Future<void> _createV3(Database db, int version) async {
     await _createV2Tables(db);
+  }
+
+  /// Adds missing product columns without failing on duplicates.
+  static Future<void> _ensureProductColumns(Database db) async {
+    final cols = await db.rawQuery('PRAGMA table_info(products)');
+    if (cols.isEmpty) return;
+    final names = cols.map((r) => r['name'] as String).toSet();
+    if (!names.contains('is_medicine')) {
+      await db.execute(
+        'ALTER TABLE products ADD COLUMN is_medicine INTEGER NOT NULL DEFAULT 0',
+      );
+    }
   }
 
   static Future<void> _createV2Tables(Database db) async {
