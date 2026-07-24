@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Computes a dropdown [itemHeight] that fits scaled desktop text.
+/// Computes a dropdown menu [itemHeight] that fits scaled desktop text.
 double appDropdownItemHeight(BuildContext context) {
   final scale = MediaQuery.textScalerOf(context).scale(1);
   // Default Material height is 48; grow with text scale so glyphs are not clipped.
@@ -27,6 +27,7 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
     this.disabledHint,
     this.selectedItemBuilder,
     this.isExpanded = true,
+    this.isDense = true,
     this.autovalidateMode,
     this.focusNode,
     this.icon,
@@ -48,6 +49,7 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
   final Widget? disabledHint;
   final DropdownButtonBuilder? selectedItemBuilder;
   final bool isExpanded;
+  final bool isDense;
   final AutovalidateMode? autovalidateMode;
   final FocusNode? focusNode;
   final Widget? icon;
@@ -61,12 +63,21 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final height = appDropdownItemHeight(context);
+    final theme = Theme.of(context);
     final baseDecoration = decoration ?? const InputDecoration();
-    final themePadding = Theme.of(context).inputDecorationTheme.contentPadding;
+    final themePadding = theme.inputDecorationTheme.contentPadding;
     final resolvedPadding = baseDecoration.contentPadding ?? themePadding;
+
+    // Dense + balanced padding keeps floating-label fields from clipping
+    // the closed-button text (common with FloatingLabelBehavior.always).
     final paddedDecoration = baseDecoration.copyWith(
-      contentPadding: _bumpVerticalPadding(resolvedPadding),
+      isDense: true,
+      contentPadding: _contentPadding(resolvedPadding),
     );
+
+    final textStyle = style ??
+        theme.textTheme.bodyLarge?.copyWith(height: 1.2) ??
+        const TextStyle(height: 1.2);
 
     return DropdownButtonFormField<T>(
       value: value,
@@ -83,11 +94,12 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
               .map(_wrapSelectedChild)
               .toList(growable: false),
       isExpanded: isExpanded,
+      isDense: isDense,
       itemHeight: height,
       autovalidateMode: autovalidateMode,
       focusNode: focusNode,
       icon: icon,
-      style: style,
+      style: textStyle,
       dropdownColor: dropdownColor,
       menuMaxHeight: menuMaxHeight,
       borderRadius: borderRadius,
@@ -96,21 +108,30 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
     );
   }
 
-  static EdgeInsetsGeometry _bumpVerticalPadding(EdgeInsetsGeometry? padding) {
+  static EdgeInsetsGeometry _contentPadding(EdgeInsetsGeometry? padding) {
     final resolved = padding?.resolve(TextDirection.ltr) ??
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 16);
+        const EdgeInsets.fromLTRB(16, 20, 16, 20);
+    // Slightly less bottom padding so closed-button glyphs aren't clipped.
     return EdgeInsets.fromLTRB(
       resolved.left,
-      math.max(resolved.top, 16),
-      resolved.right,
-      math.max(resolved.bottom, 16),
+      math.max(resolved.top, 18),
+      math.max(resolved.right, 8),
+      math.max(resolved.bottom - 4, 14),
     );
   }
 
   static Widget _wrapSelectedChild(Widget child) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: child,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: DefaultTextStyle.merge(
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          child: child,
+        ),
+      ),
     );
   }
 }
