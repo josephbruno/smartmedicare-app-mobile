@@ -170,7 +170,36 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       _serviceCharge.text = fee == fee.roundToDouble()
           ? fee.toInt().toString()
           : fee.toString();
+      _ensureServiceChargeProductLinked();
     }
+  }
+
+  /// Prefer a consultation-like service product; otherwise any active service.
+  Future<void> _ensureServiceChargeProductLinked() async {
+    if (_serviceChargeProductId != null) return;
+    final charge = double.tryParse(_serviceCharge.text.trim()) ?? 0;
+    if (charge <= 0) return;
+
+    try {
+      final products = await context.read<AppServices>().products.list(
+        query: {'type': 'service', 'per_page': 20, 'is_active': true},
+      );
+      if (products.isEmpty || !mounted) return;
+
+      Product pick = products.first;
+      for (final p in products) {
+        final name = p.name.toLowerCase();
+        if (name.contains('consult') || name.contains('service charge')) {
+          pick = p;
+          break;
+        }
+      }
+
+      setState(() {
+        _serviceChargeProductId = pick.id;
+        _serviceChargeProductName = pick.name;
+      });
+    } catch (_) {}
   }
 
   Future<void> _prefillFromPetId(int petId) async {
@@ -467,16 +496,14 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     });
   }
 
-  Future<void> _save() async {
+  Future<Map<String, dynamic>?> _buildVisitBody() async {
     if (_selectedPet == null) {
-      AppMessenger.show(context,
+      AppMessenger.show(
+        context,
         const SnackBar(content: Text('Please select a patient (pet)')),
       );
-      return;
+      return null;
     }
-
-    setState(() => _saving = true);
-    final emr = context.read<AppServices>().emr;
 
     final timeStr =
         '${_visitTime.hour.toString().padLeft(2, '0')}:${_visitTime.minute.toString().padLeft(2, '0')}';
@@ -484,18 +511,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     final serviceCharge = double.tryParse(_serviceCharge.text.trim()) ?? 0;
 
     if (serviceCharge > 0 && _serviceChargeProductId == null) {
-      try {
-        final products = await context.read<AppServices>().products.list(
-          query: {'type': 'service', 'per_page': 5, 'search': 'consult'},
-        );
-        if (products.isNotEmpty) {
-          _serviceChargeProductId = products.first.id;
-          _serviceChargeProductName ??= products.first.name;
-        }
-      } catch (_) {}
+      await _ensureServiceChargeProductLinked();
     }
 
-    final body = <String, dynamic>{
+    return <String, dynamic>{
       'pet_id': _selectedPet!.id,
       if (_selectedDoctor != null) 'doctor_id': _selectedDoctor!.id,
       'visit_type': _visitType,
@@ -505,12 +524,15 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (serviceCharge > 0 && _serviceChargeProductId != null)
         'service_charge_product_id': _serviceChargeProductId,
       if (_complaintForApi.isNotEmpty) 'chief_complaint': _complaintForApi,
-      if (_clinicalNotes.text.trim().isNotEmpty) 'clinical_notes': _clinicalNotes.text.trim(),
-      if (_followUpNotes.text.trim().isNotEmpty) 'follow_up_notes': _followUpNotes.text.trim(),
+      if (_clinicalNotes.text.trim().isNotEmpty)
+        'clinical_notes': _clinicalNotes.text.trim(),
+      if (_followUpNotes.text.trim().isNotEmpty)
+        'follow_up_notes': _followUpNotes.text.trim(),
       if (_temp.text.isNotEmpty) 'temperature': double.tryParse(_temp.text),
       if (_weight.text.isNotEmpty) 'weight': double.tryParse(_weight.text),
       if (_heartRate.text.isNotEmpty) 'heart_rate': int.tryParse(_heartRate.text),
-      if (_respiratoryRate.text.isNotEmpty) 'respiratory_rate': int.tryParse(_respiratoryRate.text),
+      if (_respiratoryRate.text.isNotEmpty)
+        'respiratory_rate': int.tryParse(_respiratoryRate.text),
       if (_followUpDate != null)
         'follow_up_date': _followUpDate!.toIso8601String().substring(0, 10),
       if (_diagnoses.isNotEmpty)
@@ -520,28 +542,63 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (_medicines.isNotEmpty)
         'medicines': _medicines.map((m) => m.toJson()).toList(),
     };
+  }
 
+  Future<PetVisit?> _persistVisit(Map<String, dynamic> body) async {
+    final emr = context.read<AppServices>().emr;
+    if (_isEdit) {
+      return emr.updateVisit(widget.visitId!, body);
+    }
+    final visit = await emr.createVisit(body);
+    if (_sourceAppointmentId != null) {
+      try {
+        await emr.updateAppointment(_sourceAppointmentId!, {
+          'status': 'in_progress',
+          'visit_id': visit.id,
+        });
+      } catch (_) {}
+    }
+    return visit;
+  }
+
+  /// Saves progress as an open visit so the doctor can leave and resume later.
+  Future<void> _hold() async {
+    final body = await _buildVisitBody();
+    if (body == null) return;
+
+    setState(() => _saving = true);
     try {
-      PetVisit visit;
-      if (_isEdit) {
-        visit = await emr.updateVisit(widget.visitId!, body);
-      } else {
-        visit = await emr.createVisit(body);
-        if (_sourceAppointmentId != null) {
-          try {
-            await emr.updateAppointment(_sourceAppointmentId!, {
-              'status': 'in_progress',
-              'visit_id': visit.id,
-            });
-          } catch (_) {}
-        }
-      }
+      final visit = await _persistVisit(body);
+      if (!mounted || visit == null) return;
+      AppMessenger.show(
+        context,
+        const SnackBar(
+          content: Text('Visit held — resume anytime from Visit Records (open).'),
+        ),
+      );
+      context.go('/emr/visits/${visit.id}');
+    } catch (e) {
       if (mounted) {
+        AppMessenger.show(context, SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _save() async {
+    final body = await _buildVisitBody();
+    if (body == null) return;
+
+    setState(() => _saving = true);
+    try {
+      final visit = await _persistVisit(body);
+      if (mounted && visit != null) {
         context.go('/emr/visits/${visit.id}');
       }
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context,SnackBar(content: Text('$e')));
+        AppMessenger.show(context, SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -850,11 +907,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                   ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
+              const SizedBox(width: 8),
               Expanded(
                 child: TextField(
                   controller: _heartRate,
@@ -962,6 +1015,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(10),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
@@ -997,7 +1051,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                               setState(() {
                                 t.productId = p.id;
                                 t.nameCtrl.text = p.name;
-                                t.priceCtrl.text = p.sellingPrice.toString();
+                                t.priceCtrl.text = _formatAmount(p.sellingPrice);
                               });
                             }
                           },
@@ -1011,25 +1065,30 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     if (_treatmentSuggestions.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: _treatmentSuggestions.take(6).map((s) {
-                            return ActionChip(
-                              label: Text(s.name, style: const TextStyle(fontSize: 12)),
-                              onPressed: () {
-                                setState(() {
-                                  t.nameCtrl.text = s.name;
-                                  if (s.defaultPrice != null &&
-                                      (t.priceCtrl.text.isEmpty ||
-                                          t.priceCtrl.text == '0')) {
-                                    t.priceCtrl.text = s.defaultPrice.toString();
-                                  }
-                                  _treatmentSuggestions = [];
-                                });
-                              },
-                            );
-                          }).toList(),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Wrap(
+                            alignment: WrapAlignment.start,
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: _treatmentSuggestions.take(6).map((s) {
+                              return ActionChip(
+                                label: Text(s.name, style: const TextStyle(fontSize: 12)),
+                                onPressed: () {
+                                  setState(() {
+                                    t.nameCtrl.text = s.name;
+                                    // Always apply template price on pick. New rows
+                                    // start as "0.0", which the old empty/'0' check missed.
+                                    if (s.defaultPrice != null) {
+                                      t.priceCtrl.text =
+                                          _formatAmount(s.defaultPrice!);
+                                    }
+                                    _treatmentSuggestions = [];
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
                         ),
                       ),
                   ],
@@ -1064,6 +1123,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(10),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
@@ -1099,7 +1159,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                               setState(() {
                                 m.productId = p.id;
                                 m.nameCtrl.text = p.name;
-                                m.priceCtrl.text = p.sellingPrice.toString();
+                                m.priceCtrl.text = _formatAmount(p.sellingPrice);
                               });
                             }
                           },
@@ -1232,20 +1292,47 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             decoration: const InputDecoration(labelText: 'Follow-up instructions'),
           ),
           const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            child: _saving
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(_isEdit ? 'Update visit' : 'Create visit'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : _hold,
+                  icon: const Icon(Icons.pause_circle_outline, size: 20),
+                  label: const Text('Hold'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: _saving
+                      ? const SizedBox(
+                          height: 22,
+                          width: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(_isEdit ? 'Update visit' : 'Create visit'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Hold saves your progress as an open visit so you can leave and resume later.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.textSecondary,
+                ),
           ),
         ],
       ),
     );
   }
+}
+
+String _formatAmount(double value) {
+  if (value == value.roundToDouble()) return value.toInt().toString();
+  return value.toString();
 }
 
 class _TreatmentRow {
@@ -1256,7 +1343,9 @@ class _TreatmentRow {
     double unitPrice = 0,
   })  : nameCtrl = TextEditingController(text: name),
         qtyCtrl = TextEditingController(text: quantity.toString()),
-        priceCtrl = TextEditingController(text: unitPrice.toString());
+        priceCtrl = TextEditingController(
+          text: unitPrice == 0 ? '' : _formatAmount(unitPrice),
+        );
 
   factory _TreatmentRow.fromModel(VisitTreatment t) => _TreatmentRow(
         productId: t.productId,
