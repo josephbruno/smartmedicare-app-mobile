@@ -481,7 +481,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
         ? null
         : DropdownButtonFormField<int>(
             key: ValueKey('branch-$_branchId'),
-            initialValue: _branches.any((b) => b.id == _branchId) ? _branchId : null,
+            value: _branches.any((b) => b.id == _branchId) ? _branchId : null,
             isExpanded: true,
             decoration: _fieldDec('Branch *'),
             items: [
@@ -496,7 +496,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
     final supplier = DropdownButtonFormField<int>(
       key: ValueKey('supplier-$_supplierId'),
-      initialValue: _supplierId,
+      value: _supplierId,
       isExpanded: true,
       decoration: _fieldDec('Supplier *'),
       items: [
@@ -609,7 +609,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
     final productField = DropdownButtonFormField<int>(
       key: ValueKey('product-$idx-${item.productId}'),
-      initialValue: item.productId,
+      value: item.productId,
       isExpanded: true,
       decoration: _fieldDec('Item *'),
       items: [
@@ -813,7 +813,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
     final mode = DropdownButtonFormField<String>(
       key: ValueKey('pay-$_paymentMode'),
-      initialValue: _paymentMode,
+      value: _paymentMode,
       decoration: _fieldDec('Payment Mode'),
       items: [
         for (final m in _paymentModes)

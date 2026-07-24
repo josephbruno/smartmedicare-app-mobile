@@ -337,7 +337,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       title: const Text('WhatsApp opted-in'),
       subtitle: const Text('Receive updates on WhatsApp'),
       value: _whatsappOpted,
-      activeThumbColor: AppTheme.primary,
+      activeColor: AppTheme.primary,
       onChanged: (v) => setState(() => _whatsappOpted = v),
     );
 

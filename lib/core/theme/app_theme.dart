@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../app_config.dart';
-
 class AppTheme {
   // Brand colors
   static const Color primary = Color(0xFF3B82F6); // Vibrant Blue
@@ -45,9 +43,6 @@ class AppTheme {
         backgroundColor: surface,
         surfaceTintColor: surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        constraints: BoxConstraints(
-          maxWidth: desktop ? AppConfig.desktopDialogMaxWidth : 400,
-        ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: surface,

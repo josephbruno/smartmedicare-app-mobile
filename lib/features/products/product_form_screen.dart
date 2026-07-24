@@ -263,7 +263,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       decoration: _dec('HSN Code', hint: 'HSN code for GST'),
     );
     final unitField = DropdownButtonFormField<int?>(
-      initialValue: _units.any((u) => u.id == _unitId) ? _unitId : null,
+      value: _units.any((u) => u.id == _unitId) ? _unitId : null,
       decoration: _dec('Unit', hint: 'Select unit'),
       items: [
         const DropdownMenuItem<int?>(value: null, child: Text('Select unit')),
@@ -277,7 +277,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       onChanged: (v) => setState(() => _unitId = v),
     );
     final categoryField = DropdownButtonFormField<int?>(
-      initialValue: _categories.any((c) => c.id == _categoryId) ? _categoryId : null,
+      value: _categories.any((c) => c.id == _categoryId) ? _categoryId : null,
       decoration: _dec('Category', hint: 'Select category'),
       items: [
         const DropdownMenuItem<int?>(value: null, child: Text('Select category')),
@@ -288,7 +288,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       onChanged: (v) => setState(() => _categoryId = v),
     );
     final brandField = DropdownButtonFormField<int?>(
-      initialValue: _brands.any((b) => b.id == _brandId) ? _brandId : null,
+      value: _brands.any((b) => b.id == _brandId) ? _brandId : null,
       decoration: _dec('Brand', hint: 'Select brand'),
       items: [
         const DropdownMenuItem<int?>(value: null, child: Text('Select brand')),
@@ -337,14 +337,14 @@ class _ProductFormScreenState extends State<ProductFormScreen>
           title: const Text('Service'),
           subtitle: Text(_isService ? 'This is a service' : 'Physical product'),
           value: _isService,
-          activeThumbColor: AppTheme.primary,
+          activeColor: AppTheme.primary,
           onChanged: (v) => setState(() => _isService = v),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Pet food'),
           value: _isPetFood,
-          activeThumbColor: AppTheme.primary,
+          activeColor: AppTheme.primary,
           onChanged: (v) => setState(() => _isPetFood = v),
         ),
         SwitchListTile(
@@ -352,7 +352,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
           title: const Text('Active'),
           subtitle: Text(_isActive ? 'Visible in POS & catalogs' : 'Hidden from sales'),
           value: _isActive,
-          activeThumbColor: AppTheme.primary,
+          activeColor: AppTheme.primary,
           onChanged: (v) => setState(() => _isActive = v),
         ),
       ],
@@ -379,7 +379,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       decoration: _dec('MRP (₹) *', hint: '0.00'),
     );
     final gstField = DropdownButtonFormField<double>(
-      initialValue: _gstRate,
+      value: _gstRate,
       decoration: _dec('GST Rate (%)'),
       items: _gstRates
           .map((r) => DropdownMenuItem(value: r, child: Text('${r.toInt()}%')))
@@ -460,7 +460,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
             _trackInventory ? 'Yes — track stock' : 'No — unlimited stock',
           ),
           value: _trackInventory,
-          activeThumbColor: AppTheme.primary,
+          activeColor: AppTheme.primary,
           onChanged: (v) => setState(() {
             _trackInventory = v;
             if (!v) {
@@ -482,14 +482,14 @@ class _ProductFormScreenState extends State<ProductFormScreen>
             contentPadding: EdgeInsets.zero,
             title: const Text('Has batch tracking'),
             value: _hasBatch,
-            activeThumbColor: AppTheme.primary,
+            activeColor: AppTheme.primary,
             onChanged: (v) => setState(() => _hasBatch = v),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Has expiry date'),
             value: _hasExpiry,
-            activeThumbColor: AppTheme.primary,
+            activeColor: AppTheme.primary,
             onChanged: (v) => setState(() => _hasExpiry = v),
           ),
         ],

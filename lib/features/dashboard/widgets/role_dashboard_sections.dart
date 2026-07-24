@@ -86,83 +86,124 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
     }
   }
 
+  List<_CashierAction> _actions(AuthSession auth) {
+    return [
+      if (auth.hasPermission(AppPermissions.invoicesCreate))
+        _CashierAction(
+          icon: Icons.point_of_sale_rounded,
+          label: 'POS',
+          color: AppTheme.primary,
+          onTap: () => context.go('/pos'),
+        ),
+      if (auth.hasPermission(AppPermissions.invoicesView))
+        _CashierAction(
+          icon: Icons.receipt_long_rounded,
+          label: 'Invoices',
+          color: const Color(0xFF8B5CF6),
+          onTap: () => context.go('/invoices'),
+        ),
+      if (auth.hasPermission(AppPermissions.customersView))
+        _CashierAction(
+          icon: Icons.people_rounded,
+          label: 'Customers',
+          color: AppTheme.primary,
+          onTap: () => context.go('/customers'),
+        ),
+      if (auth.hasPermission(AppPermissions.patientAppointmentsView))
+        _CashierAction(
+          icon: Icons.event_available_rounded,
+          label: 'Appointments',
+          color: const Color(0xFF0EA5E9),
+          onTap: () => context.go('/emr/appointments'),
+        ),
+      if (auth.hasPermission(AppPermissions.productsView))
+        _CashierAction(
+          icon: Icons.inventory_2_outlined,
+          label: 'Products',
+          color: const Color(0xFF14B8A6),
+          onTap: () => context.go('/products'),
+        ),
+      if (auth.hasPermission(AppPermissions.inventoryView))
+        _CashierAction(
+          icon: Icons.warning_amber_rounded,
+          label: 'Stock alerts',
+          color: AppTheme.warning,
+          onTap: () => context.go('/stock-alerts'),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthSession>();
     final branchName = auth.currentBranch?.name ?? 'Your branch';
+    final actions = _actions(auth);
+    final wide = MediaQuery.sizeOf(context).width >= 1100;
 
     return RefreshIndicator(
       onRefresh: _refresh,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        branchName,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Branch shift overview — sales, queue, and recent bills.',
-                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Refresh',
-                  onPressed: _refresh,
-                  icon: const Icon(Icons.refresh_rounded),
-                ),
-              ],
+            _CashierHeader(
+              branchName: branchName,
+              onRefresh: _refresh,
+              showPos: auth.hasPermission(AppPermissions.invoicesCreate),
+              onOpenPos: () => context.go('/pos'),
             ),
-            const SizedBox(height: 20),
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: actions
+                    .map(
+                      (a) => _CashierActionChip(
+                        icon: a.icon,
+                        label: a.label,
+                        color: a.color,
+                        onTap: a.onTap,
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+            const SizedBox(height: 18),
             FutureBuilder<DashboardData>(
               future: _shiftFuture,
               builder: (context, snap) {
                 if (_shiftFuture == null ||
                     snap.connectionState != ConnectionState.done) {
-                  return const Padding(
-                    padding: EdgeInsets.only(bottom: 20),
-                    child: SizedBox(
-                      height: 100,
-                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                    ),
+                  return const SizedBox(
+                    height: 88,
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                   );
                 }
                 if (snap.hasError) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.error_outline, color: AppTheme.danger),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Could not load branch stats: ${snap.error}',
-                                style: const TextStyle(color: AppTheme.textSecondary),
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline, color: AppTheme.danger),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Could not load branch stats: ${snap.error}',
+                              style: const TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 13,
                               ),
                             ),
-                            TextButton(
-                              onPressed: _loadBranchData,
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
+                          ),
+                          TextButton(
+                            onPressed: _loadBranchData,
+                            child: const Text('Retry'),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -171,119 +212,68 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
                 return _buildKpiSection(context, auth, snap.data!);
               },
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.point_of_sale_rounded, color: AppTheme.primary, size: 22),
-                const SizedBox(width: 10),
-                Text(
-                  'Billing queue',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const Spacer(),
-                if (auth.hasPermission(AppPermissions.invoicesCreate))
-                  FilledButton.icon(
-                    onPressed: () => context.go('/pos'),
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text('Open POS'),
-                  ),
+            const SizedBox(height: 20),
+            if (wide)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 5, child: _buildQueueSection(context, auth)),
+                  const SizedBox(width: 16),
+                  if (auth.hasPermission(AppPermissions.invoicesView))
+                    Expanded(flex: 5, child: _buildRecentInvoices(context)),
+                ],
+              )
+            else ...[
+              _buildQueueSection(context, auth),
+              if (auth.hasPermission(AppPermissions.invoicesView)) ...[
+                const SizedBox(height: 20),
+                _buildRecentInvoices(context),
               ],
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Visits released by doctors appear here. Select one to load the cart at POS.',
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            const VisitBillingQueuePanel(),
-            if (auth.hasPermission(AppPermissions.invoicesView)) ...[
-              const SizedBox(height: 28),
-              _buildRecentInvoices(context),
             ],
-            const SizedBox(height: 28),
-            const DashboardSectionHeader(
-              icon: Icons.bolt_rounded,
-              title: 'Quick actions',
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                if (auth.hasPermission(AppPermissions.invoicesCreate))
-                  SizedBox(
-                    width: 220,
-                    child: QuickActionCard(
-                      icon: Icons.point_of_sale_rounded,
-                      label: 'POS',
-                      subtitle: 'New sale',
-                      color: AppTheme.primary,
-                      onTap: () => context.go('/pos'),
-                    ),
-                  ),
-                if (auth.hasPermission(AppPermissions.invoicesView))
-                  SizedBox(
-                    width: 220,
-                    child: QuickActionCard(
-                      icon: Icons.receipt_long_rounded,
-                      label: 'Invoices',
-                      subtitle: 'Branch bills',
-                      color: const Color(0xFF8B5CF6),
-                      onTap: () => context.go('/invoices'),
-                    ),
-                  ),
-                if (auth.hasPermission(AppPermissions.customersView))
-                  SizedBox(
-                    width: 220,
-                    child: QuickActionCard(
-                      icon: Icons.people_rounded,
-                      label: 'Customers',
-                      subtitle: 'Lookup owner',
-                      color: AppTheme.primary,
-                      onTap: () => context.go('/customers'),
-                    ),
-                  ),
-                if (auth.hasPermission(AppPermissions.patientAppointmentsView))
-                  SizedBox(
-                    width: 220,
-                    child: QuickActionCard(
-                      icon: Icons.event_available_rounded,
-                      label: 'Appointments',
-                      subtitle: "Today's schedule",
-                      color: const Color(0xFF0EA5E9),
-                      onTap: () => context.go('/emr/appointments'),
-                    ),
-                  ),
-                if (auth.hasPermission(AppPermissions.productsView))
-                  SizedBox(
-                    width: 220,
-                    child: QuickActionCard(
-                      icon: Icons.inventory_2_outlined,
-                      label: 'Products',
-                      subtitle: 'Catalog lookup',
-                      color: const Color(0xFF14B8A6),
-                      onTap: () => context.go('/products'),
-                    ),
-                  ),
-                if (auth.hasPermission(AppPermissions.inventoryView))
-                  SizedBox(
-                    width: 220,
-                    child: QuickActionCard(
-                      icon: Icons.warning_amber_rounded,
-                      label: 'Stock alerts',
-                      subtitle: 'Low stock items',
-                      color: AppTheme.warning,
-                      onTap: () => context.go('/stock-alerts'),
-                    ),
-                  ),
-              ],
-            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildQueueSection(BuildContext context, AuthSession auth) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Icon(
+                Icons.point_of_sale_rounded,
+                color: AppTheme.primary,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Billing queue',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Visits released by doctors appear here for checkout.',
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        const VisitBillingQueuePanel(),
+      ],
     );
   }
 
@@ -291,154 +281,116 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
     final byMode = d.todaySales.byMode;
     final cash = _modeAmount(byMode, const ['cash']);
     final upi = _modeAmount(byMode, const ['upi']);
-    final card = _modeAmount(byMode, const ['card']);
+    final cardAmt = _modeAmount(byMode, const ['card']);
     final otherModes = byMode.entries
         .where((e) => !const {'cash', 'upi', 'card'}.contains(e.key) && e.value > 0)
         .toList();
+    final mixTotal = cash + upi + cardAmt + otherModes.fold<double>(0, (s, e) => s + e.value);
 
-    final cards = <Widget>[
-      SizedBox(
-        width: 200,
-        child: DashboardStatCard(
-          title: "TODAY'S SALES",
-          value: '₹${d.todaySalesTotal.toStringAsFixed(0)}',
-          subtitle: '${d.todaySalesCount} bills today',
-          icon: Icons.payments_rounded,
-          color: AppTheme.primary,
-          trend: const [],
+    final metrics = <_CashierMetric>[
+      _CashierMetric(
+        label: "Today's sales",
+        value: '₹${d.todaySalesTotal.toStringAsFixed(0)}',
+        hint: '${d.todaySalesCount} bills',
+        icon: Icons.payments_rounded,
+        color: AppTheme.primary,
+        onTap: auth.hasPermission(AppPermissions.invoicesView)
+            ? () => context.go('/invoices')
+            : null,
+      ),
+      _CashierMetric(
+        label: 'Paid today',
+        value: '₹${d.todaySales.paid.toStringAsFixed(0)}',
+        hint: d.todaySales.due > 0
+            ? 'Due ₹${d.todaySales.due.toStringAsFixed(0)}'
+            : 'All collected',
+        icon: Icons.check_circle_outline_rounded,
+        color: AppTheme.accent,
+      ),
+      if (d.outstandingDues > 0)
+        _CashierMetric(
+          label: 'Outstanding',
+          value: '₹${d.outstandingDues.toStringAsFixed(0)}',
+          hint: 'Open dues',
+          icon: Icons.account_balance_wallet_outlined,
+          color: AppTheme.danger,
           onTap: auth.hasPermission(AppPermissions.invoicesView)
               ? () => context.go('/invoices')
               : null,
         ),
-      ),
-      SizedBox(
-        width: 200,
-        child: DashboardStatCard(
-          title: 'PAID TODAY',
-          value: '₹${d.todaySales.paid.toStringAsFixed(0)}',
-          subtitle: d.todaySales.due > 0
-              ? 'Due ₹${d.todaySales.due.toStringAsFixed(0)}'
-              : 'All collected',
-          icon: Icons.check_circle_outline_rounded,
-          color: AppTheme.accent,
-          trend: const [],
-        ),
-      ),
-      if (d.outstandingDues > 0)
-        SizedBox(
-          width: 200,
-          child: DashboardStatCard(
-            title: 'OUTSTANDING',
-            value: '₹${d.outstandingDues.toStringAsFixed(0)}',
-            subtitle: 'Open dues at branch',
-            icon: Icons.account_balance_wallet_outlined,
-            color: AppTheme.danger,
-            trend: const [],
-            onTap: auth.hasPermission(AppPermissions.invoicesView)
-                ? () => context.go('/invoices')
-                : null,
-          ),
-        ),
-      SizedBox(
-        width: 200,
-        child: DashboardStatCard(
-          title: 'THIS MONTH',
-          value: '₹${d.monthlySalesTotal.toStringAsFixed(0)}',
-          subtitle: '${d.monthlySales.count} bills',
-          icon: Icons.calendar_month_rounded,
-          color: const Color(0xFF6366F1),
-          trend: const [],
-        ),
+      _CashierMetric(
+        label: 'This month',
+        value: '₹${d.monthlySalesTotal.toStringAsFixed(0)}',
+        hint: '${d.monthlySales.count} bills',
+        icon: Icons.calendar_month_rounded,
+        color: const Color(0xFF6366F1),
       ),
       if (auth.hasPermission(AppPermissions.patientAppointmentsView))
-        SizedBox(
-          width: 200,
-          child: DashboardStatCard(
-            title: 'APPOINTMENTS',
-            value: '${d.todayAppointments.count}',
-            subtitle: 'Scheduled today',
-            icon: Icons.event_rounded,
-            color: const Color(0xFF0EA5E9),
-            trend: const [],
-            onTap: () => context.go('/emr/appointments'),
-          ),
+        _CashierMetric(
+          label: 'Appointments',
+          value: '${d.todayAppointments.count}',
+          hint: 'Scheduled today',
+          icon: Icons.event_rounded,
+          color: const Color(0xFF0EA5E9),
+          onTap: () => context.go('/emr/appointments'),
         ),
       if (auth.hasPermission(AppPermissions.inventoryView))
-        SizedBox(
-          width: 200,
-          child: DashboardStatCard(
-            title: 'LOW STOCK',
-            value: '${d.lowStockCount}',
-            subtitle: 'Items below reorder',
-            icon: Icons.warning_amber_rounded,
-            color: AppTheme.warning,
-            trend: const [],
-            onTap: () => context.go('/stock-alerts'),
-          ),
+        _CashierMetric(
+          label: 'Low stock',
+          value: '${d.lowStockCount}',
+          hint: 'Below reorder',
+          icon: Icons.warning_amber_rounded,
+          color: AppTheme.warning,
+          onTap: () => context.go('/stock-alerts'),
         ),
     ];
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(spacing: 12, runSpacing: 12, children: cards),
-          if (byMode.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Payment mix today',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final cols = width >= 1100
+                ? metrics.length.clamp(3, 5)
+                : width >= 720
+                    ? 3
+                    : 2;
+            final gap = 10.0;
+            final tileW = (width - gap * (cols - 1)) / cols;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: metrics
+                  .map(
+                    (m) => SizedBox(
+                      width: tileW,
+                      child: _CashierMetricTile(metric: m),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      _PaymentModeChip(
-                        label: 'Cash',
-                        amount: cash,
-                        color: AppTheme.accent,
-                      ),
-                      _PaymentModeChip(
-                        label: 'UPI',
-                        amount: upi,
-                        color: const Color(0xFF8B5CF6),
-                      ),
-                      _PaymentModeChip(
-                        label: 'Card',
-                        amount: card,
-                        color: AppTheme.primary,
-                      ),
-                      ...otherModes.map(
-                        (e) => _PaymentModeChip(
-                          label: e.key.replaceAll('_', ' '),
-                          amount: e.value,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  )
+                  .toList(),
+            );
+          },
+        ),
+        if (mixTotal > 0) ...[
+          const SizedBox(height: 12),
+          _PaymentMixBar(
+            segments: [
+              _PaymentSegment('Cash', cash, AppTheme.accent),
+              _PaymentSegment('UPI', upi, const Color(0xFF8B5CF6)),
+              _PaymentSegment('Card', cardAmt, AppTheme.primary),
+              ...otherModes.map(
+                (e) => _PaymentSegment(
+                  e.key.replaceAll('_', ' '),
+                  e.value,
+                  AppTheme.textSecondary,
+                ),
               ),
-            ),
-          ],
+            ],
+            total: mixTotal,
+          ),
         ],
-      ),
+      ],
     );
   }
 
@@ -446,22 +398,44 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DashboardSectionHeader(
-          icon: Icons.receipt_long_outlined,
-          title: 'Recent invoices',
-          trailing: TextButton(
-            onPressed: () => context.go('/invoices'),
-            child: const Text('View all'),
-          ),
+        Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Icon(
+                Icons.receipt_long_outlined,
+                color: Color(0xFF8B5CF6),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Recent invoices',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => context.go('/invoices'),
+              child: const Text('View all'),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         FutureBuilder<List<Invoice>>(
           future: _recentInvoicesFuture,
           builder: (context, snap) {
             if (_recentInvoicesFuture == null ||
                 snap.connectionState != ConnectionState.done) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
+              return const SizedBox(
+                height: 72,
                 child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
               );
             }
@@ -473,75 +447,40 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
             }
             final invoices = snap.data ?? const <Invoice>[];
             if (invoices.isEmpty) {
-              return const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'No invoices yet for this branch today.',
-                    style: TextStyle(color: AppTheme.textSecondary),
-                  ),
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: const Text(
+                  'No invoices for this branch yet.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppTheme.textSecondary),
                 ),
               );
             }
-            return Column(
-              children: invoices.map((inv) {
-                final statusColor = _invoiceStatusColor(inv.status);
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    onTap: () => context.push('/invoices/${inv.id}'),
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        Icons.receipt_long_rounded,
-                        color: statusColor,
-                        size: 20,
-                      ),
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  for (var i = 0; i < invoices.length; i++) ...[
+                    if (i > 0) const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                    _CashierInvoiceRow(
+                      invoice: invoices[i],
+                      statusColor: _invoiceStatusColor(invoices[i].status),
+                      onTap: () => context.push('/invoices/${invoices[i].id}'),
                     ),
-                    title: Text(
-                      inv.invoiceNumber.isNotEmpty
-                          ? inv.invoiceNumber
-                          : 'Invoice #${inv.id}',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Text(
-                      [
-                        if (inv.customer?.name != null && inv.customer!.name.isNotEmpty)
-                          inv.customer!.name,
-                        if (inv.displayDate.isNotEmpty) inv.displayDate,
-                      ].join(' · '),
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '₹${inv.totalAmount.toStringAsFixed(0)}',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          inv.status.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            color: statusColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
+                  ],
+                ],
+              ),
             );
           },
         ),
@@ -550,47 +489,407 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
   }
 }
 
-class _PaymentModeChip extends StatelessWidget {
-  const _PaymentModeChip({
-    required this.label,
-    required this.amount,
-    required this.color,
+class _CashierHeader extends StatelessWidget {
+  const _CashierHeader({
+    required this.branchName,
+    required this.onRefresh,
+    required this.showPos,
+    required this.onOpenPos,
   });
 
-  final String label;
-  final double amount;
-  final Color color;
+  final String branchName;
+  final VoidCallback onRefresh;
+  final bool showPos;
+  final VoidCallback onOpenPos;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      branchName,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'Cashier',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Shift overview for this branch',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: onRefresh,
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+        if (showPos) ...[
+          const SizedBox(width: 4),
+          FilledButton.icon(
+            onPressed: onOpenPos,
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Open POS'),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _CashierAction {
+  const _CashierAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+}
+
+class _CashierActionChip extends StatelessWidget {
+  const _CashierActionChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CashierMetric {
+  const _CashierMetric({
+    required this.label,
+    required this.value,
+    required this.hint,
+    required this.icon,
+    required this.color,
+    this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final String hint;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+}
+
+class _CashierMetricTile extends StatelessWidget {
+  const _CashierMetricTile({required this.metric});
+
+  final _CashierMetric metric;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: metric.color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(metric.icon, color: metric.color, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  metric.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  metric.value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                Text(
+                  metric.hint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (metric.onTap == null) return child;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: metric.onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _PaymentSegment {
+  const _PaymentSegment(this.label, this.amount, this.color);
+  final String label;
+  final double amount;
+  final Color color;
+}
+
+class _PaymentMixBar extends StatelessWidget {
+  const _PaymentMixBar({required this.segments, required this.total});
+
+  final List<_PaymentSegment> segments;
+  final double total;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = segments.where((s) => s.amount > 0).toList();
+    if (visible.isEmpty || total <= 0) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.4,
-              color: color.withValues(alpha: 0.9),
+          const Text(
+            'Payment mix today',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 8,
+              child: Row(
+                children: [
+                  for (final s in visible)
+                    Expanded(
+                      flex: (s.amount / total * 1000).round().clamp(1, 1000),
+                      child: Container(color: s.color),
+                    ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            '₹${amount.toStringAsFixed(0)}',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: color,
-              fontSize: 14,
-            ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 14,
+            runSpacing: 6,
+            children: visible
+                .map(
+                  (s) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: s.color,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${s.label} ₹${s.amount.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+                .toList(),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CashierInvoiceRow extends StatelessWidget {
+  const _CashierInvoiceRow({
+    required this.invoice,
+    required this.statusColor,
+    required this.onTap,
+  });
+
+  final Invoice invoice;
+  final Color statusColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final customer = invoice.customer?.name;
+    final meta = [
+      if (customer != null && customer.isNotEmpty) customer,
+      if (invoice.displayDate.isNotEmpty) invoice.displayDate,
+    ].join(' · ');
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    invoice.invoiceNumber.isNotEmpty
+                        ? invoice.invoiceNumber
+                        : 'Invoice #${invoice.id}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                    ),
+                  ),
+                  if (meta.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      meta,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '₹${invoice.totalAmount.toStringAsFixed(0)}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    invoice.status.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
