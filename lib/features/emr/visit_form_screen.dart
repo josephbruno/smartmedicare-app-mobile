@@ -373,22 +373,22 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void _applyComplaintSuggestion(String complaint) {
     final text = _complaint.text;
     final q = _complaintSearchTerm(text);
-    String next;
-    if (text.trim().isEmpty) {
-      next = complaint;
-    } else if (q.isNotEmpty &&
-        complaint.toLowerCase().startsWith(q.toLowerCase())) {
-      // Replace the in-progress typed segment with the selected template.
-      final lastComma = text.lastIndexOf(',');
-      if (lastComma < 0) {
-        next = complaint;
-      } else {
-        next = '${text.substring(0, lastComma + 1).trimRight()} $complaint';
-      }
-    } else if (q.isEmpty) {
-      next = '${text.trimRight()} $complaint';
+    final String next;
+    if (q.isEmpty) {
+      // No in-progress term (empty or trailing comma) — append the selection.
+      final trimmed = text.trimRight();
+      next = trimmed.isEmpty
+          ? complaint
+          : trimmed.endsWith(',')
+              ? '$trimmed $complaint'
+              : '$trimmed, $complaint';
     } else {
-      next = '${text.trimRight()}, $complaint';
+      // Always replace the typed search segment with the selected complaint
+      // (not only when the suggestion is a prefix of what was typed).
+      final lastComma = text.lastIndexOf(',');
+      next = lastComma < 0
+          ? complaint
+          : '${text.substring(0, lastComma + 1).trimRight()} $complaint';
     }
     _setComplaintText('${next.trimRight()}, ');
     setState(() {});
