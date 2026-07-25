@@ -354,6 +354,24 @@ class EmrService {
     }
   }
 
+  Future<List<ProcedureKit>> getProcedureKits({String? q}) async {
+    try {
+      final res = await _client.get(
+        '/visits/procedure-kits',
+        queryParameters: q != null && q.isNotEmpty ? {'q': q} : null,
+      );
+      return parseEnvelopeData(res, (data) {
+        if (data is! List) return <ProcedureKit>[];
+        return data
+            .whereType<Map>()
+            .map((e) => ProcedureKit.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
   Future<List<MedicineSuggestion>> getMedicineSuggestions({String? q}) async {
     try {
       final res = await _client.get(

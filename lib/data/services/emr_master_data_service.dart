@@ -74,6 +74,82 @@ class TreatmentSuggestion {
       );
 }
 
+/// Procedure kit that expands into multiple visit treatment lines.
+class ProcedureKit {
+  ProcedureKit({
+    required this.id,
+    required this.name,
+    this.procedureCode,
+    this.defaultPrice,
+    this.itemsTotal = 0,
+    this.items = const [],
+  });
+
+  final int id;
+  final String name;
+  final String? procedureCode;
+  final double? defaultPrice;
+  final double itemsTotal;
+  final List<ProcedureKitItem> items;
+
+  factory ProcedureKit.fromJson(Map<String, dynamic> json) {
+    final rawItems = json['items'];
+    return ProcedureKit(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name']?.toString() ?? '',
+      procedureCode: json['procedure_code']?.toString(),
+      defaultPrice: json['default_price'] != null
+          ? double.tryParse(json['default_price'].toString())
+          : null,
+      itemsTotal: json['items_total'] != null
+          ? (double.tryParse(json['items_total'].toString()) ?? 0)
+          : 0,
+      items: rawItems is List
+          ? rawItems
+              .whereType<Map>()
+              .map((e) => ProcedureKitItem.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+    );
+  }
+}
+
+class ProcedureKitItem {
+  ProcedureKitItem({
+    required this.productId,
+    required this.quantity,
+    required this.unitPrice,
+    required this.treatmentName,
+    this.procedureCode,
+    this.productName,
+  });
+
+  final int productId;
+  final double quantity;
+  final double unitPrice;
+  final String treatmentName;
+  final String? procedureCode;
+  final String? productName;
+
+  factory ProcedureKitItem.fromJson(Map<String, dynamic> json) {
+    final product = json['product'];
+    final productMap = product is Map ? Map<String, dynamic>.from(product) : null;
+    return ProcedureKitItem(
+      productId: (json['product_id'] as num?)?.toInt() ?? 0,
+      quantity: (json['quantity'] as num?)?.toDouble() ?? 1,
+      unitPrice: (json['unit_price'] as num?)?.toDouble() ??
+          (json['unit_price_override'] as num?)?.toDouble() ??
+          (productMap?['selling_price'] as num?)?.toDouble() ??
+          0,
+      treatmentName: json['treatment_name']?.toString() ??
+          productMap?['name']?.toString() ??
+          '',
+      procedureCode: json['procedure_code']?.toString(),
+      productName: productMap?['name']?.toString(),
+    );
+  }
+}
+
 class MedicineSuggestion {
   MedicineSuggestion({
     required this.name,

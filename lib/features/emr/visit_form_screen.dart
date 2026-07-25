@@ -303,6 +303,73 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     } catch (_) {}
   }
 
+  Future<void> _addProcedureKit() async {
+    final kit = await showModalBottomSheet<ProcedureKit>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => const _ProcedureKitPickerSheet(),
+    );
+    if (kit == null || !mounted) return;
+    if (kit.items.isEmpty) {
+      AppMessenger.show(
+        context,
+        const SnackBar(content: Text('This kit has no products configured')),
+      );
+      return;
+    }
+    setState(() {
+      for (final item in kit.items) {
+        if (item.productId <= 0) continue;
+        _treatments.add(_TreatmentRow(
+          productId: item.productId,
+          name: item.treatmentName.isNotEmpty
+              ? item.treatmentName
+              : (item.productName ?? kit.name),
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        ));
+      }
+    });
+    if (!mounted) return;
+    AppMessenger.show(
+      context,
+      SnackBar(
+        content: Text(
+          'Added ${kit.items.where((i) => i.productId > 0).length} lines from ${kit.name}',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addProductsMulti() async {
+    final products = await showModalBottomSheet<List<Product>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => const _MultiProductPickerSheet(
+        type: 'product',
+        title: 'Add products / services',
+        allowAllTypes: true,
+      ),
+    );
+    if (products == null || products.isEmpty || !mounted) return;
+    setState(() {
+      for (final p in products) {
+        _treatments.add(_TreatmentRow(
+          productId: p.id,
+          name: p.name,
+          unitPrice: p.sellingPrice,
+        ));
+      }
+    });
+    if (!mounted) return;
+    AppMessenger.show(
+      context,
+      SnackBar(content: Text('Added ${products.length} line${products.length == 1 ? '' : 's'}')),
+    );
+  }
+
   Future<void> _searchMedicines(String q) async {
     if (q.length < 2) {
       setState(() => _medicineSuggestions = []);
@@ -1063,29 +1130,22 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 ),
               ),
               TextButton.icon(
-                onPressed: () async {
-                  final p = await _pickProduct(
-                    type: 'service',
-                    allowCreateService: true,
-                  );
-                  if (p == null) return;
-                  setState(() {
-                    _treatments.add(_TreatmentRow(
-                      productId: p.id,
-                      name: p.name,
-                      unitPrice: p.sellingPrice,
-                    ));
-                  });
-                },
+                onPressed: _addProductsMulti,
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Add'),
+              ),
+              TextButton.icon(
+                onPressed: _addProcedureKit,
+                icon: const Icon(Icons.medical_services_outlined, size: 18),
+                label: const Text('Add kit'),
               ),
             ],
           ),
           if (_treatments.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('No treatments — add a service product to bill',
+              child: Text(
+                  'Add: search & pick one or many · Add kit: insert all kit products',
                   style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
             ),
           ..._treatments.asMap().entries.map((e) {
@@ -2007,5 +2067,274 @@ class _MedicineRow {
     daysCtrl.dispose();
     qtyCtrl.dispose();
     priceCtrl.dispose();
+  }
+}
+
+class _MultiProductPickerSheet extends StatefulWidget {
+  const _MultiProductPickerSheet({
+    required this.type,
+    required this.title,
+    this.allowAllTypes = false,
+  });
+
+  final String type;
+  final String title;
+  final bool allowAllTypes;
+
+  @override
+  State<_MultiProductPickerSheet> createState() => _MultiProductPickerSheetState();
+}
+
+class _MultiProductPickerSheetState extends State<_MultiProductPickerSheet> {
+  final _search = TextEditingController();
+  final _selected = <int, Product>{};
+  List<Product> _results = [];
+  bool _loading = false;
+  int _seq = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _runSearch('');
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _runSearch(String q) async {
+    final seq = ++_seq;
+    setState(() => _loading = true);
+    try {
+      final query = <String, dynamic>{
+        'per_page': 40,
+        'is_active': 1,
+        if (q.trim().isNotEmpty) 'search': q.trim(),
+        if (!widget.allowAllTypes) 'type': widget.type,
+      };
+      final list = await context.read<AppServices>().products.list(query: query);
+      if (!mounted || seq != _seq) return;
+      setState(() {
+        _results = list;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted || seq != _seq) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  void _toggle(Product p) {
+    setState(() {
+      if (_selected.containsKey(p.id)) {
+        _selected.remove(p.id);
+      } else {
+        _selected[p.id] = p;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.7,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _search,
+                decoration: const InputDecoration(
+                  hintText: 'Search products...',
+                  prefixIcon: Icon(Icons.search),
+                  isDense: true,
+                ),
+                onChanged: (v) {
+                  if (v.isEmpty || v.length >= 2) _runSearch(v);
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                'Tap to select · Add selected inserts all checked items',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _results.isEmpty
+                      ? const Center(child: Text('No products found'))
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                          itemCount: _results.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, i) {
+                            final p = _results[i];
+                            final checked = _selected.containsKey(p.id);
+                            return CheckboxListTile(
+                              value: checked,
+                              onChanged: (_) => _toggle(p),
+                              title: Text(p.name),
+                              subtitle: Text('₹${p.sellingPrice.toStringAsFixed(2)}'),
+                              secondary: IconButton(
+                                tooltip: 'Add this only',
+                                icon: const Icon(Icons.add_circle_outline),
+                                onPressed: () => Navigator.pop(context, [p]),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: FilledButton(
+                  onPressed: _selected.isEmpty
+                      ? null
+                      : () => Navigator.pop(context, _selected.values.toList()),
+                  child: Text('Add selected (${_selected.length})'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProcedureKitPickerSheet extends StatefulWidget {
+  const _ProcedureKitPickerSheet();
+
+  @override
+  State<_ProcedureKitPickerSheet> createState() => _ProcedureKitPickerSheetState();
+}
+
+class _ProcedureKitPickerSheetState extends State<_ProcedureKitPickerSheet> {
+  final _search = TextEditingController();
+  List<ProcedureKit> _kits = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load([String? q]) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final kits = await context.read<AppServices>().emr.getProcedureKits(q: q);
+      if (!mounted) return;
+      setState(() {
+        _kits = kits;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.65,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Text(
+                'Add procedure kit',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _search,
+                decoration: const InputDecoration(
+                  hintText: 'Search kits...',
+                  prefixIcon: Icon(Icons.search),
+                  isDense: true,
+                ),
+                onChanged: (v) {
+                  if (v.isEmpty || v.length >= 2) _load(v);
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!, textAlign: TextAlign.center))
+                      : _kits.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No procedure kits yet.\nCreate them under EMR → Procedure kits.',
+                                textAlign: TextAlign.center,
+                              ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+                              itemCount: _kits.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, i) {
+                                final kit = _kits[i];
+                                final total = kit.itemsTotal > 0
+                                    ? kit.itemsTotal
+                                    : kit.defaultPrice;
+                                return ListTile(
+                                  title: Text(kit.name),
+                                  subtitle: Text(
+                                    [
+                                      '${kit.items.length} items',
+                                      if (total != null && total > 0)
+                                        '₹${total.toStringAsFixed(0)}',
+                                      if (kit.procedureCode != null &&
+                                          kit.procedureCode!.isNotEmpty)
+                                        kit.procedureCode!,
+                                    ].join(' · '),
+                                  ),
+                                  trailing: const Icon(Icons.add_circle_outline),
+                                  onTap: () => Navigator.pop(context, kit),
+                                );
+                              },
+                            ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
