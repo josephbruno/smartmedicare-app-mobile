@@ -1,23 +1,58 @@
-import 'package:printing/printing.dart';
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../../data/models/customer.dart';
 import '../../data/models/invoice.dart';
+import '../desktop/desktop_prefs.dart';
+import 'esc_pos_receipt_builder.dart';
+import 'windows_print_bridge.dart';
 
-/// Receipt printing via the system print dialog (desktop + mobile).
+/// POS receipt printing.
+///
+/// On Windows with a configured USB thermal printer, sends ESC/POS raw bytes
+/// directly (no dialog). Otherwise falls back to the system PDF print dialog.
 class ThermalPrinterService {
   static const double printerWidth = 80;
   static const double pageHeight = 300;
 
-  static Future<bool> printReceipt({
+  /// Result of a print attempt.
+  static Future<ThermalPrintResult> printReceipt({
     required Invoice invoice,
     required List<InvoiceItem> items,
     String? shopName,
     String? shopPhone,
     String? shopGstin,
+    String? shopAddress,
   }) async {
     try {
+      final preferDirect = await DesktopPrefs.getDirectThermalPrint();
+      if (preferDirect && WindowsPrintBridge.isSupported) {
+        final printer = await DesktopPrefs.getThermalPrinterName();
+        if (printer.isNotEmpty) {
+          final paper = await DesktopPrefs.getThermalPaperWidthMm();
+          final bytes = await EscPosReceiptBuilder.build(
+            invoice: invoice,
+            items: items,
+            shopName: shopName,
+            shopPhone: shopPhone,
+            shopGstin: shopGstin,
+            shopAddress: shopAddress,
+            paperWidthMm: paper,
+          );
+          final ok = await WindowsPrintBridge.printRaw(
+            printerName: printer,
+            data: Uint8List.fromList(bytes),
+          );
+          if (ok) {
+            return ThermalPrintResult.directSuccess;
+          }
+          // Fall through to dialog if direct fails.
+        }
+      }
+
       final pdf = _generateReceiptPdf(
         invoice: invoice,
         items: items,
@@ -30,11 +65,40 @@ class ThermalPrinterService {
         onLayout: (PdfPageFormat format) async => pdf.save(),
         name: 'Invoice-${invoice.invoiceNumber}',
       );
-      return true;
-    } catch (e) {
-      return false;
+      return ThermalPrintResult.dialogOpened;
+    } catch (_) {
+      return ThermalPrintResult.failed;
     }
   }
+
+  static Future<ThermalPrintResult> printSampleBill({
+    String? shopName,
+  }) async {
+    if (!WindowsPrintBridge.isSupported) {
+      return ThermalPrintResult.unsupported;
+    }
+    final printer = await DesktopPrefs.getThermalPrinterName();
+    if (printer.isEmpty) {
+      return ThermalPrintResult.noPrinterConfigured;
+    }
+    try {
+      final paper = await DesktopPrefs.getThermalPaperWidthMm();
+      final bytes = await EscPosReceiptBuilder.buildSample(
+        shopName: shopName ?? 'Maran Billing',
+        paperWidthMm: paper,
+      );
+      final ok = await WindowsPrintBridge.printRaw(
+        printerName: printer,
+        data: Uint8List.fromList(bytes),
+      );
+      return ok ? ThermalPrintResult.directSuccess : ThermalPrintResult.failed;
+    } catch (_) {
+      return ThermalPrintResult.failed;
+    }
+  }
+
+  static Future<List<String>> listWindowsPrinters() =>
+      WindowsPrintBridge.listPrinters();
 
   static pw.Document _generateReceiptPdf({
     required Invoice invoice,
@@ -252,4 +316,33 @@ class ThermalPrinterService {
         return PdfColors.black;
     }
   }
+}
+
+enum ThermalPrintResult {
+  directSuccess,
+  dialogOpened,
+  failed,
+  unsupported,
+  noPrinterConfigured,
+}
+
+extension ThermalPrintResultMessage on ThermalPrintResult {
+  String get userMessage {
+    switch (this) {
+      case ThermalPrintResult.directSuccess:
+        return 'Printed to thermal printer';
+      case ThermalPrintResult.dialogOpened:
+        return 'Print dialog opened';
+      case ThermalPrintResult.failed:
+        return 'Print failed';
+      case ThermalPrintResult.unsupported:
+        return 'Direct USB print is available on Windows only';
+      case ThermalPrintResult.noPrinterConfigured:
+        return 'Select a USB printer in Settings first';
+    }
+  }
+
+  bool get isSuccess =>
+      this == ThermalPrintResult.directSuccess ||
+      this == ThermalPrintResult.dialogOpened;
 }

@@ -142,7 +142,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   Future<void> _handlePrint(Invoice inv) async {
     if (inv.items == null || inv.items!.isEmpty) return;
     final auth = context.read<AuthSession>();
-    final ok = await ThermalPrinterService.printReceipt(
+    final result = await ThermalPrinterService.printReceipt(
       invoice: inv,
       items: inv.items!,
       shopName: auth.currentShop?.name ?? auth.currentBranch?.name,
@@ -151,8 +151,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     AppMessenger.show(
       context,
       SnackBar(
-        content: Text(ok ? 'Print dialog opened' : 'Print failed'),
-        backgroundColor: ok ? Colors.green : Colors.red,
+        content: Text(result.userMessage),
+        backgroundColor: result.isSuccess ? Colors.green : Colors.red,
       ),
     );
   }

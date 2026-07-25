@@ -14,6 +14,7 @@ import '../../data/local/offline_invoice_queue.dart';
 import '../../data/local/product_local_dao.dart';
 import '../../data/models/customer.dart';
 import '../../data/models/invoice.dart';
+import '../../data/models/shop.dart';
 import 'package:uuid/uuid.dart';
 
 /// Payment-first checkout: invoice is created only when payment is confirmed.
@@ -46,12 +47,26 @@ Future<bool> showPosCheckoutDialog({
   bool refreshingCustomer = false;
   var completed = false;
 
+  // Shop loyalty rates for redeem value preview (defaults match backend).
+  var redeemPerPoint = 0.25;
+  var minRedeemPoints = 100;
+  var maxRedeemPercent = 10.0;
+
   // Refresh balances (loyalty / advance) so redeem UI has current values.
   if (isOnline && billingCustomer != null && billingCustomer.id > 0) {
     try {
       final fresh = await services.customers.get(billingCustomer.id);
       billingCustomer = fresh;
       applyAdvance = fresh.advanceBalance > 0;
+    } catch (_) {}
+  }
+  if (isOnline) {
+    try {
+      final shop = await services.shop.get();
+      final s = shop.settings ?? ShopSettings();
+      redeemPerPoint = s.loyaltyRedeemPerPoint > 0 ? s.loyaltyRedeemPerPoint : 0.25;
+      minRedeemPoints = s.loyaltyRedemptionMinPoints;
+      maxRedeemPercent = s.loyaltyMaxRedeemPercent;
     } catch (_) {}
   }
 
@@ -96,17 +111,71 @@ Future<bool> showPosCheckoutDialog({
               }
             }
 
-            double billDue() {
+            double billGross() {
               if (activeInvoice != null) {
-                return activeInvoice!.dueAmount > 0
-                    ? activeInvoice!.dueAmount
-                    : activeInvoice!.totalAmount;
+                return activeInvoice!.totalAmount;
               }
               return grandTotal;
             }
 
             bool hasRegisteredCustomer() =>
                 billingCustomer != null && billingCustomer!.id > 0;
+
+            int loyaltyPtsRequested() {
+              if (!hasRegisteredCustomer()) return 0;
+              return int.tryParse(loyaltyController.text.trim()) ?? 0;
+            }
+
+            /// Max points that can be redeemed on this bill (balance + max %).
+            int maxRedeemablePoints() {
+              if (!hasRegisteredCustomer()) return 0;
+              final available = billingCustomer!.loyaltyPoints;
+              if (available <= 0 || redeemPerPoint <= 0) return 0;
+              final maxValue = billGross() * (maxRedeemPercent / 100);
+              final byPercent = maxValue > 0
+                  ? (maxValue / redeemPerPoint).floor()
+                  : 0;
+              return math.min(available, byPercent);
+            }
+
+            /// ₹ value applied when redeeming the entered points.
+            double loyaltyRedeemValue() {
+              final pts = loyaltyPtsRequested();
+              if (pts <= 0 || redeemPerPoint <= 0) return 0;
+              if (pts < minRedeemPoints) return 0;
+              final cappedPts = math.min(pts, maxRedeemablePoints());
+              if (cappedPts <= 0) return 0;
+              final value = cappedPts * redeemPerPoint;
+              return math.min(value, billGross());
+            }
+
+            /// Advance that will auto-apply against remaining after loyalty.
+            double advanceApplyValue() {
+              if (!hasRegisteredCustomer()) return 0;
+              if (!applyAdvance || paymentMode == 'advance') return 0;
+              final avail = billingCustomer?.advanceBalance ?? 0;
+              if (avail <= 0) return 0;
+              final remaining = math.max(0.0, billGross() - loyaltyRedeemValue());
+              return math.min(avail, remaining);
+            }
+
+            double billDue() {
+              if (activeInvoice != null) {
+                return activeInvoice!.dueAmount > 0
+                    ? activeInvoice!.dueAmount
+                    : activeInvoice!.totalAmount;
+              }
+              // Preview credits before invoice is created.
+              return math.max(
+                0.0,
+                billGross() - loyaltyRedeemValue() - advanceApplyValue(),
+              );
+            }
+
+            void syncPaidToDue() {
+              if (paymentSaved || paymentMode != 'cash') return;
+              paidController.text = billDue().toStringAsFixed(2);
+            }
 
             double tenderedAmount() =>
                 double.tryParse(paidController.text.trim()) ?? 0;
@@ -120,7 +189,10 @@ Future<bool> showPosCheckoutDialog({
               }
               if (paymentMode == 'advance') {
                 final avail = billingCustomer?.advanceBalance ?? 0;
-                return avail >= due ? due : avail;
+                final afterLoyalty =
+                    math.max(0.0, billGross() - loyaltyRedeemValue());
+                final need = math.min(afterLoyalty, avail);
+                return avail >= need ? need : avail;
               }
               final tendered = tenderedAmount();
               if (tendered <= 0) return 0;
@@ -236,11 +308,32 @@ Future<bool> showPosCheckoutDialog({
                 );
                 return;
               }
-              final loyaltyPts = hasRegisteredCustomer()
+              final loyaltyPtsRaw = hasRegisteredCustomer()
                   ? (int.tryParse(loyaltyController.text.trim()) ?? 0)
                   : 0;
+              if (loyaltyPtsRaw > 0 && loyaltyPtsRaw < minRedeemPoints) {
+                AppMessenger.show(context,
+                  SnackBar(
+                    content: Text(
+                      'Minimum $minRedeemPoints loyalty points required to redeem',
+                    ),
+                  ),
+                );
+                return;
+              }
+              final loyaltyPts = loyaltyPtsRaw > 0
+                  ? math.min(loyaltyPtsRaw, maxRedeemablePoints())
+                  : 0;
+              // Ensure cash/upi amount matches remaining due after credits.
+              if (paymentMode == 'cash') {
+                syncPaidToDue();
+              }
               final amount = paymentAmount();
-              if (paymentMode != 'credit' && amount <= 0 && loyaltyPts <= 0) {
+              final advanceCredit = advanceApplyValue();
+              if (paymentMode != 'credit' &&
+                  amount <= 0 &&
+                  loyaltyPts <= 0 &&
+                  advanceCredit <= 0) {
                 AppMessenger.show(context,
                   const SnackBar(content: Text('Enter a valid payment amount')),
                 );
@@ -266,7 +359,7 @@ Future<bool> showPosCheckoutDialog({
                   payments.add({'mode': 'advance', 'amount': amount});
                 } else if (paymentMode == 'credit') {
                   // Leave unpaid — credit sale
-                } else {
+                } else if (amount > 0.009) {
                   payments.add({
                     'mode': paymentMode,
                     'amount': amount,
@@ -370,8 +463,7 @@ Future<bool> showPosCheckoutDialog({
                         : () => setState(() {
                               paymentMode = mode;
                               if (mode == 'cash') {
-                                paidController.text =
-                                    billDue().toStringAsFixed(2);
+                                syncPaidToDue();
                               }
                             }),
                     borderRadius: BorderRadius.circular(10),
@@ -427,6 +519,10 @@ Future<bool> showPosCheckoutDialog({
                 return const SizedBox.shrink();
               }
               final pts = billingCustomer!.loyaltyPoints;
+              final maxPts = maxRedeemablePoints();
+              final redeemValue = loyaltyRedeemValue();
+              final requested = loyaltyPtsRequested();
+              final belowMin = requested > 0 && requested < minRedeemPoints;
               return Container(
                 width: double.infinity,
                 padding: EdgeInsets.all(largeUi ? 10 : 8),
@@ -474,7 +570,10 @@ Future<bool> showPosCheckoutDialog({
                     ),
                     SizedBox(height: largeUi ? 6 : 4),
                     Text(
-                      'Available: $pts pts',
+                      pts > 0
+                          ? 'Available: $pts pts · ₹${redeemPerPoint.toStringAsFixed(2)}/pt'
+                              '${maxPts < pts ? ' · max $maxPts on this bill' : ''}'
+                          : 'Available: 0 pts',
                       style: TextStyle(
                         fontSize: alertFs(13),
                         fontWeight: FontWeight.w600,
@@ -494,11 +593,13 @@ Future<bool> showPosCheckoutDialog({
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
                             ],
-                            onChanged: (_) => setState(() {}),
+                            onChanged: (_) => setState(() {
+                              syncPaidToDue();
+                            }),
                             decoration: InputDecoration(
                               isDense: true,
                               labelText: pts > 0
-                                  ? 'Points to redeem (max $pts)'
+                                  ? 'Points to redeem (max $maxPts)'
                                   : 'No points to redeem',
                               filled: true,
                               fillColor: Colors.white,
@@ -515,11 +616,11 @@ Future<bool> showPosCheckoutDialog({
                         if (pts > 0) ...[
                           const SizedBox(width: 8),
                           OutlinedButton(
-                            onPressed: paymentSaved
+                            onPressed: paymentSaved || maxPts <= 0
                                 ? null
                                 : () {
-                                    loyaltyController.text = '$pts';
-                                    setState(() {});
+                                    loyaltyController.text = '$maxPts';
+                                    setState(() => syncPaidToDue());
                                   },
                             child: Text('Use all',
                                 style: TextStyle(fontSize: alertFs(12))),
@@ -527,6 +628,27 @@ Future<bool> showPosCheckoutDialog({
                         ],
                       ],
                     ),
+                    if (belowMin) ...[
+                      SizedBox(height: largeUi ? 6 : 4),
+                      Text(
+                        'Minimum $minRedeemPoints points required to redeem',
+                        style: TextStyle(
+                          fontSize: alertFs(12),
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.danger,
+                        ),
+                      ),
+                    ] else if (redeemValue > 0) ...[
+                      SizedBox(height: largeUi ? 6 : 4),
+                      Text(
+                        'Redeem value: −₹${redeemValue.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: alertFs(13),
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.accent,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               );
@@ -566,6 +688,9 @@ Future<bool> showPosCheckoutDialog({
             }
 
             Widget buildPaymentSummary() {
+              final gross = billGross();
+              final loyaltyValue = loyaltyRedeemValue();
+              final advanceValue = advanceApplyValue();
               final due = billDue();
               final tendered = paymentMode == 'cash' ? tenderedAmount() : due;
               final change = changeReturn();
@@ -594,11 +719,29 @@ Future<bool> showPosCheckoutDialog({
                   children: [
                     paymentSummaryRow(
                       'Bill Total',
-                      '₹${due.toStringAsFixed(2)}',
+                      '₹${gross.toStringAsFixed(2)}',
                       valueColor: AppTheme.primary,
                       valueWeight: FontWeight.w800,
                       valueSize: alertFs(18),
                     ),
+                    if (loyaltyValue > 0)
+                      paymentSummaryRow(
+                        'Loyalty Redeem',
+                        '−₹${loyaltyValue.toStringAsFixed(2)}',
+                        valueColor: AppTheme.accent,
+                      ),
+                    if (advanceValue > 0)
+                      paymentSummaryRow(
+                        'Advance Applied',
+                        '−₹${advanceValue.toStringAsFixed(2)}',
+                        valueColor: AppTheme.accent,
+                      ),
+                    if (loyaltyValue > 0 || advanceValue > 0)
+                      paymentSummaryRow(
+                        'Amount Due',
+                        '₹${due.toStringAsFixed(2)}',
+                        valueWeight: FontWeight.w800,
+                      ),
                     paymentSummaryRow(
                       'Paid by Customer',
                       '₹${tendered.toStringAsFixed(2)}',
@@ -645,8 +788,12 @@ Future<bool> showPosCheckoutDialog({
 
             Widget buildInvoiceCard() {
               final invoice = activeInvoice;
-              final total = invoice?.totalAmount ?? grandTotal;
+              final total = invoice?.totalAmount ?? billDue();
               final invoiceNo = invoice?.invoiceNumber ?? 'Pending payment';
+              final loyaltyValue =
+                  invoice == null ? loyaltyRedeemValue() : 0.0;
+              final advanceValue =
+                  invoice == null ? advanceApplyValue() : 0.0;
               return Container(
                 padding: EdgeInsets.all(largeUi ? 14 : 10),
                 decoration: BoxDecoration(
@@ -720,6 +867,19 @@ Future<bool> showPosCheckoutDialog({
                                   fontSize: alertFs(28),
                                 ),
                               ),
+                              if (loyaltyValue > 0 || advanceValue > 0)
+                                Text(
+                                  loyaltyValue > 0 && advanceValue > 0
+                                      ? 'After loyalty & advance'
+                                      : loyaltyValue > 0
+                                          ? 'After loyalty redeem'
+                                          : 'After advance',
+                                  style: TextStyle(
+                                    fontSize: alertFs(11),
+                                    color: AppTheme.accent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                             ],
                           ),
                         ],
@@ -745,6 +905,21 @@ Future<bool> showPosCheckoutDialog({
                               fontSize: alertFs(20),
                             ),
                           ),
+                          if (loyaltyValue > 0 || advanceValue > 0) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              loyaltyValue > 0 && advanceValue > 0
+                                  ? 'After loyalty & advance'
+                                  : loyaltyValue > 0
+                                      ? 'After loyalty redeem'
+                                      : 'After advance',
+                              style: TextStyle(
+                                fontSize: alertFs(11),
+                                color: AppTheme.accent,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                           if (invoice != null && invoice.paidAmount > 0) ...[
                             const SizedBox(height: 8),
                             Text(
@@ -769,8 +944,8 @@ Future<bool> showPosCheckoutDialog({
                   if (!paymentSaved) {
                     setState(() {
                       paymentMode = 'cash';
-                      paidController.text = billDue().toStringAsFixed(2);
                       loyaltyController.clear();
+                      syncPaidToDue();
                     });
                   }
                 });
@@ -822,7 +997,10 @@ Future<bool> showPosCheckoutDialog({
                       value: applyAdvance && paymentMode != 'advance',
                       onChanged: paymentSaved || paymentMode == 'advance'
                           ? null
-                          : (v) => setState(() => applyAdvance = v),
+                          : (v) => setState(() {
+                                applyAdvance = v;
+                                syncPaidToDue();
+                              }),
                     ),
                   ],
                   if (registered) ...[
@@ -1178,7 +1356,7 @@ Future<bool> showPosCheckoutDialog({
                                   ? null
                                   : () async {
                                       final invoice = activeInvoice!;
-                                      final ok =
+                                      final result =
                                           await ThermalPrinterService
                                               .printReceipt(
                                         invoice: invoice,
@@ -1190,12 +1368,8 @@ Future<bool> showPosCheckoutDialog({
                                         AppMessenger.show(
                                           context,
                                           SnackBar(
-                                            content: Text(
-                                              ok
-                                                  ? 'Print dialog opened'
-                                                  : 'Print failed',
-                                            ),
-                                            backgroundColor: ok
+                                            content: Text(result.userMessage),
+                                            backgroundColor: result.isSuccess
                                                 ? AppTheme.accent
                                                 : AppTheme.danger,
                                           ),
@@ -1259,7 +1433,7 @@ Future<bool> showPosCheckoutDialog({
                             ? null
                             : () async {
                                 final invoice = activeInvoice!;
-                                final ok =
+                                final result =
                                     await ThermalPrinterService.printReceipt(
                                   invoice: invoice,
                                   items: printItems,
@@ -1269,12 +1443,8 @@ Future<bool> showPosCheckoutDialog({
                                 if (context.mounted) {
                                   AppMessenger.show(context,
                                     SnackBar(
-                                      content: Text(
-                                        ok
-                                            ? 'Print dialog opened'
-                                            : 'Print failed',
-                                      ),
-                                      backgroundColor: ok
+                                      content: Text(result.userMessage),
+                                      backgroundColor: result.isSuccess
                                           ? AppTheme.accent
                                           : AppTheme.danger,
                                     ),
@@ -1412,7 +1582,7 @@ Future<bool> showPosCheckoutDialog({
                     if (!paymentSaved) {
                       setState(() {
                         paymentMode = 'cash';
-                        paidController.text = billDue().toStringAsFixed(2);
+                        syncPaidToDue();
                       });
                     }
                   },
