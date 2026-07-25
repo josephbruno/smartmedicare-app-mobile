@@ -36,6 +36,7 @@ class CashierShiftPanel extends StatelessWidget {
 
     final canStart = auth.hasPermission(AppPermissions.cashierShiftStart);
     final canEnd = auth.hasPermission(AppPermissions.cashierShiftEnd);
+    final canMove = auth.hasPermission(AppPermissions.cashierCashMove);
     final canDayClose = auth.hasPermission(AppPermissions.cashierDayClose);
     final open = session?.isOpen == true;
 
@@ -97,7 +98,8 @@ class CashierShiftPanel extends StatelessWidget {
                       if (open)
                         Text(
                           'Opening ₹${session!.openingAmount.toStringAsFixed(0)}'
-                          ' · Cash in ₹${session!.cashCollected.toStringAsFixed(0)}',
+                          ' · Cash in ₹${session!.cashCollected.toStringAsFixed(0)}'
+                          '${session!.cashOutTotal > 0 ? ' · Taken ₹${session!.cashOutTotal.toStringAsFixed(0)}' : ''}',
                           style: TextStyle(
                             fontSize: compact ? 11 : 12,
                             color: AppTheme.textSecondary,
@@ -133,6 +135,15 @@ class CashierShiftPanel extends StatelessWidget {
                         : () => _startShift(context),
                     icon: const Icon(Icons.play_arrow_rounded, size: 18),
                     label: const Text('Start shift'),
+                  ),
+                if (open && canMove)
+                  OutlinedButton.icon(
+                    onPressed: loading
+                        ? null
+                        : () => _takeFromDrawer(context),
+                    icon: const Icon(Icons.money_off_csred_rounded, size: 18),
+                    label: const Text('Take from drawer'),
+                    style: OutlinedButton.styleFrom(foregroundColor: AppTheme.danger),
                   ),
                 if (open && canEnd)
                   FilledButton.tonalIcon(
@@ -255,7 +266,9 @@ class CashierShiftPanel extends StatelessWidget {
             ),
             Text(
               'Opening ₹${session.openingAmount.toStringAsFixed(2)}'
-              ' + cash collected ₹${session.cashCollected.toStringAsFixed(2)}',
+              ' + cash ₹${session.cashCollected.toStringAsFixed(2)}'
+              '${session.cashInTotal > 0 ? ' + in ₹${session.cashInTotal.toStringAsFixed(2)}' : ''}'
+              '${session.cashOutTotal > 0 ? ' − taken ₹${session.cashOutTotal.toStringAsFixed(2)}' : ''}',
               style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 12),
@@ -329,6 +342,112 @@ class CashierShiftPanel extends StatelessWidget {
     }
   }
 
+  Future<void> _takeFromDrawer(BuildContext context) async {
+    final session = this.session;
+    if (session == null || !session.isOpen) return;
+
+    final amountCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Take cash from drawer'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'In hand now: ₹${session.amountInHand.toStringAsFixed(2)}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Logged against you for this branch. Notes are required.',
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountCtrl,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              ],
+              decoration: const InputDecoration(
+                labelText: 'Amount taken (₹)',
+                prefixText: '₹ ',
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: notesCtrl,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Notes (required)',
+                hintText: 'e.g. Bank deposit / Owner handover',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm take'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) {
+      amountCtrl.dispose();
+      notesCtrl.dispose();
+      return;
+    }
+    final amount = double.tryParse(amountCtrl.text.trim());
+    final notes = notesCtrl.text.trim();
+    amountCtrl.dispose();
+    notesCtrl.dispose();
+    if (amount == null || amount <= 0) {
+      AppMessenger.show(
+        context,
+        const SnackBar(content: Text('Enter a valid amount.'), backgroundColor: AppTheme.danger),
+      );
+      return;
+    }
+    if (notes.length < 2) {
+      AppMessenger.show(
+        context,
+        const SnackBar(
+          content: Text('Notes are required for drawer cash takeaway.'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
+    try {
+      await context.read<AppServices>().cashierCash.recordMovement(
+            sessionId: session.id,
+            type: 'cash_out',
+            amount: amount,
+            notes: notes,
+          );
+      if (context.mounted) {
+        AppMessenger.show(
+          context,
+          SnackBar(content: Text('Took ₹${amount.toStringAsFixed(2)} from drawer.')),
+        );
+        await onRefresh();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        AppMessenger.show(
+          context,
+          SnackBar(content: Text('$e'), backgroundColor: AppTheme.danger),
+        );
+      }
+    }
+  }
+
   Future<void> _showDayClose(BuildContext context) async {
     late final CashierDayStatus day;
     try {
@@ -365,7 +484,8 @@ class CashierShiftPanel extends StatelessWidget {
                   Text(
                     'Sessions ${day.sessionsCount}'
                     ' · Open ${day.openSessions}'
-                    ' · Cash collected ₹${day.totals.cashCollected.toStringAsFixed(0)}',
+                    ' · Cash ₹${day.totals.cashCollected.toStringAsFixed(0)}'
+                    ' · Taken ₹${day.totals.cashOutTotal.toStringAsFixed(0)}',
                     style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
                   ),
                   const SizedBox(height: 12),
@@ -380,7 +500,9 @@ class CashierShiftPanel extends StatelessWidget {
                       subtitle: Text(
                         s.isOpen
                             ? 'Open · in hand ₹${s.amountInHand.toStringAsFixed(2)}'
+                                '${s.cashOutTotal > 0 ? ' · taken ₹${s.cashOutTotal.toStringAsFixed(0)}' : ''}'
                             : 'Closed · counted ₹${(s.countedAmount ?? 0).toStringAsFixed(2)}'
+                                ' · taken ₹${s.cashOutTotal.toStringAsFixed(0)}'
                                 ' · var ₹${(s.variance ?? 0).toStringAsFixed(2)}',
                         style: const TextStyle(fontSize: 12),
                       ),
@@ -394,11 +516,31 @@ class CashierShiftPanel extends StatelessWidget {
                       ),
                     );
                   }),
+                  if (day.movements.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Branch drawer log',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                    ),
+                    const SizedBox(height: 4),
+                    ...day.movements.map((m) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          '${m.userName ?? 'User'} · ${m.type} ₹${m.amount.toStringAsFixed(0)}'
+                          '${(m.notes ?? '').isNotEmpty ? ' — ${m.notes}' : ''}',
+                          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                        ),
+                      );
+                    }),
+                  ],
                   if (!day.isClosed && day.canClose) ...[
                     const SizedBox(height: 8),
                     TextField(
                       controller: notesCtrl,
-                      decoration: const InputDecoration(labelText: 'Day close notes (optional)'),
+                      decoration: const InputDecoration(
+                        labelText: 'Day close notes (who took remaining cash)',
+                      ),
                     ),
                   ],
                   if (!day.isClosed && !day.canClose)

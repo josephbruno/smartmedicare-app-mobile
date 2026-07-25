@@ -32,6 +32,7 @@ abstract class AppPermissions {
   static const String cashierShiftView = 'cashier.shift.view';
   static const String cashierShiftStart = 'cashier.shift.start';
   static const String cashierShiftEnd = 'cashier.shift.end';
+  static const String cashierCashMove = 'cashier.cash_move';
   static const String cashierDayClose = 'cashier.day_close';
 
   // Customers & pets

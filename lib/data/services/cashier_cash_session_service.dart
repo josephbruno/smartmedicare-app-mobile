@@ -60,6 +60,46 @@ class CashierCashSessionService {
     }
   }
 
+  Future<CashierCashSession> recordMovement({
+    required int sessionId,
+    required String type,
+    required double amount,
+    required String notes,
+  }) async {
+    try {
+      final res = await _client.post('/cashier/cash-session/$sessionId/movements', data: {
+        'type': type,
+        'amount': amount,
+        'notes': notes,
+      });
+      return parseEnvelopeData(
+        res,
+        (data) => CashierCashSession.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<CashierCashMovement>> movements({String? date}) async {
+    try {
+      final res = await _client.get('/cashier/movements', queryParameters: {
+        if (date != null && date.isNotEmpty) 'date': date,
+      });
+      return parseEnvelopeData(res, (data) {
+        final map = Map<String, dynamic>.from(data as Map);
+        final list = map['movements'];
+        if (list is! List) return <CashierCashMovement>[];
+        return list
+            .whereType<Map>()
+            .map((e) => CashierCashMovement.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
   Future<CashierDayStatus> dayStatus({String? date}) async {
     try {
       final res = await _client.get('/cashier/day-close/status', queryParameters: {

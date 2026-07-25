@@ -1,3 +1,58 @@
+class CashierCashMovement {
+  CashierCashMovement({
+    required this.id,
+    required this.branchId,
+    this.cashSessionId,
+    this.dayCloseId,
+    required this.userId,
+    this.userName,
+    this.createdBy,
+    this.createdByName,
+    required this.businessDate,
+    required this.type,
+    required this.amount,
+    this.balanceAfter,
+    this.notes,
+    this.createdAt,
+  });
+
+  final int id;
+  final int branchId;
+  final int? cashSessionId;
+  final int? dayCloseId;
+  final int userId;
+  final String? userName;
+  final int? createdBy;
+  final String? createdByName;
+  final String businessDate;
+  final String type;
+  final double amount;
+  final double? balanceAfter;
+  final String? notes;
+  final String? createdAt;
+
+  bool get isCashOut => type == 'cash_out';
+
+  factory CashierCashMovement.fromJson(Map<String, dynamic> j) {
+    return CashierCashMovement(
+      id: (j['id'] as num?)?.toInt() ?? 0,
+      branchId: (j['branch_id'] as num?)?.toInt() ?? 0,
+      cashSessionId: (j['cash_session_id'] as num?)?.toInt(),
+      dayCloseId: (j['day_close_id'] as num?)?.toInt(),
+      userId: (j['user_id'] as num?)?.toInt() ?? 0,
+      userName: j['user_name']?.toString(),
+      createdBy: (j['created_by'] as num?)?.toInt(),
+      createdByName: j['created_by_name']?.toString(),
+      businessDate: j['business_date']?.toString() ?? '',
+      type: j['type']?.toString() ?? '',
+      amount: (j['amount'] as num?)?.toDouble() ?? 0,
+      balanceAfter: (j['balance_after'] as num?)?.toDouble(),
+      notes: j['notes']?.toString(),
+      createdAt: j['created_at']?.toString(),
+    );
+  }
+}
+
 class CashierCashSession {
   CashierCashSession({
     required this.id,
@@ -9,6 +64,8 @@ class CashierCashSession {
     this.endedAt,
     required this.openingAmount,
     required this.cashCollected,
+    this.cashInTotal = 0,
+    this.cashOutTotal = 0,
     required this.expectedClosingAmount,
     this.countedAmount,
     this.variance,
@@ -17,6 +74,7 @@ class CashierCashSession {
     this.openingNotes,
     this.closingNotes,
     this.dayCloseId,
+    this.movements = const [],
   });
 
   final int id;
@@ -28,6 +86,8 @@ class CashierCashSession {
   final String? endedAt;
   final double openingAmount;
   final double cashCollected;
+  final double cashInTotal;
+  final double cashOutTotal;
   final double expectedClosingAmount;
   final double? countedAmount;
   final double? variance;
@@ -36,10 +96,20 @@ class CashierCashSession {
   final String? openingNotes;
   final String? closingNotes;
   final int? dayCloseId;
+  final List<CashierCashMovement> movements;
 
   bool get isOpen => status == 'open';
 
   factory CashierCashSession.fromJson(Map<String, dynamic> j) {
+    final movementsRaw = j['movements'];
+    final movements = <CashierCashMovement>[];
+    if (movementsRaw is List) {
+      for (final item in movementsRaw) {
+        if (item is Map) {
+          movements.add(CashierCashMovement.fromJson(Map<String, dynamic>.from(item)));
+        }
+      }
+    }
     return CashierCashSession(
       id: (j['id'] as num?)?.toInt() ?? 0,
       userId: (j['user_id'] as num?)?.toInt() ?? 0,
@@ -50,6 +120,8 @@ class CashierCashSession {
       endedAt: j['ended_at']?.toString(),
       openingAmount: (j['opening_amount'] as num?)?.toDouble() ?? 0,
       cashCollected: (j['cash_collected'] as num?)?.toDouble() ?? 0,
+      cashInTotal: (j['cash_in_total'] as num?)?.toDouble() ?? 0,
+      cashOutTotal: (j['cash_out_total'] as num?)?.toDouble() ?? 0,
       expectedClosingAmount: (j['expected_closing_amount'] as num?)?.toDouble() ?? 0,
       countedAmount: (j['counted_amount'] as num?)?.toDouble(),
       variance: (j['variance'] as num?)?.toDouble(),
@@ -58,6 +130,7 @@ class CashierCashSession {
       openingNotes: j['opening_notes']?.toString(),
       closingNotes: j['closing_notes']?.toString(),
       dayCloseId: (j['day_close_id'] as num?)?.toInt(),
+      movements: movements,
     );
   }
 }
@@ -67,11 +140,13 @@ class CashierCurrentSessionResult {
     this.session,
     required this.businessDate,
     required this.dayClosed,
+    this.branchId,
   });
 
   final CashierCashSession? session;
   final String businessDate;
   final bool dayClosed;
+  final int? branchId;
 
   factory CashierCurrentSessionResult.fromJson(Map<String, dynamic> j) {
     final sessionMap = j['session'];
@@ -81,6 +156,7 @@ class CashierCurrentSessionResult {
           : null,
       businessDate: j['business_date']?.toString() ?? '',
       dayClosed: j['day_closed'] == true,
+      branchId: (j['branch_id'] as num?)?.toInt(),
     );
   }
 }
@@ -89,6 +165,8 @@ class CashierDayTotals {
   CashierDayTotals({
     required this.openingAmount,
     required this.cashCollected,
+    this.cashInTotal = 0,
+    this.cashOutTotal = 0,
     required this.expectedClosingAmount,
     required this.countedAmount,
     required this.variance,
@@ -97,6 +175,8 @@ class CashierDayTotals {
 
   final double openingAmount;
   final double cashCollected;
+  final double cashInTotal;
+  final double cashOutTotal;
   final double expectedClosingAmount;
   final double countedAmount;
   final double variance;
@@ -106,6 +186,8 @@ class CashierDayTotals {
     return CashierDayTotals(
       openingAmount: (j['opening_amount'] as num?)?.toDouble() ?? 0,
       cashCollected: (j['cash_collected'] as num?)?.toDouble() ?? 0,
+      cashInTotal: (j['cash_in_total'] as num?)?.toDouble() ?? 0,
+      cashOutTotal: (j['cash_out_total'] as num?)?.toDouble() ?? 0,
       expectedClosingAmount: (j['expected_closing_amount'] as num?)?.toDouble() ?? 0,
       countedAmount: (j['counted_amount'] as num?)?.toDouble() ?? 0,
       variance: (j['variance'] as num?)?.toDouble() ?? 0,
@@ -127,6 +209,7 @@ class CashierDayCloseInfo {
     this.notes,
     this.closedBy,
     this.closedAt,
+    this.branchId,
   });
 
   final int id;
@@ -140,6 +223,7 @@ class CashierDayCloseInfo {
   final String? notes;
   final int? closedBy;
   final String? closedAt;
+  final int? branchId;
 
   factory CashierDayCloseInfo.fromJson(Map<String, dynamic> j) {
     return CashierDayCloseInfo(
@@ -154,6 +238,7 @@ class CashierDayCloseInfo {
       notes: j['notes']?.toString(),
       closedBy: (j['closed_by'] as num?)?.toInt(),
       closedAt: j['closed_at']?.toString(),
+      branchId: (j['branch_id'] as num?)?.toInt(),
     );
   }
 }
@@ -167,7 +252,9 @@ class CashierDayStatus {
     required this.sessionsCount,
     required this.totals,
     required this.sessions,
+    this.movements = const [],
     this.dayClose,
+    this.branchId,
   });
 
   final String businessDate;
@@ -177,7 +264,9 @@ class CashierDayStatus {
   final int sessionsCount;
   final CashierDayTotals totals;
   final List<CashierCashSession> sessions;
+  final List<CashierCashMovement> movements;
   final CashierDayCloseInfo? dayClose;
+  final int? branchId;
 
   factory CashierDayStatus.fromJson(Map<String, dynamic> j) {
     final sessionsRaw = j['sessions'];
@@ -186,6 +275,15 @@ class CashierDayStatus {
       for (final item in sessionsRaw) {
         if (item is Map) {
           sessions.add(CashierCashSession.fromJson(Map<String, dynamic>.from(item)));
+        }
+      }
+    }
+    final movementsRaw = j['movements'];
+    final movements = <CashierCashMovement>[];
+    if (movementsRaw is List) {
+      for (final item in movementsRaw) {
+        if (item is Map) {
+          movements.add(CashierCashMovement.fromJson(Map<String, dynamic>.from(item)));
         }
       }
     }
@@ -208,9 +306,11 @@ class CashierDayStatus {
               amountInHandOpen: 0,
             ),
       sessions: sessions,
+      movements: movements,
       dayClose: dayCloseMap is Map
           ? CashierDayCloseInfo.fromJson(Map<String, dynamic>.from(dayCloseMap))
           : null,
+      branchId: (j['branch_id'] as num?)?.toInt(),
     );
   }
 }
