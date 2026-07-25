@@ -29,6 +29,10 @@ abstract class AppPermissions {
   static const String paymentsView = 'payments.view';
   static const String paymentsCreate = 'payments.create';
   static const String discountsApply = 'discounts.apply';
+  static const String cashierShiftView = 'cashier.shift.view';
+  static const String cashierShiftStart = 'cashier.shift.start';
+  static const String cashierShiftEnd = 'cashier.shift.end';
+  static const String cashierDayClose = 'cashier.day_close';
 
   // Customers & pets
   static const String customersView = 'customers.view';

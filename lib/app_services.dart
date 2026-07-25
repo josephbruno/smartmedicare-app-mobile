@@ -2,6 +2,7 @@ import 'core/network/api_client.dart';
 import 'data/services/device_token_service.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/billing_service.dart';
+import 'data/services/cashier_cash_session_service.dart';
 import 'data/services/customer_service.dart';
 import 'data/services/doctor_service.dart';
 import 'data/services/emr_service.dart';
@@ -18,6 +19,7 @@ class AppServices {
   AppServices(this.api)
       : auth = AuthService(api),
         billing = BillingService(api),
+        cashierCash = CashierCashSessionService(api),
         products = ProductService(api),
         customers = CustomerService(api),
         inventory = InventoryService(api),
@@ -36,6 +38,7 @@ class AppServices {
   final ApiClient api;
   final AuthService auth;
   final BillingService billing;
+  final CashierCashSessionService cashierCash;
   final ProductService products;
   final CustomerService customers;
   final InventoryService inventory;

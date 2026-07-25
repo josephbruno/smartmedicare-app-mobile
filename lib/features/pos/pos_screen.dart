@@ -22,7 +22,10 @@ import '../../data/repositories/pos_product_repository.dart';
 import '../../data/models/customer.dart';
 import '../../data/models/product.dart';
 import '../../data/models/invoice.dart';
+import '../../data/models/cashier_cash_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/services/permission_service.dart';
+import 'cashier_shift_panel.dart';
 import 'pos_cart_notifier.dart';
 import 'pos_checkout_dialog.dart';
 
@@ -45,6 +48,11 @@ class _PosScreenState extends State<PosScreen> {
   bool _loadingVisit = false;
   String? _loadedVisitNumber;
   int? _lastLoadedVisitId;
+
+  CashierCashSession? _cashSession;
+  CashierDayStatus? _dayStatus;
+  bool _dayClosed = false;
+  bool _loadingCashSession = false;
 
   Future<void> _runSearch(String q, {bool immediate = false}) async {
     _searchDebounce?.cancel();
@@ -137,7 +145,36 @@ class _PosScreenState extends State<PosScreen> {
         _searchFocus.requestFocus();
       }
       unawaited(_loadVisitFromQuery());
+      unawaited(_refreshCashSession());
     });
+  }
+
+  Future<void> _refreshCashSession() async {
+    if (!mounted) return;
+    final auth = context.read<AuthSession>();
+    if (!auth.hasPermission(AppPermissions.cashierShiftView)) return;
+    final online = context.read<ConnectivityNotifier>().isOnline;
+    if (!online) return;
+
+    setState(() => _loadingCashSession = true);
+    try {
+      final services = context.read<AppServices>();
+      final current = await services.cashierCash.current();
+      CashierDayStatus? day;
+      try {
+        day = await services.cashierCash.dayStatus(date: current.businessDate);
+      } catch (_) {}
+      if (!mounted) return;
+      setState(() {
+        _cashSession = current.session;
+        _dayClosed = current.dayClosed;
+        _dayStatus = day;
+      });
+    } catch (_) {
+      // Keep POS usable if cash-session API is unavailable.
+    } finally {
+      if (mounted) setState(() => _loadingCashSession = false);
+    }
   }
 
   Future<void> _loadVisitFromQuery() async {
@@ -351,6 +388,21 @@ class _PosScreenState extends State<PosScreen> {
     if (cart.items.isEmpty) return;
     final online = context.read<ConnectivityNotifier>().isOnline;
     final services = context.read<AppServices>();
+    final auth = context.read<AuthSession>();
+
+    if (online &&
+        auth.hasPermission(AppPermissions.cashierShiftStart) &&
+        (_cashSession == null || !_cashSession!.isOpen)) {
+      AppMessenger.show(
+        context,
+        const SnackBar(
+          content: Text('Start your cash shift before checkout.'),
+          backgroundColor: AppTheme.warning,
+        ),
+      );
+      unawaited(_refreshCashSession());
+      return;
+    }
 
     // Refresh customer so loyalty / advance balances are current at checkout.
     if (online && cart.customer != null && cart.customer!.id > 0) {
@@ -398,6 +450,7 @@ class _PosScreenState extends State<PosScreen> {
       _loadedVisitNumber = null;
       _lastLoadedVisitId = null;
     });
+    unawaited(_refreshCashSession());
     unawaited(context.read<VisitBillingQueueNotifier>().refresh());
     final term = _search.text.trim();
     if (term.isNotEmpty) {
@@ -634,6 +687,15 @@ class _PosScreenState extends State<PosScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            CashierShiftPanel(
+              session: _cashSession,
+              dayStatus: _dayStatus,
+              dayClosed: _dayClosed,
+              loading: _loadingCashSession,
+              onRefresh: _refreshCashSession,
+              compact: _desktop,
             ),
             const SizedBox(height: 8),
             _buildCartCustomerSection(cart),
@@ -897,7 +959,25 @@ class _PosScreenState extends State<PosScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: cart.items.isEmpty ? null : _checkout,
+                    onPressed: cart.items.isEmpty
+                        ? null
+                        : () {
+                            final auth = context.read<AuthSession>();
+                            final online = context.read<ConnectivityNotifier>().isOnline;
+                            if (online &&
+                                auth.hasPermission(AppPermissions.cashierShiftStart) &&
+                                (_cashSession == null || !_cashSession!.isOpen)) {
+                              AppMessenger.show(
+                                context,
+                                const SnackBar(
+                                  content: Text('Start your cash shift before checkout.'),
+                                  backgroundColor: AppTheme.warning,
+                                ),
+                              );
+                              return;
+                            }
+                            _checkout();
+                          },
                     icon: Icon(Icons.shopping_cart_checkout_rounded, size: _ic(18)),
                     label: Text('Checkout', style: TextStyle(fontSize: _fs(14))),
                     style: ElevatedButton.styleFrom(
