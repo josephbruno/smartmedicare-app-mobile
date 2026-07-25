@@ -35,6 +35,20 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
     _future = context.read<AppServices>().emr.getVisit(widget.visitId);
   }
 
+  VisitClinicInfo _clinicInfo() {
+    final auth = context.read<AuthSession>();
+    final shop = auth.currentShop;
+    final branch = auth.currentBranch;
+    return VisitPdf.clinicFromAuth(
+      shopName: shop?.name,
+      shopAddress: shop?.formattedAddress,
+      shopPhone: shop?.phone,
+      branchName: branch?.name,
+      branchAddress: branch?.formattedAddress,
+      branchPhone: branch?.phone,
+    );
+  }
+
   Future<void> _completeVisit() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -56,7 +70,7 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
     try {
       final visit = await services.emr.completeVisit(widget.visitId);
       if (!mounted) return;
-      await VisitPdf.printVisit(visit);
+      await VisitPdf.printVisit(visit, clinic: _clinicInfo());
       if (!mounted) return;
       AppMessenger.show(
         context,
@@ -226,8 +240,8 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
                       statusLabel: _statusLabel(v.status),
                       visitTypeLabel: _visitTypeLabel(v.visitType),
                       timeLabel: _formatTime(v.visitTime),
-                      onPrint: () => VisitPdf.printVisit(v),
-                      onDownload: () => VisitPdf.downloadVisit(v),
+                      onPrint: () => VisitPdf.printVisit(v, clinic: _clinicInfo()),
+                      onDownload: () => VisitPdf.downloadVisit(v, clinic: _clinicInfo()),
                       onEdit: canEdit &&
                               (v.status == 'open' || v.status == 'bill_on_hold')
                           ? () => context.push('/emr/visits/${v.id}/edit')

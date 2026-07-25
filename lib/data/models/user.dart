@@ -3,6 +3,12 @@ class ShopLite {
     required this.id,
     required this.name,
     this.slug,
+    this.phone,
+    this.email,
+    this.address,
+    this.city,
+    this.state,
+    this.pincode,
     this.logoUrl,
     this.currency,
     this.timezone,
@@ -11,9 +17,23 @@ class ShopLite {
   final int id;
   final String name;
   final String? slug;
+  final String? phone;
+  final String? email;
+  final String? address;
+  final String? city;
+  final String? state;
+  final String? pincode;
   final String? logoUrl;
   final String? currency;
   final String? timezone;
+
+  String get formattedAddress {
+    final parts = [address, city, state, pincode]
+        .where((p) => p != null && p.trim().isNotEmpty)
+        .map((p) => p!.trim())
+        .toList();
+    return parts.join(', ');
+  }
 
   factory ShopLite.fromJson(Map<String, dynamic>? j) {
     if (j == null) {
@@ -23,6 +43,12 @@ class ShopLite {
       id: (j['id'] as num?)?.toInt() ?? 0,
       name: j['name']?.toString() ?? '',
       slug: j['slug']?.toString(),
+      phone: j['phone']?.toString(),
+      email: j['email']?.toString(),
+      address: j['address']?.toString(),
+      city: j['city']?.toString(),
+      state: j['state']?.toString(),
+      pincode: j['pincode']?.toString(),
       logoUrl: j['logo_url']?.toString(),
       currency: j['currency']?.toString(),
       timezone: j['timezone']?.toString(),
@@ -33,6 +59,12 @@ class ShopLite {
         'id': id,
         'name': name,
         if (slug != null) 'slug': slug,
+        if (phone != null) 'phone': phone,
+        if (email != null) 'email': email,
+        if (address != null) 'address': address,
+        if (city != null) 'city': city,
+        if (state != null) 'state': state,
+        if (pincode != null) 'pincode': pincode,
         if (logoUrl != null) 'logo_url': logoUrl,
         if (currency != null) 'currency': currency,
         if (timezone != null) 'timezone': timezone,
@@ -44,6 +76,12 @@ class BranchLite {
     required this.id,
     required this.name,
     this.code,
+    this.phone,
+    this.email,
+    this.address,
+    this.city,
+    this.state,
+    this.pincode,
     this.isMain,
     this.isActive,
   });
@@ -51,8 +89,22 @@ class BranchLite {
   final int id;
   final String name;
   final String? code;
+  final String? phone;
+  final String? email;
+  final String? address;
+  final String? city;
+  final String? state;
+  final String? pincode;
   final bool? isMain;
   final bool? isActive;
+
+  String get formattedAddress {
+    final parts = [address, city, state, pincode]
+        .where((p) => p != null && p.trim().isNotEmpty)
+        .map((p) => p!.trim())
+        .toList();
+    return parts.join(', ');
+  }
 
   factory BranchLite.fromJson(Map<String, dynamic>? j) {
     if (j == null) {
@@ -62,6 +114,12 @@ class BranchLite {
       id: (j['id'] as num?)?.toInt() ?? 0,
       name: j['name']?.toString() ?? '',
       code: j['code']?.toString(),
+      phone: j['phone']?.toString(),
+      email: j['email']?.toString(),
+      address: j['address']?.toString(),
+      city: j['city']?.toString(),
+      state: j['state']?.toString(),
+      pincode: j['pincode']?.toString(),
       isMain: j['is_main'] as bool?,
       isActive: j['is_active'] as bool?,
     );
@@ -71,6 +129,12 @@ class BranchLite {
         'id': id,
         'name': name,
         if (code != null) 'code': code,
+        if (phone != null) 'phone': phone,
+        if (email != null) 'email': email,
+        if (address != null) 'address': address,
+        if (city != null) 'city': city,
+        if (state != null) 'state': state,
+        if (pincode != null) 'pincode': pincode,
         if (isMain != null) 'is_main': isMain,
         if (isActive != null) 'is_active': isActive,
       };
