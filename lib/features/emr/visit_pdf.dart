@@ -29,6 +29,12 @@ class VisitPdf {
 
   static final PdfPageFormat _pageFormat = PdfPageFormat.a5.landscape;
 
+  /// Page margins (points). Kept tight for A5 landscape.
+  static const double _marginL = 10;
+  static const double _marginR = 10;
+  static const double _marginT = 8;
+  static const double _marginB = 8;
+
   static Future<pw.Document> build(
     PetVisit visit, {
     VisitClinicInfo? clinic,
@@ -44,83 +50,88 @@ class VisitPdf {
     final clinicPhone = clinic?.phone?.trim();
 
     doc.addPage(
-      pw.MultiPage(
+      pw.Page(
         pageFormat: _pageFormat,
-        margin: const pw.EdgeInsets.fromLTRB(18, 14, 18, 16),
-        footer: (context) => _pageFooter(context),
-        build: (context) => [
-          _clinicHeader(
-            name: clinicName,
-            address: clinicAddress,
-            phone: clinicPhone,
-          ),
-          pw.SizedBox(height: 8),
-          _ownerPetRow(
-            visit: visit,
-            petName: petName,
-            meta: [
-              visit.visitNumber,
-              visit.visitDate,
-              if (time.isNotEmpty) time,
-              typeLabel,
-            ].join('  ·  '),
-          ),
-          pw.SizedBox(height: 10),
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    _labeledBlock(
-                      title: 'Complaint',
-                      child: _bodyText(
-                        visit.chiefComplaint?.trim().isNotEmpty == true
-                            ? visit.chiefComplaint!
-                            : '—',
+        margin: const pw.EdgeInsets.fromLTRB(_marginL, _marginT, _marginR, _marginB),
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            _clinicHeader(
+              name: clinicName,
+              address: clinicAddress,
+              phone: clinicPhone,
+            ),
+            pw.SizedBox(height: 4),
+            _ownerPetRow(
+              visit: visit,
+              petName: petName,
+              meta: [
+                visit.visitNumber,
+                visit.visitDate,
+                if (time.isNotEmpty) time,
+                typeLabel,
+              ].join(' · '),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Expanded(
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  pw.Expanded(
+                    child: _panel(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          _sectionTitle('Complaint'),
+                          _bodyText(
+                            visit.chiefComplaint?.trim().isNotEmpty == true
+                                ? visit.chiefComplaint!
+                                : '—',
+                          ),
+                          _divider(),
+                          _sectionTitle('Observation'),
+                          _observationBody(visit),
+                          _divider(),
+                          _sectionTitle('Investigation'),
+                          _bodyText(
+                            visit.investigation?.trim().isNotEmpty == true
+                                ? visit.investigation!
+                                : '—',
+                          ),
+                          _divider(),
+                          _sectionTitle('Treatment'),
+                          _medicinesBody(visit),
+                          if (visit.followUpDate != null) ...[
+                            _divider(),
+                            _sectionTitle('Follow-up'),
+                            _bodyText(visit.followUpDate!, bold: true),
+                            if (visit.followUpNotes != null &&
+                                visit.followUpNotes!.trim().isNotEmpty)
+                              _bodyText(visit.followUpNotes!, muted: true),
+                          ],
+                        ],
                       ),
                     ),
-                    pw.SizedBox(height: 8),
-                    _labeledBlock(
-                      title: 'Observation',
-                      child: _observationBody(visit),
+                  ),
+                  pw.SizedBox(width: 6),
+                  pw.Expanded(
+                    child: _panel(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          _sectionTitle('Procedures'),
+                          _proceduresBody(visit),
+                        ],
+                      ),
                     ),
-                    pw.SizedBox(height: 8),
-                    _labeledBlock(
-                      title: 'Treatment',
-                      child: _medicinesBody(visit),
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(width: 10),
-              pw.Expanded(
-                child: _labeledBlock(
-                  title: 'Procedures',
-                  child: _proceduresBody(visit),
-                ),
-              ),
-            ],
-          ),
-          if (visit.followUpDate != null) ...[
-            pw.SizedBox(height: 8),
-            _labeledBlock(
-              title: 'Follow-up',
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  _bodyText(visit.followUpDate!, bold: true),
-                  if (visit.followUpNotes != null &&
-                      visit.followUpNotes!.trim().isNotEmpty) ...[
-                    pw.SizedBox(height: 2),
-                    _bodyText(visit.followUpNotes!, muted: true),
-                  ],
+                  ),
                 ],
               ),
             ),
+            pw.SizedBox(height: 3),
+            _pageFooter(context),
           ],
-        ],
+        ),
       ),
     );
     return doc;
@@ -131,11 +142,16 @@ class VisitPdf {
     required String address,
     String? phone,
   }) {
+    final subtitle = [
+      if (address.isNotEmpty) address,
+      if (phone != null && phone.isNotEmpty) phone,
+    ].join('  ·  ');
+
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.only(bottom: 8),
+      padding: const pw.EdgeInsets.only(bottom: 3),
       decoration: const pw.BoxDecoration(
-        border: pw.Border(bottom: pw.BorderSide(color: _border, width: 1)),
+        border: pw.Border(bottom: pw.BorderSide(color: _border, width: 0.8)),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.center,
@@ -144,27 +160,17 @@ class VisitPdf {
             name,
             textAlign: pw.TextAlign.center,
             style: pw.TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: pw.FontWeight.bold,
               color: _primary,
             ),
           ),
-          if (address.isNotEmpty) ...[
-            pw.SizedBox(height: 2),
+          if (subtitle.isNotEmpty)
             pw.Text(
-              address,
+              subtitle,
               textAlign: pw.TextAlign.center,
-              style: const pw.TextStyle(fontSize: 8.5, color: _muted),
+              style: const pw.TextStyle(fontSize: 7.5, color: _muted),
             ),
-          ],
-          if (phone != null && phone.isNotEmpty) ...[
-            pw.SizedBox(height: 1),
-            pw.Text(
-              phone,
-              textAlign: pw.TextAlign.center,
-              style: const pw.TextStyle(fontSize: 8.5, color: _muted),
-            ),
-          ],
         ],
       ),
     );
@@ -179,156 +185,110 @@ class VisitPdf {
       visit.pet?.species,
       visit.pet?.breed,
     ].where((e) => e != null && e.isNotEmpty).join(' · ');
+    final owner = visit.pet?.customerName?.trim().isNotEmpty == true
+        ? visit.pet!.customerName!
+        : '—';
+    final phone = visit.pet?.customerPhone?.trim() ?? '';
+    final petLine = [
+      petName,
+      if (species.isNotEmpty) species,
+      if (visit.doctor != null) 'Dr. ${visit.doctor!.name}',
+    ].join(' · ');
 
     return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: pw.BoxDecoration(
         color: _surface,
-        border: pw.Border.all(color: _border),
-        borderRadius: pw.BorderRadius.circular(6),
+        border: pw.Border.all(color: _border, width: 0.6),
+        borderRadius: pw.BorderRadius.circular(3),
       ),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  'Owner',
-                  style: pw.TextStyle(
-                    fontSize: 8,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _muted,
-                  ),
-                ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  visit.pet?.customerName?.trim().isNotEmpty == true
-                      ? visit.pet!.customerName!
-                      : '—',
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _text,
-                  ),
-                ),
-                if (visit.pet?.customerPhone != null &&
-                    visit.pet!.customerPhone!.isNotEmpty) ...[
-                  pw.SizedBox(height: 1),
-                  pw.Text(
-                    visit.pet!.customerPhone!,
-                    style: const pw.TextStyle(fontSize: 8.5, color: _muted),
-                  ),
-                ],
-              ],
+            child: _kvBlock(
+              'Owner',
+              [owner, if (phone.isNotEmpty) phone].join(' · '),
             ),
           ),
-          pw.Container(width: 1, height: 42, color: _border),
-          pw.SizedBox(width: 10),
-          pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  'Pet',
-                  style: pw.TextStyle(
-                    fontSize: 8,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _muted,
-                  ),
-                ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  petName,
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _text,
-                  ),
-                ),
-                if (species.isNotEmpty) ...[
-                  pw.SizedBox(height: 1),
-                  pw.Text(
-                    species,
-                    style: const pw.TextStyle(fontSize: 8.5, color: _muted),
-                  ),
-                ],
-                if (visit.doctor != null) ...[
-                  pw.SizedBox(height: 1),
-                  pw.Text(
-                    'Dr. ${visit.doctor!.name}',
-                    style: const pw.TextStyle(fontSize: 8.5, color: _muted),
-                  ),
-                ],
-              ],
-            ),
+          pw.Container(
+            width: 0.6,
+            margin: const pw.EdgeInsets.symmetric(horizontal: 6),
+            color: _border,
           ),
-          pw.Container(width: 1, height: 42, color: _border),
-          pw.SizedBox(width: 10),
-          pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  'Visit',
-                  style: pw.TextStyle(
-                    fontSize: 8,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _muted,
-                  ),
-                ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  meta,
-                  style: const pw.TextStyle(fontSize: 8.5, color: _text),
-                ),
-              ],
-            ),
+          pw.Expanded(child: _kvBlock('Pet', petLine)),
+          pw.Container(
+            width: 0.6,
+            margin: const pw.EdgeInsets.symmetric(horizontal: 6),
+            color: _border,
           ),
+          pw.Expanded(child: _kvBlock('Visit', meta)),
         ],
       ),
     );
   }
 
-  static pw.Widget _labeledBlock({
-    required String title,
-    required pw.Widget child,
-  }) {
+  static pw.Widget _kvBlock(String label, String value) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: 7,
+            fontWeight: pw.FontWeight.bold,
+            color: _muted,
+          ),
+        ),
+        pw.Text(
+          value,
+          style: pw.TextStyle(
+            fontSize: 8.5,
+            fontWeight: pw.FontWeight.bold,
+            color: _text,
+          ),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _panel({required pw.Widget child}) {
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.fromLTRB(8, 7, 8, 8),
+      padding: const pw.EdgeInsets.fromLTRB(6, 5, 6, 5),
       decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: _border),
-        borderRadius: pw.BorderRadius.circular(6),
+        border: pw.Border.all(color: _border, width: 0.6),
+        borderRadius: pw.BorderRadius.circular(3),
       ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Container(
-            width: double.infinity,
-            padding: const pw.EdgeInsets.only(bottom: 5),
-            decoration: const pw.BoxDecoration(
-              border: pw.Border(bottom: pw.BorderSide(color: _border, width: 0.6)),
-            ),
-            child: pw.Text(
-              title,
-              style: pw.TextStyle(
-                fontSize: 9.5,
-                fontWeight: pw.FontWeight.bold,
-                color: _text,
-              ),
-            ),
-          ),
-          pw.SizedBox(height: 6),
-          child,
-        ],
+      child: child,
+    );
+  }
+
+  static pw.Widget _sectionTitle(String title) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 2),
+      child: pw.Text(
+        title,
+        style: pw.TextStyle(
+          fontSize: 8.5,
+          fontWeight: pw.FontWeight.bold,
+          color: _text,
+        ),
       ),
+    );
+  }
+
+  static pw.Widget _divider() {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+      child: pw.Container(height: 0.6, color: _border),
     );
   }
 
   static pw.Widget _observationBody(PetVisit visit) {
-    final notes = visit.clinicalNotes?.trim() ?? '';
+    final notes = visit.observation?.trim().isNotEmpty == true
+        ? visit.observation!.trim()
+        : (visit.clinicalNotes?.trim() ?? '');
     final vitals = <String>[];
     if (visit.temperature != null) vitals.add('Temp ${visit.temperature} °F');
     if (visit.weight != null) vitals.add('Wt ${visit.weight} kg');
@@ -346,25 +306,16 @@ class VisitPdf {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         if (notes.isNotEmpty) _bodyText(notes),
-        if (vitals.isNotEmpty) ...[
-          if (notes.isNotEmpty) pw.SizedBox(height: 4),
-          _bodyText(vitals.join('  ·  '), muted: true),
-        ],
-        if (diagnoses.isNotEmpty) ...[
-          if (notes.isNotEmpty || vitals.isNotEmpty) pw.SizedBox(height: 4),
-          for (final d in diagnoses) ...[
-            pw.Text(
-              [
-                if (d.isPrimary) '[P]',
-                d.diagnosisName,
-                if (d.icdCode != null && d.icdCode!.isNotEmpty) '(${d.icdCode})',
-                '· ${_titleCase(d.severity)}',
-              ].join(' '),
-              style: const pw.TextStyle(fontSize: 8.5, color: _text),
-            ),
-            pw.SizedBox(height: 2),
-          ],
-        ],
+        if (vitals.isNotEmpty) _bodyText(vitals.join(' · '), muted: true),
+        for (final d in diagnoses)
+          _bodyText(
+            [
+              if (d.isPrimary) '[P]',
+              d.diagnosisName,
+              if (d.icdCode != null && d.icdCode!.isNotEmpty) '(${d.icdCode})',
+              '· ${_titleCase(d.severity)}',
+            ].join(' '),
+          ),
       ],
     );
   }
@@ -376,25 +327,27 @@ class VisitPdf {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        for (final m in meds) ...[
+        for (var i = 0; i < meds.length; i++) ...[
+          if (i > 0) pw.SizedBox(height: 2),
           pw.Text(
-            m.medicineName,
+            meds[i].medicineName,
             style: pw.TextStyle(
-              fontSize: 9,
+              fontSize: 8.5,
               fontWeight: pw.FontWeight.bold,
               color: _text,
             ),
           ),
           pw.Text(
             [
-              if (m.dosage != null && m.dosage!.isNotEmpty) m.dosage!,
-              if (m.frequency != null && m.frequency!.isNotEmpty) m.frequency!,
-              if (m.durationDays != null) '${m.durationDays}d',
-              'Qty ${m.quantity}',
+              if (meds[i].dosage != null && meds[i].dosage!.isNotEmpty)
+                meds[i].dosage!,
+              if (meds[i].frequency != null && meds[i].frequency!.isNotEmpty)
+                meds[i].frequency!,
+              if (meds[i].durationDays != null) '${meds[i].durationDays}d',
+              'Qty ${meds[i].quantity}',
             ].join(' · '),
-            style: const pw.TextStyle(fontSize: 8, color: _muted),
+            style: const pw.TextStyle(fontSize: 7.5, color: _muted),
           ),
-          pw.SizedBox(height: 4),
         ],
       ],
     );
@@ -407,7 +360,8 @@ class VisitPdf {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        for (final t in items) ...[
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) pw.SizedBox(height: 2),
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
@@ -416,29 +370,29 @@ class VisitPdf {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
-                      t.treatmentName,
+                      items[i].treatmentName,
                       style: pw.TextStyle(
-                        fontSize: 9,
+                        fontSize: 8.5,
                         fontWeight: pw.FontWeight.bold,
                         color: _text,
                       ),
                     ),
-                    if (t.notes != null && t.notes!.trim().isNotEmpty)
+                    if (items[i].notes != null &&
+                        items[i].notes!.trim().isNotEmpty)
                       pw.Text(
-                        t.notes!,
-                        style: const pw.TextStyle(fontSize: 8, color: _muted),
+                        items[i].notes!,
+                        style: const pw.TextStyle(fontSize: 7.5, color: _muted),
                       ),
                   ],
                 ),
               ),
-              pw.SizedBox(width: 6),
+              pw.SizedBox(width: 4),
               pw.Text(
-                '× ${t.quantity}  ·  ₹${t.unitPrice.toStringAsFixed(2)}',
-                style: const pw.TextStyle(fontSize: 8, color: _muted),
+                '× ${items[i].quantity} · ₹${items[i].unitPrice.toStringAsFixed(2)}',
+                style: const pw.TextStyle(fontSize: 7.5, color: _muted),
               ),
             ],
           ),
-          pw.SizedBox(height: 4),
         ],
       ],
     );
@@ -452,31 +406,30 @@ class VisitPdf {
     return pw.Text(
       text,
       style: pw.TextStyle(
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
         color: muted ? _muted : _text,
-        lineSpacing: 1.5,
+        lineSpacing: 1.2,
       ),
     );
   }
 
   static pw.Widget _pageFooter(pw.Context context) {
     return pw.Container(
-      margin: const pw.EdgeInsets.only(top: 6),
-      padding: const pw.EdgeInsets.only(top: 4),
+      padding: const pw.EdgeInsets.only(top: 2),
       decoration: const pw.BoxDecoration(
-        border: pw.Border(top: pw.BorderSide(color: _border, width: 0.6)),
+        border: pw.Border(top: pw.BorderSide(color: _border, width: 0.5)),
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(
             'Generated by Maran Billing',
-            style: const pw.TextStyle(fontSize: 7, color: _muted),
+            style: const pw.TextStyle(fontSize: 6.5, color: _muted),
           ),
           pw.Text(
-            'Page ${context.pageNumber} of ${context.pagesCount}',
-            style: const pw.TextStyle(fontSize: 7, color: _muted),
+            'Page ${context.pageNumber}',
+            style: const pw.TextStyle(fontSize: 6.5, color: _muted),
           ),
         ],
       ),

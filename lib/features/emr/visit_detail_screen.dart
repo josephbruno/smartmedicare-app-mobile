@@ -359,6 +359,40 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
           child: _VitalsGrid(visit: v),
         ),
       ],
+      if (v.observation != null && v.observation!.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _SectionCard(
+          icon: Icons.visibility_outlined,
+          iconColor: const Color(0xFF2563EB),
+          iconBg: const Color(0xFFEFF6FF),
+          title: 'Observation',
+          child: Text(
+            v.observation!,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.55,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ),
+      ],
+      if (v.investigation != null && v.investigation!.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _SectionCard(
+          icon: Icons.biotech_outlined,
+          iconColor: const Color(0xFF0F766E),
+          iconBg: const Color(0xFFF0FDFA),
+          title: 'Investigation',
+          child: Text(
+            v.investigation!,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.55,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ),
+      ],
       if (v.diagnoses != null && v.diagnoses!.isNotEmpty) ...[
         const SizedBox(height: 12),
         _SectionCard(

@@ -310,6 +310,8 @@ class PetVisit {
     this.heartRate,
     this.respiratoryRate,
     this.clinicalNotes,
+    this.observation,
+    this.investigation,
     this.followUpDate,
     this.followUpNotes,
     this.serviceCharge = 0,
@@ -339,6 +341,8 @@ class PetVisit {
   final int? heartRate;
   final int? respiratoryRate;
   final String? clinicalNotes;
+  final String? observation;
+  final String? investigation;
   final String? followUpDate;
   final String? followUpNotes;
   final double serviceCharge;
@@ -384,6 +388,8 @@ class PetVisit {
       heartRate: intOrNull(j['heart_rate']),
       respiratoryRate: intOrNull(j['respiratory_rate']),
       clinicalNotes: j['clinical_notes']?.toString(),
+      observation: j['observation']?.toString(),
+      investigation: j['investigation']?.toString(),
       followUpDate: formatApiDate(j['follow_up_date']?.toString()),
       followUpNotes: j['follow_up_notes']?.toString(),
       serviceCharge: numOrNull(j['service_charge']) ?? 0,
@@ -413,6 +419,8 @@ class PetVisit {
         if (heartRate != null) 'heart_rate': heartRate,
         if (respiratoryRate != null) 'respiratory_rate': respiratoryRate,
         if (clinicalNotes != null) 'clinical_notes': clinicalNotes,
+        if (observation != null) 'observation': observation,
+        if (investigation != null) 'investigation': investigation,
         if (followUpDate != null) 'follow_up_date': followUpDate,
         if (followUpNotes != null) 'follow_up_notes': followUpNotes,
         if (diagnoses != null && diagnoses!.isNotEmpty)

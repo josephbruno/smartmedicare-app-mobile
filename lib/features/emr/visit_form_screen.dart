@@ -26,6 +26,8 @@ class VisitFormScreen extends StatefulWidget {
 class _VisitFormScreenState extends State<VisitFormScreen> {
   final _complaint = TextEditingController();
   final _clinicalNotes = TextEditingController();
+  final _observation = TextEditingController();
+  final _investigation = TextEditingController();
   final _followUpNotes = TextEditingController();
   final _temp = TextEditingController();
   final _weight = TextEditingController();
@@ -137,6 +139,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     }
     _complaint.text = visit.chiefComplaint ?? '';
     _clinicalNotes.text = visit.clinicalNotes ?? '';
+    _observation.text = visit.observation ?? '';
+    _investigation.text = visit.investigation ?? '';
     _followUpNotes.text = visit.followUpNotes ?? '';
     if (visit.temperature != null) _temp.text = visit.temperature.toString();
     if (visit.weight != null) _weight.text = visit.weight.toString();
@@ -499,6 +503,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (_complaintForApi.isNotEmpty) 'chief_complaint': _complaintForApi,
       if (_clinicalNotes.text.trim().isNotEmpty)
         'clinical_notes': _clinicalNotes.text.trim(),
+      if (_observation.text.trim().isNotEmpty)
+        'observation': _observation.text.trim(),
+      if (_investigation.text.trim().isNotEmpty)
+        'investigation': _investigation.text.trim(),
       if (_followUpNotes.text.trim().isNotEmpty)
         'follow_up_notes': _followUpNotes.text.trim(),
       if (_temp.text.isNotEmpty) 'temperature': double.tryParse(_temp.text),
@@ -582,6 +590,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void dispose() {
     _complaint.dispose();
     _clinicalNotes.dispose();
+    _observation.dispose();
+    _investigation.dispose();
     _followUpNotes.dispose();
     _temp.dispose();
     _weight.dispose();
@@ -959,6 +969,26 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 ],
               );
             },
+          ),
+          const SizedBox(height: 16),
+          Text('Observation', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _observation,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Examination findings, physical observations...',
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Investigation', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _investigation,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Labs, imaging, diagnostic tests...',
+            ),
           ),
           const SizedBox(height: 16),
           Text('Diagnoses', style: Theme.of(context).textTheme.titleSmall),
