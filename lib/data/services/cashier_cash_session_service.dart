@@ -114,6 +114,31 @@ class CashierCashSessionService {
     }
   }
 
+  Future<CashierDayStatus> dayCloseReport({String? date}) async {
+    try {
+      final res = await _client.get('/cashier/day-close/report', queryParameters: {
+        if (date != null && date.isNotEmpty) 'date': date,
+      });
+      return parseEnvelopeData(
+        res,
+        (data) => CashierDayStatus.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<CashierDayCloseInfo>> dayCloseHistory({int limit = 30}) async {
+    try {
+      final res = await _client.get('/cashier/day-close/history', queryParameters: {
+        'limit': limit,
+      });
+      return parseEnvelopeList(res, CashierDayCloseInfo.fromJson).items;
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
   Future<CashierDayStatus> dayClose({String? businessDate, String? notes}) async {
     try {
       final res = await _client.post('/cashier/day-close', data: {

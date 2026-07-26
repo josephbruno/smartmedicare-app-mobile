@@ -47,6 +47,7 @@ import '../../features/purchases/purchase_form_screen.dart';
 import '../../features/purchases/purchase_list_screen.dart';
 import '../../features/purchases/supplier_list_screen.dart';
 import '../../features/reports/gst_report_screen.dart';
+import '../../features/reports/day_close_report_screen.dart';
 import '../../features/reports/sales_report_screen.dart';
 import '../../features/reports/stock_transfer_report_screen.dart';
 import '../../features/settings/branches_screen.dart';
@@ -153,7 +154,9 @@ GoRouter createAppRouter({
     if (path.startsWith('/expenses')) {
       if (need(AppPermissions.expensesView)) return denied;
     }
-    if (path.startsWith('/reports')) {
+    if (path.startsWith('/reports/day-close')) {
+      if (need(AppPermissions.cashierDayClose)) return denied;
+    } else if (path.startsWith('/reports')) {
       if (need(AppPermissions.reportsView) || !auth.isSuperAdmin) return denied;
     }
     if (path.startsWith('/settings/doctors')) {
@@ -519,6 +522,14 @@ GoRouter createAppRouter({
               permission: AppPermissions.reportsView,
               additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
               child: const StockTransferReportScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/reports/day-close',
+            name: 'DayCloseReport',
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.cashierDayClose,
+              child: DayCloseReportScreen(),
             ),
           ),
           GoRoute(

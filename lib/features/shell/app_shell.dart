@@ -870,6 +870,8 @@ List<_MenuItem> _menuItems(AuthSession auth) {
       _MenuItem(label: 'GST Report', icon: Icons.description_outlined, path: '/reports/gst'),
       _MenuItem(label: 'Stock Transfer Report', icon: Icons.swap_horiz_outlined, path: '/reports/stock-transfers'),
     ],
+    if (can('cashier.day_close'))
+      _MenuItem(label: 'Day Close Report', icon: Icons.summarize_outlined, path: '/reports/day-close'),
   ]);
 
   addSection('MANAGEMENT', [
@@ -913,6 +915,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/reports/sales')) return 'Sales Report';
   if (path.startsWith('/reports/gst')) return 'GST Report';
   if (path.startsWith('/reports/stock-transfers')) return 'Stock Transfer Report';
+  if (path.startsWith('/reports/day-close')) return 'Day Close Report';
   if (path.startsWith('/settings/doctors')) return 'Doctors';
   if (path.startsWith('/settings/catalog')) return 'Catalog';
   if (path.startsWith('/settings/emr-master-data')) return 'EMR Master Data';

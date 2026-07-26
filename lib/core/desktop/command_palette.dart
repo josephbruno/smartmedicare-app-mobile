@@ -277,6 +277,9 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
   add('Stock transfer report', '/reports/stock-transfers', Icons.swap_horiz_outlined,
       visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView),
       keywords: ['inventory', 'transfer']);
+  add('Day close report', '/reports/day-close', Icons.summarize_outlined,
+      visible: () => can(AppPermissions.cashierDayClose),
+      keywords: ['cashier', 'shift', 'eod', 'drawer']);
   add('Settings', '/settings', Icons.settings_outlined, visible: () => auth.canAccessSettings);
 
   return entries;

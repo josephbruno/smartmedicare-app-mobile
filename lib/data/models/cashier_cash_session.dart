@@ -208,8 +208,10 @@ class CashierDayCloseInfo {
     required this.sessionsCount,
     this.notes,
     this.closedBy,
+    this.closedByName,
     this.closedAt,
     this.branchId,
+    this.branchName,
   });
 
   final int id;
@@ -222,8 +224,10 @@ class CashierDayCloseInfo {
   final int sessionsCount;
   final String? notes;
   final int? closedBy;
+  final String? closedByName;
   final String? closedAt;
   final int? branchId;
+  final String? branchName;
 
   factory CashierDayCloseInfo.fromJson(Map<String, dynamic> j) {
     return CashierDayCloseInfo(
@@ -237,8 +241,10 @@ class CashierDayCloseInfo {
       sessionsCount: (j['sessions_count'] as num?)?.toInt() ?? 0,
       notes: j['notes']?.toString(),
       closedBy: (j['closed_by'] as num?)?.toInt(),
+      closedByName: j['closed_by_name']?.toString(),
       closedAt: j['closed_at']?.toString(),
       branchId: (j['branch_id'] as num?)?.toInt(),
+      branchName: j['branch_name']?.toString(),
     );
   }
 }
