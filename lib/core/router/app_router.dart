@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../session/auth_session.dart';
 import '../services/permission_service.dart';
 import '../widgets/permission_guard.dart';
+import '../app_config.dart';
 import '../../features/auth/cashier_desktop_only_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
 import '../../features/auth/landing_screen.dart';
@@ -56,6 +57,7 @@ import '../../features/settings/catalog_master_data_screen.dart';
 import '../../features/settings/doctors_screen.dart';
 import '../../features/settings/emr_master_data_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/settings/usb_printer_settings_screen.dart';
 import '../../features/settings/users_screen.dart';
 import '../../features/shell/app_shell.dart';
 
@@ -172,7 +174,14 @@ GoRouter createAppRouter({
     if (path.startsWith('/settings/catalog')) {
       if (need(AppPermissions.productsEdit)) return denied;
     }
-    if (path == '/settings' || path.startsWith('/settings/')) {
+    if (path.startsWith('/settings/printer')) {
+      // Local USB ESC/POS config — cashiers on desktop, or anyone who can manage shop.
+      final canPrinter = auth.hasPermission(AppPermissions.shopManage) ||
+          (auth.hasRole(AppRoles.cashier) &&
+              AppConfig.isCashierPlatform &&
+              auth.hasPermission(AppPermissions.invoicesCreate));
+      if (!canPrinter) return denied;
+    } else if (path == '/settings' || path.startsWith('/settings/')) {
       if (path == '/settings' && need(AppPermissions.shopManage)) return denied;
       if (path.startsWith('/settings/users') && need(AppPermissions.usersView)) {
         return denied;
@@ -550,6 +559,18 @@ GoRouter createAppRouter({
             builder: (c, s) => const PermissionGuard(
               permission: AppPermissions.shopManage,
               child: SettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/printer',
+            name: 'UsbPrinterSettings',
+            builder: (c, s) => AccessGuard(
+              allow: (session) =>
+                  session.hasPermission(AppPermissions.shopManage) ||
+                  (session.hasRole(AppRoles.cashier) &&
+                      AppConfig.isCashierPlatform &&
+                      session.hasPermission(AppPermissions.invoicesCreate)),
+              child: const UsbPrinterSettingsScreen(),
             ),
           ),
           GoRoute(

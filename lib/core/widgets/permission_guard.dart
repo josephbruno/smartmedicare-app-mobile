@@ -70,6 +70,30 @@ class MultiPermissionGuard extends StatelessWidget {
   }
 }
 
+/// Guard with a custom allow predicate.
+class AccessGuard extends StatelessWidget {
+  const AccessGuard({
+    super.key,
+    required this.allow,
+    required this.child,
+    this.fallback,
+  });
+
+  final bool Function(AuthSession auth) allow;
+  final Widget child;
+  final Widget? fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthSession>(
+      builder: (context, auth, _) {
+        if (allow(auth)) return child;
+        return fallback ?? _PermissionDeniedWidget(homeRoute: auth.homeRoute);
+      },
+    );
+  }
+}
+
 /// Guard based on role.
 class RoleGuard extends StatelessWidget {
   final String role;

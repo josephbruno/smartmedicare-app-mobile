@@ -10,8 +10,12 @@ import '../../../core/session/auth_session.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// POS / desktop toggles stored in SharedPreferences.
+///
+/// [printerFocused] highlights USB ESC/POS (XPrinter) setup for cashier desktops.
 class PosDesktopSettingsSection extends StatefulWidget {
-  const PosDesktopSettingsSection({super.key});
+  const PosDesktopSettingsSection({super.key, this.printerFocused = false});
+
+  final bool printerFocused;
 
   @override
   State<PosDesktopSettingsSection> createState() => _PosDesktopSettingsSectionState();
@@ -28,7 +32,7 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
   bool _loadingPrinters = false;
   bool _testing = false;
 
-  bool get _isWindowsDesktop {
+  bool get _isDesktopPrintSupported {
     if (kIsWeb) return false;
     return WindowsPrintBridge.isSupported;
   }
@@ -54,7 +58,7 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
       _paperWidth = paper;
       _loading = false;
     });
-    if (_isWindowsDesktop) {
+    if (_isDesktopPrintSupported) {
       await _refreshPrinters();
     }
   }
@@ -119,53 +123,78 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
   Widget build(BuildContext context) {
     if (_loading) return const SizedBox.shrink();
 
+    final printerOnly = widget.printerFocused;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const ListTile(
-            leading: Icon(Icons.desktop_windows_outlined, color: AppTheme.primary),
-            title: Text('Desktop & POS', style: TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('Receipt printing and notifications'),
-          ),
-          SwitchListTile(
-            title: const Text('Auto-print receipt after checkout'),
-            subtitle: Text(
-              _directPrint && _isWindowsDesktop
-                  ? 'Sends bill directly to the USB thermal printer'
-                  : 'Opens print dialog when payment succeeds',
+          ListTile(
+            leading: Icon(
+              printerOnly ? Icons.print_outlined : Icons.desktop_windows_outlined,
+              color: AppTheme.primary,
             ),
-            value: _autoPrint,
-            onChanged: (v) async {
-              await DesktopPrefs.setAutoPrintReceipt(v);
-              setState(() => _autoPrint = v);
-            },
+            title: Text(
+              printerOnly ? 'USB ESC/POS Printer' : 'Desktop & POS',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Text(
+              printerOnly
+                  ? 'Local XPrinter only — configured on this PC'
+                  : 'Receipt printing and notifications',
+            ),
           ),
-          SwitchListTile(
-            title: const Text('Sound for visit billing alerts'),
-            value: _sound,
-            onChanged: (v) async {
-              await DesktopPrefs.setNotificationSound(v);
-              setState(() => _sound = v);
-            },
-          ),
-          if (_isWindowsDesktop) ...[
-            const Divider(height: 1),
-            const ListTile(
-              leading: Icon(Icons.print_outlined, color: AppTheme.primary),
-              title: Text('USB thermal printer', style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text('Epson / XPrinter installed in Windows'),
+          if (!printerOnly) ...[
+            SwitchListTile(
+              title: const Text('Auto-print receipt after checkout'),
+              subtitle: Text(
+                _directPrint && _isDesktopPrintSupported
+                    ? 'Sends bill directly to the USB thermal printer'
+                    : 'Opens print dialog when payment succeeds',
+              ),
+              value: _autoPrint,
+              onChanged: (v) async {
+                await DesktopPrefs.setAutoPrintReceipt(v);
+                setState(() => _autoPrint = v);
+              },
             ),
             SwitchListTile(
+              title: const Text('Sound for visit billing alerts'),
+              value: _sound,
+              onChanged: (v) async {
+                await DesktopPrefs.setNotificationSound(v);
+                setState(() => _sound = v);
+              },
+            ),
+          ],
+          if (_isDesktopPrintSupported) ...[
+            if (!printerOnly) const Divider(height: 1),
+            if (!printerOnly)
+              const ListTile(
+                leading: Icon(Icons.print_outlined, color: AppTheme.primary),
+                title: Text('USB thermal printer', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text('XPrinter ESC/POS installed on this computer'),
+              ),
+            SwitchListTile(
               title: const Text('Direct USB print (no dialog)'),
-              subtitle: const Text('ESC/POS raw to the selected Windows printer'),
+              subtitle: const Text('ESC/POS raw bytes to the selected local XPrinter'),
               value: _directPrint,
               onChanged: (v) async {
                 await DesktopPrefs.setDirectThermalPrint(v);
                 setState(() => _directPrint = v);
               },
             ),
+            if (printerOnly)
+              SwitchListTile(
+                title: const Text('Auto-print receipt after checkout'),
+                subtitle: const Text('Prints immediately to the configured USB printer'),
+                value: _autoPrint,
+                onChanged: (v) async {
+                  await DesktopPrefs.setAutoPrintReceipt(v);
+                  setState(() => _autoPrint = v);
+                },
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Row(
@@ -173,7 +202,7 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                   Expanded(
                     child: InputDecorator(
                       decoration: const InputDecoration(
-                        labelText: 'Printer',
+                        labelText: 'Local USB printer',
                         isDense: true,
                         border: OutlineInputBorder(),
                       ),
@@ -181,13 +210,18 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                         child: DropdownButton<String>(
                           isExpanded: true,
                           isDense: true,
-                          hint: const Text('Select USB printer'),
+                          hint: const Text('Select XPrinter'),
                           value: _dropdownPrinterValue(),
                           items: _printerDropdownItems(),
                           onChanged: (v) async {
                             if (v == null) return;
                             await DesktopPrefs.setThermalPrinterName(v);
-                            setState(() => _printerName = v);
+                            // Selecting a printer implies direct ESC/POS print.
+                            await DesktopPrefs.setDirectThermalPrint(true);
+                            setState(() {
+                              _printerName = v;
+                              _directPrint = true;
+                            });
                           },
                         ),
                       ),
@@ -195,7 +229,7 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    tooltip: 'Refresh printers',
+                    tooltip: 'Refresh local printers',
                     onPressed: _loadingPrinters ? null : _refreshPrinters,
                     icon: _loadingPrinters
                         ? const SizedBox(
@@ -212,8 +246,18 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Text(
-                  'No printers found. Install your USB Epson/XPrinter in Windows first.',
+                  'No printers found. On Linux: plug in the USB XPrinter, then either '
+                  'add it in CUPS (Settings → Printers) or ensure /dev/usb/lp0 appears. '
+                  'On Windows: install it under Devices & Printers. Config is local to this PC only.',
                   style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                ),
+              )
+            else if (_printerName.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  'Selected: $_printerName · Print will go directly to this printer',
+                  style: const TextStyle(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w600),
                 ),
               ),
             Padding(
@@ -253,10 +297,17 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.receipt_long_outlined, size: 18),
-                label: Text(_testing ? 'Printing…' : 'Test print sample bill'),
+                label: Text(_testing ? 'Printing…' : 'Test print (ESC/POS)'),
               ),
             ),
-          ],
+          ] else if (printerOnly)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Text(
+                'Direct USB ESC/POS print is available on Windows and Linux cashier desktops only.',
+                style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+              ),
+            ),
         ],
       ),
     );

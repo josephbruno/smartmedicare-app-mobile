@@ -653,8 +653,15 @@ class _DesktopShellState extends State<_DesktopShell> {
                         onPressed: () => showCommandPalette(context, widget.auth),
                       ),
                       IconButton(
-                        tooltip: 'Settings',
-                        icon: const Icon(Icons.settings_outlined, color: AppTheme.textSecondary),
+                        tooltip: widget.auth.settingsRoute == '/settings/printer'
+                            ? 'USB Printer'
+                            : 'Settings',
+                        icon: Icon(
+                          widget.auth.settingsRoute == '/settings/printer'
+                              ? Icons.print_outlined
+                              : Icons.settings_outlined,
+                          color: AppTheme.textSecondary,
+                        ),
                         onPressed: widget.auth.settingsRoute != null
                             ? () => context.go(widget.auth.settingsRoute!)
                             : null,
@@ -883,6 +890,14 @@ List<_MenuItem> _menuItems(AuthSession auth) {
       _MenuItem(label: 'EMR Master Data', icon: Icons.list_alt_outlined, path: '/settings/emr-master-data'),
     if (can('shop.manage'))
       _MenuItem(label: 'Settings', icon: Icons.settings_outlined, path: '/settings'),
+    if (auth.hasRole(AppRoles.cashier) &&
+        AppConfig.isCashierPlatform &&
+        can(AppPermissions.invoicesCreate))
+      _MenuItem(
+        label: 'USB Printer',
+        icon: Icons.print_outlined,
+        path: '/settings/printer',
+      ),
     if (can('users.view'))
       _MenuItem(label: 'Users', icon: Icons.manage_accounts_outlined, path: '/settings/users'),
     if (can('branch.manage'))
@@ -920,6 +935,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/settings/doctors')) return 'Doctors';
   if (path.startsWith('/settings/catalog')) return 'Catalog';
   if (path.startsWith('/settings/emr-master-data')) return 'EMR Master Data';
+  if (path.startsWith('/settings/printer')) return 'USB Printer';
   if (path.startsWith('/settings/users')) return 'Users';
   if (path.startsWith('/settings/branches')) return 'Branches';
   if (path.startsWith('/settings')) return 'Settings';

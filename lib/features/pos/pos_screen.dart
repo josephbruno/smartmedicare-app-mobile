@@ -1201,6 +1201,15 @@ class _PosScreenState extends State<PosScreen> {
           const SizedBox(width: 6),
           Text(auth.user?.name ?? 'Cashier', style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(13))),
           const Spacer(),
+          if (AppConfig.isCashierPlatform &&
+              (auth.hasRole(AppRoles.cashier) ||
+                  auth.hasPermission(AppPermissions.shopManage)))
+            IconButton(
+              tooltip: 'USB Printer (XPrinter ESC/POS)',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => context.go('/settings/printer'),
+              icon: Icon(Icons.print_outlined, size: _ic(20), color: AppTheme.primary),
+            ),
           Text(
             DateFormat('EEE, d MMM · HH:mm').format(DateTime.now()),
             style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(12)),

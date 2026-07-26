@@ -28,10 +28,11 @@ class ThermalPrinterService {
     String? shopAddress,
   }) async {
     try {
-      final preferDirect = await DesktopPrefs.getDirectThermalPrint();
-      if (preferDirect && WindowsPrintBridge.isSupported) {
+      // Prefer local USB ESC/POS (XPrinter) whenever a printer is configured.
+      if (WindowsPrintBridge.isSupported) {
         final printer = await DesktopPrefs.getThermalPrinterName();
-        if (printer.isNotEmpty) {
+        final preferDirect = await DesktopPrefs.getDirectThermalPrint();
+        if (preferDirect && printer.isNotEmpty) {
           final paper = await DesktopPrefs.getThermalPaperWidthMm();
           final bytes = await EscPosReceiptBuilder.build(
             invoice: invoice,
@@ -49,7 +50,10 @@ class ThermalPrinterService {
           if (ok) {
             return ThermalPrintResult.directSuccess;
           }
-          // Fall through to dialog if direct fails.
+          return ThermalPrintResult.failed;
+        }
+        if (preferDirect && printer.isEmpty) {
+          return ThermalPrintResult.noPrinterConfigured;
         }
       }
 
@@ -336,9 +340,9 @@ extension ThermalPrintResultMessage on ThermalPrintResult {
       case ThermalPrintResult.failed:
         return 'Print failed';
       case ThermalPrintResult.unsupported:
-        return 'Direct USB print is available on Windows only';
+        return 'Direct USB print is available on Windows/Linux desktops only';
       case ThermalPrintResult.noPrinterConfigured:
-        return 'Select a USB printer in Settings first';
+        return 'Select a USB XPrinter in USB Printer settings first';
     }
   }
 
