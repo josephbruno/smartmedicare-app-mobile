@@ -334,6 +334,36 @@ class EmrService {
     }
   }
 
+  Future<List<String>> getObservations({String? q}) async {
+    try {
+      final res = await _client.get(
+        '/visits/observations',
+        queryParameters: q != null && q.isNotEmpty ? {'q': q} : null,
+      );
+      return parseEnvelopeData(res, (data) {
+        if (data is List) return data.map((e) => e.toString()).toList();
+        return <String>[];
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<String>> getInvestigations({String? q}) async {
+    try {
+      final res = await _client.get(
+        '/visits/investigations',
+        queryParameters: q != null && q.isNotEmpty ? {'q': q} : null,
+      );
+      return parseEnvelopeData(res, (data) {
+        if (data is List) return data.map((e) => e.toString()).toList();
+        return <String>[];
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
   Future<List<VisitDiagnosis>> getDiagnosisSuggestions({String? q}) async {
     try {
       final res = await _client.get(

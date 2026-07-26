@@ -166,13 +166,17 @@ class _SurgeryManagementScreenState extends State<SurgeryManagementScreen> {
         context.watch<AuthSession>().hasPermission(AppPermissions.emrSurgeriesCreate);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Surgeries')),
-      floatingActionButton: canCreate
-          ? FloatingActionButton(
+      appBar: AppBar(
+        title: const Text('Surgeries'),
+        actions: [
+          if (canCreate)
+            IconButton(
+              tooltip: 'Add surgery',
               onPressed: _showAddForm,
-              child: const Icon(Icons.add),
-            )
-          : null,
+              icon: const Icon(Icons.add),
+            ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () async => setState(_reload),
         child: FutureBuilder<List<PetSurgery>>(

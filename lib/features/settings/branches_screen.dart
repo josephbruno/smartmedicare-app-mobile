@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/extensions/permission_extensions.dart';
-import '../../core/responsive/desktop_layout_helper.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
@@ -113,19 +112,11 @@ class _BranchesScreenState extends State<BranchesScreen> {
     final canManage =
         context.watch<AuthSession>().hasPermission(AppPermissions.branchManage);
     final currentBranchId = context.watch<AuthSession>().currentBranchId;
-    final isMobile = ResponsiveLayout.isMobile(context);
     final width = MediaQuery.sizeOf(context).width;
     final columns = _gridColumns(width);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      floatingActionButton: canManage && isMobile
-          ? FloatingActionButton.extended(
-              onPressed: () => _openForm(),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Branch'),
-            )
-          : null,
       body: Column(
         children: [
           if (_loading) const LinearProgressIndicator(minHeight: 2),
@@ -177,7 +168,7 @@ class _BranchesScreenState extends State<BranchesScreen> {
                               ],
                             ),
                           ),
-                          if (canManage && !isMobile) ...[
+                          if (canManage) ...[
                             const SizedBox(width: 12),
                             FilledButton(
                               onPressed: () => _openForm(),
@@ -195,7 +186,7 @@ class _BranchesScreenState extends State<BranchesScreen> {
                     )
                   else
                     SliverPadding(
-                      padding: EdgeInsets.fromLTRB(20, 8, 20, isMobile ? 88 : 24),
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                       sliver: SliverGrid(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: columns,

@@ -67,7 +67,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                   onSubmitted: (_) => setState(() {}),
                 ),
               ),
-              if (canCreate && _splitPane) ...[
+              if (canCreate) ...[
                 const SizedBox(width: 12),
                 FilledButton.icon(
                   onPressed: _openCreateCustomer,
@@ -113,14 +113,6 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      floatingActionButton: canCreate && !_splitPane
-          ? FloatingActionButton(
-              onPressed: _openCreateCustomer,
-              backgroundColor: AppTheme.primary,
-              foregroundColor: Colors.white,
-              child: const Icon(Icons.add_rounded),
-            )
-          : null,
       body: _splitPane
           ? Row(
               children: [

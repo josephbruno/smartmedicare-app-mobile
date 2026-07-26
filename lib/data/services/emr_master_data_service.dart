@@ -218,6 +218,12 @@ class EmrMasterDataService {
   Future<List<EmrTemplateItem>> listFrequencies({String? search}) =>
       _list('$_base/frequencies', search);
 
+  Future<List<EmrTemplateItem>> listObservations({String? search}) =>
+      _list('$_base/observations', search);
+
+  Future<List<EmrTemplateItem>> listInvestigations({String? search}) =>
+      _list('$_base/investigations', search);
+
   Future<EmrTemplateItem> createComplaint(Map<String, dynamic> body) =>
       _create('$_base/complaints', body);
 
@@ -265,6 +271,22 @@ class EmrMasterDataService {
       _update('$_base/frequencies/$id', body);
 
   Future<void> deleteFrequency(int id) => _delete('$_base/frequencies/$id');
+
+  Future<EmrTemplateItem> createObservation(Map<String, dynamic> body) =>
+      _create('$_base/observations', body);
+
+  Future<EmrTemplateItem> updateObservation(int id, Map<String, dynamic> body) =>
+      _update('$_base/observations/$id', body);
+
+  Future<void> deleteObservation(int id) => _delete('$_base/observations/$id');
+
+  Future<EmrTemplateItem> createInvestigation(Map<String, dynamic> body) =>
+      _create('$_base/investigations', body);
+
+  Future<EmrTemplateItem> updateInvestigation(int id, Map<String, dynamic> body) =>
+      _update('$_base/investigations/$id', body);
+
+  Future<void> deleteInvestigation(int id) => _delete('$_base/investigations/$id');
 
   // ── Procedure / service kits ──────────────────────────────────────
 

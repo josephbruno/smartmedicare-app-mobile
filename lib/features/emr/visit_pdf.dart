@@ -35,6 +35,37 @@ class VisitPdf {
   static const double _marginT = 8;
   static const double _marginB = 8;
 
+  /// Empty-field placeholder (ASCII — Helvetica cannot draw em dash U+2014).
+  static const String _empty = '-';
+
+  /// Helvetica/WinAnsi cannot render many Unicode punctuation chars (shows as
+  /// tofu boxes in print preview). Map them to plain ASCII.
+  static String _t(String? input) {
+    if (input == null || input.isEmpty) return '';
+    return input
+        .replaceAll('\u2014', '-') // em dash —
+        .replaceAll('\u2013', '-') // en dash –
+        .replaceAll('\u2012', '-') // figure dash
+        .replaceAll('\u2015', '-') // horizontal bar
+        .replaceAll('\u2212', '-') // minus
+        .replaceAll('\u00A0', ' ') // nbsp
+        .replaceAll('\u2022', '*') // bullet
+        .replaceAll('\u2026', '...') // ellipsis
+        .replaceAll('\u2018', "'")
+        .replaceAll('\u2019', "'")
+        .replaceAll('\u201C', '"')
+        .replaceAll('\u201D', '"')
+        .replaceAll('\u00B7', '|') // middle dot ·
+        .replaceAll('\u2022', '*');
+  }
+
+  static String _join(Iterable<String?> parts, [String sep = ' | ']) {
+    return parts
+        .map(_t)
+        .where((e) => e.trim().isNotEmpty)
+        .join(sep);
+  }
+
   static Future<pw.Document> build(
     PetVisit visit, {
     VisitClinicInfo? clinic,
@@ -67,20 +98,20 @@ class VisitPdf {
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
               _clinicHeader(
-                name: clinicName,
-                address: clinicAddress,
-                phone: clinicPhone,
+                name: _t(clinicName),
+                address: _t(clinicAddress),
+                phone: clinicPhone == null ? null : _t(clinicPhone),
               ),
               pw.SizedBox(height: 4),
               _ownerPetRow(
                 visit: visit,
-                petName: petName,
-                meta: [
+                petName: _t(petName),
+                meta: _join([
                   visit.visitNumber,
                   visit.visitDate,
                   if (time.isNotEmpty) time,
                   typeLabel,
-                ].join(' · '),
+                ]),
               ),
               pw.SizedBox(height: 4),
               pw.Expanded(
@@ -95,8 +126,8 @@ class VisitPdf {
                             _sectionTitle('Complaint'),
                             _bodyText(
                               visit.chiefComplaint?.trim().isNotEmpty == true
-                                  ? visit.chiefComplaint!
-                                  : '—',
+                                  ? _t(visit.chiefComplaint)
+                                  : _empty,
                             ),
                             _divider(),
                             _sectionTitle('Observation'),
@@ -105,19 +136,16 @@ class VisitPdf {
                             _sectionTitle('Investigation'),
                             _bodyText(
                               visit.investigation?.trim().isNotEmpty == true
-                                  ? visit.investigation!
-                                  : '—',
+                                  ? _t(visit.investigation)
+                                  : _empty,
                             ),
-                            _divider(),
-                            _sectionTitle('Treatment'),
-                            _medicinesBody(visit),
                             if (visit.followUpDate != null) ...[
                               _divider(),
                               _sectionTitle('Follow-up'),
-                              _bodyText(visit.followUpDate!, bold: true),
+                              _bodyText(_t(visit.followUpDate), bold: true),
                               if (visit.followUpNotes != null &&
                                   visit.followUpNotes!.trim().isNotEmpty)
-                                _bodyText(visit.followUpNotes!, muted: true),
+                                _bodyText(_t(visit.followUpNotes), muted: true),
                             ],
                           ],
                         ),
@@ -131,6 +159,9 @@ class VisitPdf {
                           children: [
                             _sectionTitle('Procedures'),
                             _proceduresBody(visit),
+                            _divider(),
+                            _sectionTitle('Treatment'),
+                            _medicinesBody(visit),
                           ],
                         ),
                       ),
@@ -153,10 +184,10 @@ class VisitPdf {
     required String address,
     String? phone,
   }) {
-    final subtitle = [
+    final subtitle = _join([
       if (address.isNotEmpty) address,
       if (phone != null && phone.isNotEmpty) phone,
-    ].join('  ·  ');
+    ]);
 
     return pw.Container(
       width: double.infinity,
@@ -168,7 +199,7 @@ class VisitPdf {
         crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
           pw.Text(
-            name,
+            _t(name),
             textAlign: pw.TextAlign.center,
             style: pw.TextStyle(
               fontSize: 12,
@@ -192,19 +223,19 @@ class VisitPdf {
     required String petName,
     required String meta,
   }) {
-    final species = [
+    final species = _join([
       visit.pet?.species,
       visit.pet?.breed,
-    ].where((e) => e != null && e.isNotEmpty).join(' · ');
+    ]);
     final owner = visit.pet?.customerName?.trim().isNotEmpty == true
-        ? visit.pet!.customerName!
-        : '—';
-    final phone = visit.pet?.customerPhone?.trim() ?? '';
-    final petLine = [
+        ? _t(visit.pet!.customerName)
+        : _empty;
+    final phone = _t(visit.pet?.customerPhone);
+    final petLine = _join([
       petName,
       if (species.isNotEmpty) species,
-      if (visit.doctor != null) 'Dr. ${visit.doctor!.name}',
-    ].join(' · ');
+      if (visit.doctor != null) 'Dr. ${_t(visit.doctor!.name)}',
+    ]);
 
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -219,7 +250,7 @@ class VisitPdf {
           pw.Expanded(
             child: _kvBlock(
               'Owner',
-              [owner, if (phone.isNotEmpty) phone].join(' · '),
+              _join([owner, if (phone.isNotEmpty) phone]),
             ),
           ),
           pw.Container(
@@ -252,7 +283,7 @@ class VisitPdf {
           ),
         ),
         pw.Text(
-          value,
+          _t(value),
           style: pw.TextStyle(
             fontSize: 8.5,
             fontWeight: pw.FontWeight.bold,
@@ -301,7 +332,7 @@ class VisitPdf {
         ? visit.observation!.trim()
         : (visit.clinicalNotes?.trim() ?? '');
     final vitals = <String>[];
-    if (visit.temperature != null) vitals.add('Temp ${visit.temperature} °F');
+    if (visit.temperature != null) vitals.add('Temp ${visit.temperature} F');
     if (visit.weight != null) vitals.add('Wt ${visit.weight} kg');
     if (visit.heartRate != null) vitals.add('HR ${visit.heartRate} bpm');
     if (visit.respiratoryRate != null) {
@@ -310,22 +341,22 @@ class VisitPdf {
     final diagnoses = visit.diagnoses ?? const <VisitDiagnosis>[];
 
     if (notes.isEmpty && vitals.isEmpty && diagnoses.isEmpty) {
-      return _bodyText('—');
+      return _bodyText(_empty);
     }
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        if (notes.isNotEmpty) _bodyText(notes),
-        if (vitals.isNotEmpty) _bodyText(vitals.join(' · '), muted: true),
+        if (notes.isNotEmpty) _bodyText(_t(notes)),
+        if (vitals.isNotEmpty) _bodyText(_join(vitals), muted: true),
         for (final d in diagnoses)
           _bodyText(
-            [
+            _join([
               if (d.isPrimary) '[P]',
               d.diagnosisName,
               if (d.icdCode != null && d.icdCode!.isNotEmpty) '(${d.icdCode})',
-              '· ${_titleCase(d.severity)}',
-            ].join(' '),
+              _titleCase(d.severity),
+            ]),
           ),
       ],
     );
@@ -333,40 +364,58 @@ class VisitPdf {
 
   static pw.Widget _medicinesBody(PetVisit visit) {
     final meds = visit.medicines ?? const <VisitMedicine>[];
-    if (meds.isEmpty) return _bodyText('—');
+    if (meds.isEmpty) return _bodyText(_empty);
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         for (var i = 0; i < meds.length; i++) ...[
           if (i > 0) pw.SizedBox(height: 2),
-          pw.Text(
-            meds[i].medicineName,
-            style: pw.TextStyle(
-              fontSize: 8.5,
-              fontWeight: pw.FontWeight.bold,
-              color: _text,
-            ),
-          ),
-          pw.Text(
-            [
-              if (meds[i].dosage != null && meds[i].dosage!.isNotEmpty)
-                meds[i].dosage!,
-              if (meds[i].frequency != null && meds[i].frequency!.isNotEmpty)
-                meds[i].frequency!,
-              if (meds[i].durationDays != null) '${meds[i].durationDays}d',
-              'Qty ${meds[i].quantity}',
-            ].join(' · '),
-            style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      _t(meds[i].medicineName),
+                      style: pw.TextStyle(
+                        fontSize: 8.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: _text,
+                      ),
+                    ),
+                    if (_medicineMeta(meds[i]).isNotEmpty)
+                      pw.Text(
+                        _medicineMeta(meds[i]),
+                        style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+                      ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(width: 4),
+              pw.Text(
+                'x ${meds[i].quantity}',
+                style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+              ),
+            ],
           ),
         ],
       ],
     );
   }
 
+  static String _medicineMeta(VisitMedicine med) {
+    return _join([
+      if (med.frequency != null && med.frequency!.isNotEmpty) med.frequency!,
+      if (med.durationDays != null) '${med.durationDays}d',
+    ]);
+  }
+
   static pw.Widget _proceduresBody(PetVisit visit) {
     final items = visit.treatments ?? const <VisitTreatment>[];
-    if (items.isEmpty) return _bodyText('—');
+    if (items.isEmpty) return _bodyText(_empty);
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -381,7 +430,7 @@ class VisitPdf {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
-                      items[i].treatmentName,
+                      _t(items[i].treatmentName),
                       style: pw.TextStyle(
                         fontSize: 8.5,
                         fontWeight: pw.FontWeight.bold,
@@ -391,7 +440,7 @@ class VisitPdf {
                     if (items[i].notes != null &&
                         items[i].notes!.trim().isNotEmpty)
                       pw.Text(
-                        items[i].notes!,
+                        _t(items[i].notes),
                         style: const pw.TextStyle(fontSize: 7.5, color: _muted),
                       ),
                   ],
@@ -399,7 +448,7 @@ class VisitPdf {
               ),
               pw.SizedBox(width: 4),
               pw.Text(
-                '× ${items[i].quantity}',
+                'x ${items[i].quantity}',
                 style: const pw.TextStyle(fontSize: 7.5, color: _muted),
               ),
             ],
@@ -415,7 +464,7 @@ class VisitPdf {
     bool muted = false,
   }) {
     return pw.Text(
-      text,
+      _t(text),
       style: pw.TextStyle(
         fontSize: 8.5,
         fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,

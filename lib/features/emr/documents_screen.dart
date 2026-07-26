@@ -159,19 +159,23 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     final canUpload = context.watch<AuthSession>().hasPermission(AppPermissions.emrDocumentsUpload);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Documents')),
-      floatingActionButton: canUpload
-          ? FloatingActionButton(
+      appBar: AppBar(
+        title: const Text('Documents'),
+        actions: [
+          if (canUpload)
+            IconButton(
+              tooltip: 'Upload document',
               onPressed: _uploading ? null : _upload,
-              child: _uploading
+              icon: _uploading
                   ? const SizedBox(
                       width: 22,
                       height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.upload_file),
-            )
-          : null,
+            ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () async => setState(_reload),
         child: FutureBuilder<List<PetDocument>>(

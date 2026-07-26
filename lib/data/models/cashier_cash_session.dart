@@ -141,15 +141,18 @@ class CashierCurrentSessionResult {
     required this.businessDate,
     required this.dayClosed,
     this.branchId,
+    this.suggestedOpening,
   });
 
   final CashierCashSession? session;
   final String businessDate;
   final bool dayClosed;
   final int? branchId;
+  final CashierSuggestedOpening? suggestedOpening;
 
   factory CashierCurrentSessionResult.fromJson(Map<String, dynamic> j) {
     final sessionMap = j['session'];
+    final suggestedMap = j['suggested_opening'];
     return CashierCurrentSessionResult(
       session: sessionMap is Map
           ? CashierCashSession.fromJson(Map<String, dynamic>.from(sessionMap))
@@ -157,6 +160,53 @@ class CashierCurrentSessionResult {
       businessDate: j['business_date']?.toString() ?? '',
       dayClosed: j['day_closed'] == true,
       branchId: (j['branch_id'] as num?)?.toInt(),
+      suggestedOpening: suggestedMap is Map
+          ? CashierSuggestedOpening.fromJson(Map<String, dynamic>.from(suggestedMap))
+          : null,
+    );
+  }
+}
+
+class CashierSuggestedOpening {
+  CashierSuggestedOpening({
+    this.amount,
+    required this.source,
+    this.label,
+    this.previousShiftAmount,
+    this.previousShiftDate,
+    this.lastDayCloseAmount,
+    this.lastDayCloseDate,
+    this.lastDayCloseNotes,
+  });
+
+  final double? amount;
+  final String source; // previous_shift | day_close | none
+  final String? label;
+  final double? previousShiftAmount;
+  final String? previousShiftDate;
+  final double? lastDayCloseAmount;
+  final String? lastDayCloseDate;
+  final String? lastDayCloseNotes;
+
+  bool get hasSuggestion => amount != null;
+
+  factory CashierSuggestedOpening.fromJson(Map<String, dynamic> j) {
+    final prev = j['previous_shift'];
+    final day = j['last_day_close'];
+    Map<String, dynamic>? prevMap;
+    Map<String, dynamic>? dayMap;
+    if (prev is Map) prevMap = Map<String, dynamic>.from(prev);
+    if (day is Map) dayMap = Map<String, dynamic>.from(day);
+
+    return CashierSuggestedOpening(
+      amount: (j['amount'] as num?)?.toDouble(),
+      source: j['source']?.toString() ?? 'none',
+      label: j['label']?.toString(),
+      previousShiftAmount: (prevMap?['counted_amount'] as num?)?.toDouble(),
+      previousShiftDate: prevMap?['business_date']?.toString(),
+      lastDayCloseAmount: (dayMap?['total_counted_amount'] as num?)?.toDouble(),
+      lastDayCloseDate: dayMap?['business_date']?.toString(),
+      lastDayCloseNotes: dayMap?['notes']?.toString(),
     );
   }
 }

@@ -576,7 +576,6 @@ class _ClinicalColumn extends StatelessWidget {
       vitals.add('RR ${visit.respiratoryRate} /min');
     }
     final diagnoses = visit.diagnoses ?? const <VisitDiagnosis>[];
-    final meds = visit.medicines ?? const <VisitMedicine>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -611,25 +610,6 @@ class _ClinicalColumn extends StatelessWidget {
               ? visit.investigation!
               : '—',
         ),
-        const _DividerLine(),
-        const _SectionTitle('Treatment'),
-        if (meds.isEmpty)
-          const _BodyText('—')
-        else
-          for (var i = 0; i < meds.length; i++) ...[
-            if (i > 0) const SizedBox(height: 6),
-            _BodyText(meds[i].medicineName, bold: true),
-            _BodyText(
-              [
-                if (meds[i].dosage != null && meds[i].dosage!.isNotEmpty) meds[i].dosage!,
-                if (meds[i].frequency != null && meds[i].frequency!.isNotEmpty)
-                  meds[i].frequency!,
-                if (meds[i].durationDays != null) '${meds[i].durationDays}d',
-                'Qty ${meds[i].quantity}',
-              ].join(' · '),
-              muted: true,
-            ),
-          ],
         if (visit.followUpDate != null) ...[
           const _DividerLine(),
           const _SectionTitle('Follow-up'),
@@ -658,6 +638,7 @@ class _ProceduresColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = visit.treatments ?? const <VisitTreatment>[];
+    final meds = visit.medicines ?? const <VisitMedicine>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -689,7 +670,42 @@ class _ProceduresColumn extends StatelessWidget {
               ],
             ),
           ],
+        const _DividerLine(),
+        const _SectionTitle('Treatment'),
+        if (meds.isEmpty)
+          const _BodyText('—')
+        else
+          for (var i = 0; i < meds.length; i++) ...[
+            if (i > 0) const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _BodyText(meds[i].medicineName, bold: true),
+                      if (_medicineMeta(meds[i]).isNotEmpty)
+                        _BodyText(_medicineMeta(meds[i]), muted: true),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '× ${meds[i].quantity}',
+                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+          ],
       ],
     );
+  }
+
+  static String _medicineMeta(VisitMedicine med) {
+    return [
+      if (med.frequency != null && med.frequency!.isNotEmpty) med.frequency!,
+      if (med.durationDays != null) '${med.durationDays}d',
+    ].join(' · ');
   }
 }

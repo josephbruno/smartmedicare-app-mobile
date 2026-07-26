@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import 'pet_visit_summary_screen.dart';
 
 /// Quick navigation to pet-centric EMR modules (matches web timeline hub links).
 class EmrPetHub extends StatelessWidget {
@@ -11,6 +12,25 @@ class EmrPetHub extends StatelessWidget {
 
   final int petId;
   final String? petName;
+
+  void _openVisitSummary(BuildContext context) {
+    final router = GoRouter.of(context);
+    // namedLocation throws when the route is missing (e.g. GoRouter built
+    // before Visit summary was added and the app was only hot-reloaded).
+    try {
+      final loc = router.namedLocation(
+        'PetVisitSummary',
+        pathParameters: {'petId': '$petId'},
+      );
+      context.push(loc);
+    } catch (_) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PetVisitSummaryScreen(petId: petId),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +43,7 @@ class EmrPetHub extends StatelessWidget {
           'Visit summary',
           Icons.description_outlined,
           '/emr/pets/$petId/visit-summary',
+          onTap: () => _openVisitSummary(context),
         ),
       if (auth.hasPermission('emr.deworming.view'))
         _HubLink('Deworming', Icons.medication_outlined, '/emr/pets/$petId/deworming'),
@@ -87,9 +108,10 @@ class EmrPetHub extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: links.map((l) {
+              final onPressed = l.onTap ?? () => context.push(l.path);
               if (l.primary) {
                 return FilledButton.icon(
-                  onPressed: () => context.push(l.path),
+                  onPressed: onPressed,
                   icon: Icon(l.icon, size: 16),
                   label: Text(l.label),
                   style: FilledButton.styleFrom(
@@ -101,7 +123,7 @@ class EmrPetHub extends StatelessWidget {
                 );
               }
               return OutlinedButton.icon(
-                onPressed: () => context.push(l.path),
+                onPressed: onPressed,
                 icon: Icon(l.icon, size: 16, color: AppTheme.primary),
                 label: Text(l.label),
                 style: OutlinedButton.styleFrom(
@@ -123,9 +145,16 @@ class EmrPetHub extends StatelessWidget {
 }
 
 class _HubLink {
-  const _HubLink(this.label, this.icon, this.path, {this.primary = false});
+  const _HubLink(
+    this.label,
+    this.icon,
+    this.path, {
+    this.primary = false,
+    this.onTap,
+  });
   final String label;
   final IconData icon;
   final String path;
   final bool primary;
+  final VoidCallback? onTap;
 }

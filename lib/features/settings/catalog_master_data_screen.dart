@@ -244,14 +244,17 @@ class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Catalog'),
+        actions: [
+          IconButton(
+            tooltip: 'Add',
+            onPressed: () => _openForm(),
+            icon: const Icon(Icons.add),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           tabs: _tabLabels.map((l) => Tab(text: l)).toList(),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openForm(),
-        child: const Icon(Icons.add),
       ),
       body: RefreshIndicator(
         onRefresh: _load,

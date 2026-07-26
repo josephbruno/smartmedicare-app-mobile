@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -42,7 +43,7 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
   late final AuthSession _session;
   late final ApiClient _api;
   late final AppServices _services;
-  late final GoRouter _router;
+  late GoRouter _router;
   late final AuthRepository _authRepository;
   late final OfflineInvoiceQueue _offlineQueue;
   late final ProductLocalDao _productDao;
@@ -108,6 +109,24 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
     unawaited(AppDatabase.instance());
   }
 
+  /// Hot reload keeps the old [GoRouter] instance (routes registered at start).
+  /// Rebuild it in debug so newly added routes like Visit summary resolve.
+  @override
+  void reassemble() {
+    super.reassemble();
+    if (!kDebugMode) return;
+    final loc = _router.routerDelegate.currentConfiguration.uri.toString();
+    _router.dispose();
+    _router = createAppRouter(auth: _session, rootNavigatorKey: _rootKey);
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (loc.isNotEmpty && loc != '/') {
+        _router.go(loc);
+      }
+    });
+  }
+
   void _onAuthSessionChanged() {
     if (_session.isAuthenticated && _session.isUnlocked) {
       if (!_session.cashierPlatformAllowed) {
@@ -129,6 +148,7 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
     _session.removeListener(_onAuthSessionChanged);
     _pushService.dispose();
     _visitPollService.dispose();
+    _router.dispose();
     super.dispose();
   }
 

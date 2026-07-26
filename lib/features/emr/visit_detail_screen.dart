@@ -1116,7 +1116,6 @@ class _MedicineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final details = [
-      if (medicine.dosage != null && medicine.dosage!.isNotEmpty) medicine.dosage!,
       if (medicine.frequency != null && medicine.frequency!.isNotEmpty) medicine.frequency!,
       if (medicine.durationDays != null) '${medicine.durationDays}d',
     ].join(' · ');

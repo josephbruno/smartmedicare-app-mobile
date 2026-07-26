@@ -58,5 +58,9 @@ class PosProductRepository {
     return _dao.findByBarcode(branchId, barcode);
   }
 
+  /// Local POS catalog lookup (includes synced [Product.currentStock]).
+  Future<Product?> findById(int branchId, int productId) =>
+      _dao.findById(branchId, productId);
+
   Future<int> localCount(int branchId) => _dao.countForBranch(branchId);
 }

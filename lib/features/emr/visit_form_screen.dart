@@ -44,10 +44,16 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   final List<_TreatmentRow> _treatments = [];
   final List<_MedicineRow> _medicines = [];
   List<String> _complaintSuggestions = [];
+  List<String> _observationSuggestions = [];
+  List<String> _investigationSuggestions = [];
   List<VisitDiagnosis> _diagnosisSuggestions = [];
+  List<TreatmentSuggestion> _defaultTreatmentSuggestions = [];
   List<TreatmentSuggestion> _treatmentSuggestions = [];
+  int? _treatmentSuggestForIndex;
+  List<MedicineSuggestion> _defaultMedicineSuggestions = [];
   List<MedicineSuggestion> _medicineSuggestions = [];
-  List<String> _dosageSuggestions = [];
+  int? _medicineSuggestForIndex;
+  int? _medicineFrequencySuggestForIndex;
   List<String> _frequencySuggestions = [];
   PetSummary? _petSummary;
   int? _serviceChargeProductId;
@@ -88,9 +94,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     try {
       _doctors = await emr.listDoctors();
       _complaintSuggestions = await emr.getComplaints();
-      _treatmentSuggestions = await emr.getTreatmentSuggestions();
-      _medicineSuggestions = await emr.getMedicineSuggestions();
-      _dosageSuggestions = await emr.getDosageSuggestions();
+      _observationSuggestions = await emr.getObservations();
+      _investigationSuggestions = await emr.getInvestigations();
+      _defaultTreatmentSuggestions = await emr.getTreatmentSuggestions();
+      _defaultMedicineSuggestions = await emr.getMedicineSuggestions();
       _frequencySuggestions = await emr.getFrequencySuggestions();
 
       if (auth.hasRole('doctor') && auth.user != null) {
@@ -292,15 +299,46 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     } catch (_) {}
   }
 
-  Future<void> _searchTreatments(String q) async {
+  void _showTreatmentSuggestionsFor(int index, {String? query}) {
+    final q = query ?? _treatments[index].nameCtrl.text.trim();
+    setState(() {
+      _treatmentSuggestForIndex = index;
+      if (q.length < 2) {
+        _treatmentSuggestions = _defaultTreatmentSuggestions;
+      }
+    });
+    if (q.length >= 2) {
+      _searchTreatments(q, forIndex: index);
+    }
+  }
+
+  Future<void> _searchTreatments(String q, {int? forIndex}) async {
+    final index = forIndex ?? _treatmentSuggestForIndex;
     if (q.length < 2) {
-      setState(() => _treatmentSuggestions = []);
+      if (!mounted) return;
+      setState(() {
+        _treatmentSuggestions = _defaultTreatmentSuggestions;
+        if (index != null) _treatmentSuggestForIndex = index;
+      });
       return;
     }
     try {
       final results = await context.read<AppServices>().emr.getTreatmentSuggestions(q: q);
-      if (mounted) setState(() => _treatmentSuggestions = results);
+      if (!mounted) return;
+      if (index != null && _treatmentSuggestForIndex != index) return;
+      setState(() {
+        _treatmentSuggestions = results;
+        if (index != null) _treatmentSuggestForIndex = index;
+      });
     } catch (_) {}
+  }
+
+  void _clearTreatmentSuggestions({int? onlyIfIndex}) {
+    if (onlyIfIndex != null && _treatmentSuggestForIndex != onlyIfIndex) return;
+    setState(() {
+      _treatmentSuggestForIndex = null;
+      _treatmentSuggestions = [];
+    });
   }
 
   Future<void> _addProcedureKit() async {
@@ -368,15 +406,46 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     );
   }
 
-  Future<void> _searchMedicines(String q) async {
+  void _showMedicineSuggestionsFor(int index, {String? query}) {
+    final q = query ?? _medicines[index].nameCtrl.text.trim();
+    setState(() {
+      _medicineSuggestForIndex = index;
+      if (q.length < 2) {
+        _medicineSuggestions = _defaultMedicineSuggestions;
+      }
+    });
+    if (q.length >= 2) {
+      _searchMedicines(q, forIndex: index);
+    }
+  }
+
+  Future<void> _searchMedicines(String q, {int? forIndex}) async {
+    final index = forIndex ?? _medicineSuggestForIndex;
     if (q.length < 2) {
-      setState(() => _medicineSuggestions = []);
+      if (!mounted) return;
+      setState(() {
+        _medicineSuggestions = _defaultMedicineSuggestions;
+        if (index != null) _medicineSuggestForIndex = index;
+      });
       return;
     }
     try {
       final results = await context.read<AppServices>().emr.getMedicineSuggestions(q: q);
-      if (mounted) setState(() => _medicineSuggestions = results);
+      if (!mounted) return;
+      if (index != null && _medicineSuggestForIndex != index) return;
+      setState(() {
+        _medicineSuggestions = results;
+        if (index != null) _medicineSuggestForIndex = index;
+      });
     } catch (_) {}
+  }
+
+  void _clearMedicineSuggestions({int? onlyIfIndex}) {
+    if (onlyIfIndex != null && _medicineSuggestForIndex != onlyIfIndex) return;
+    setState(() {
+      _medicineSuggestForIndex = null;
+      _medicineSuggestions = [];
+    });
   }
 
   Future<void> _searchDiagnoses(String q) async {
@@ -462,6 +531,83 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _setComplaintText('${next.trimRight()}, ');
     setState(() {});
     _searchComplaints('');
+  }
+
+  String _phraseSearchTerm(String text) {
+    final parts = text.split(',');
+    return parts.isEmpty ? '' : parts.last.trim();
+  }
+
+  void _setPhraseField(TextEditingController controller, String value) {
+    controller.text = value;
+    controller.selection =
+        TextSelection.collapsed(offset: controller.text.length);
+  }
+
+  Future<void> _searchObservations(String text) async {
+    final q = _phraseSearchTerm(text);
+    try {
+      final results = await context
+          .read<AppServices>()
+          .emr
+          .getObservations(q: q.isEmpty ? null : q);
+      if (mounted) setState(() => _observationSuggestions = results);
+    } catch (_) {}
+  }
+
+  void _applyObservationSuggestion(String phrase) {
+    final text = _observation.text;
+    final q = _phraseSearchTerm(text);
+    final String next;
+    if (q.isEmpty) {
+      final trimmed = text.trimRight();
+      next = trimmed.isEmpty
+          ? phrase
+          : trimmed.endsWith(',')
+              ? '$trimmed $phrase'
+              : '$trimmed, $phrase';
+    } else {
+      final lastComma = text.lastIndexOf(',');
+      next = lastComma < 0
+          ? phrase
+          : '${text.substring(0, lastComma + 1).trimRight()} $phrase';
+    }
+    _setPhraseField(_observation, '${next.trimRight()}, ');
+    setState(() {});
+    _searchObservations('');
+  }
+
+  Future<void> _searchInvestigations(String text) async {
+    final q = _phraseSearchTerm(text);
+    try {
+      final results = await context
+          .read<AppServices>()
+          .emr
+          .getInvestigations(q: q.isEmpty ? null : q);
+      if (mounted) setState(() => _investigationSuggestions = results);
+    } catch (_) {}
+  }
+
+  void _applyInvestigationSuggestion(String phrase) {
+    final text = _investigation.text;
+    final q = _phraseSearchTerm(text);
+    final String next;
+    if (q.isEmpty) {
+      final trimmed = text.trimRight();
+      next = trimmed.isEmpty
+          ? phrase
+          : trimmed.endsWith(',')
+              ? '$trimmed $phrase'
+              : '$trimmed, $phrase';
+    } else {
+      final lastComma = text.lastIndexOf(',');
+      next = lastComma < 0
+          ? phrase
+          : '${text.substring(0, lastComma + 1).trimRight()} $phrase';
+    }
+    _setPhraseField(_investigation, '${next.trimRight()}, ');
+    setState(() {});
+    _searchInvestigations('');
   }
 
   void _addDiagnosisFromSuggestion(VisitDiagnosis d) {
@@ -1042,9 +1188,23 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             controller: _observation,
             maxLines: 3,
             decoration: const InputDecoration(
-              hintText: 'Examination findings, physical observations...',
+              hintText: 'Type to search or add observations...',
             ),
+            onChanged: _searchObservations,
           ),
+          if (_observationSuggestions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: _observationSuggestions.take(12).map((c) {
+                return ActionChip(
+                  label: Text(c, style: const TextStyle(fontSize: 12)),
+                  onPressed: () => _applyObservationSuggestion(c),
+                );
+              }).toList(),
+            ),
+          ],
           const SizedBox(height: 16),
           Text('Investigation', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
@@ -1052,9 +1212,23 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             controller: _investigation,
             maxLines: 3,
             decoration: const InputDecoration(
-              hintText: 'Labs, imaging, diagnostic tests...',
+              hintText: 'Type to search or add investigations...',
             ),
+            onChanged: _searchInvestigations,
           ),
+          if (_investigationSuggestions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: _investigationSuggestions.take(12).map((c) {
+                return ActionChip(
+                  label: Text(c, style: const TextStyle(fontSize: 12)),
+                  onPressed: () => _applyInvestigationSuggestion(c),
+                );
+              }).toList(),
+            ),
+          ],
           const SizedBox(height: 16),
           Text('Diagnoses', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
@@ -1149,6 +1323,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ..._treatments.asMap().entries.map((e) {
             final i = e.key;
             final t = e.value;
+            final showSuggestions =
+                _treatmentSuggestForIndex == i && _treatmentSuggestions.isNotEmpty;
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: Padding(
@@ -1160,13 +1336,39 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
+                          flex: 3,
+                          child: Focus(
+                            onFocusChange: (hasFocus) {
+                              if (hasFocus) {
+                                _showTreatmentSuggestionsFor(i);
+                              } else {
+                                // Delay so ActionChip taps still register.
+                                Future.delayed(const Duration(milliseconds: 180), () {
+                                  if (!mounted) return;
+                                  _clearTreatmentSuggestions(onlyIfIndex: i);
+                                });
+                              }
+                            },
+                            child: TextField(
+                              decoration: const InputDecoration(
+                                labelText: 'Treatment name',
+                                isDense: true,
+                              ),
+                              controller: t.nameCtrl,
+                              onChanged: (q) => _searchTreatments(q, forIndex: i),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 2,
                           child: TextField(
                             decoration: const InputDecoration(
-                              labelText: 'Treatment name',
+                              labelText: 'Price (₹)',
                               isDense: true,
                             ),
-                            controller: t.nameCtrl,
-                            onChanged: _searchTreatments,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            controller: t.priceCtrl,
                           ),
                         ),
                         IconButton(
@@ -1201,6 +1403,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                           icon: const Icon(Icons.close, color: AppTheme.danger),
                           onPressed: () {
                             final row = _treatments.removeAt(i);
+                            _clearTreatmentSuggestions();
                             setState(() {});
                             WidgetsBinding.instance
                                 .addPostFrameCallback((_) => row.dispose());
@@ -1208,39 +1411,31 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      decoration: const InputDecoration(
-                        labelText: 'Price (₹)',
-                        isDense: true,
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      controller: t.priceCtrl,
-                    ),
-                    if (_treatmentSuggestions.isNotEmpty)
+                    if (showSuggestions)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Wrap(
-                            alignment: WrapAlignment.start,
-                            spacing: 6,
-                            runSpacing: 6,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
                             children: _treatmentSuggestions.take(6).map((s) {
-                              return ActionChip(
-                                label: Text(s.name, style: const TextStyle(fontSize: 12)),
-                                onPressed: () {
-                                  setState(() {
-                                    t.nameCtrl.text = s.name;
-                                    // Always apply template price on pick. New rows
-                                    // start as "0.0", which the old empty/'0' check missed.
-                                    if (s.defaultPrice != null) {
-                                      t.priceCtrl.text =
-                                          _formatAmount(s.defaultPrice!);
-                                    }
-                                    _treatmentSuggestions = [];
-                                  });
-                                },
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: ActionChip(
+                                  label: Text(s.name, style: const TextStyle(fontSize: 12)),
+                                  onPressed: () {
+                                    setState(() {
+                                      t.nameCtrl.text = s.name;
+                                      // Always apply template price on pick. New rows
+                                      // start as "0.0", which the old empty/'0' check missed.
+                                      if (s.defaultPrice != null) {
+                                        t.priceCtrl.text =
+                                            _formatAmount(s.defaultPrice!);
+                                      }
+                                      _treatmentSuggestForIndex = null;
+                                      _treatmentSuggestions = [];
+                                    });
+                                  },
+                                ),
                               );
                             }).toList(),
                           ),
@@ -1302,6 +1497,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ..._medicines.asMap().entries.map((e) {
             final i = e.key;
             final m = e.value;
+            final showMedicineSuggestions =
+                _medicineSuggestForIndex == i && _medicineSuggestions.isNotEmpty;
+            final showFrequencySuggestions =
+                _medicineFrequencySuggestForIndex == i &&
+                    _frequencySuggestions.isNotEmpty;
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: Padding(
@@ -1313,13 +1513,85 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
+                          flex: 3,
+                          child: Focus(
+                            onFocusChange: (hasFocus) {
+                              if (hasFocus) {
+                                _showMedicineSuggestionsFor(i);
+                              } else {
+                                Future.delayed(const Duration(milliseconds: 180), () {
+                                  if (!mounted) return;
+                                  _clearMedicineSuggestions(onlyIfIndex: i);
+                                });
+                              }
+                            },
+                            child: TextField(
+                              decoration: const InputDecoration(
+                                labelText: 'Medicine name',
+                                isDense: true,
+                              ),
+                              controller: m.nameCtrl,
+                              onChanged: (q) => _searchMedicines(q, forIndex: i),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 2,
                           child: TextField(
                             decoration: const InputDecoration(
-                              labelText: 'Medicine name',
+                              labelText: 'Price (₹)',
                               isDense: true,
                             ),
-                            controller: m.nameCtrl,
-                            onChanged: _searchMedicines,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            controller: m.priceCtrl,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 2,
+                          child: Focus(
+                            onFocusChange: (hasFocus) {
+                              if (hasFocus) {
+                                setState(() => _medicineFrequencySuggestForIndex = i);
+                              } else {
+                                Future.delayed(const Duration(milliseconds: 180), () {
+                                  if (!mounted) return;
+                                  if (_medicineFrequencySuggestForIndex == i) {
+                                    setState(() => _medicineFrequencySuggestForIndex = null);
+                                  }
+                                });
+                              }
+                            },
+                            child: TextField(
+                              decoration: const InputDecoration(
+                                labelText: 'Frequency',
+                                isDense: true,
+                              ),
+                              controller: m.freqCtrl,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              labelText: 'Days',
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                            controller: m.daysCtrl,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              labelText: 'Qty',
+                              isDense: true,
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            controller: m.qtyCtrl,
                           ),
                         ),
                         IconButton(
@@ -1355,120 +1627,70 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                           icon: const Icon(Icons.close, color: AppTheme.danger),
                           onPressed: () {
                             final row = _medicines.removeAt(i);
-                            setState(() {});
+                            _clearMedicineSuggestions();
+                            setState(() {
+                              if (_medicineFrequencySuggestForIndex == i) {
+                                _medicineFrequencySuggestForIndex = null;
+                              }
+                            });
                             WidgetsBinding.instance
                                 .addPostFrameCallback((_) => row.dispose());
                           },
                         ),
                       ],
                     ),
-                    if (_medicineSuggestions.isNotEmpty)
+                    if (showMedicineSuggestions)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: _medicineSuggestions.take(6).map((s) {
-                            return ActionChip(
-                              label: Text(s.name, style: const TextStyle(fontSize: 12)),
-                              onPressed: () {
-                                setState(() {
-                                  m.nameCtrl.text = s.name;
-                                  if (s.defaultDosage != null && m.dosageCtrl.text.isEmpty) {
-                                    m.dosageCtrl.text = s.defaultDosage!;
-                                  }
-                                  if (s.defaultFrequency != null && m.freqCtrl.text.isEmpty) {
-                                    m.freqCtrl.text = s.defaultFrequency!;
-                                  }
-                                  if (s.defaultDurationDays != null && m.daysCtrl.text.isEmpty) {
-                                    m.daysCtrl.text = s.defaultDurationDays.toString();
-                                  }
-                                  _medicineSuggestions = [];
-                                });
-                              },
-                            );
-                          }).toList(),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: _medicineSuggestions.take(6).map((s) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: ActionChip(
+                                  label: Text(s.name, style: const TextStyle(fontSize: 12)),
+                                  onPressed: () {
+                                    setState(() {
+                                      m.nameCtrl.text = s.name;
+                                      if (s.defaultFrequency != null &&
+                                          m.freqCtrl.text.isEmpty) {
+                                        m.freqCtrl.text = s.defaultFrequency!;
+                                      }
+                                      if (s.defaultDurationDays != null &&
+                                          m.daysCtrl.text.isEmpty) {
+                                        m.daysCtrl.text =
+                                            s.defaultDurationDays.toString();
+                                      }
+                                      _medicineSuggestForIndex = null;
+                                      _medicineSuggestions = [];
+                                    });
+                                  },
+                                ),
+                              );
+                            }).toList(),
+                          ),
                         ),
                       ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      decoration: const InputDecoration(
-                        labelText: 'Price (₹)',
-                        isDense: true,
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      controller: m.priceCtrl,
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              labelText: 'Dosage',
-                              isDense: true,
-                            ),
-                            controller: m.dosageCtrl,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              labelText: 'Frequency',
-                              isDense: true,
-                            ),
-                            controller: m.freqCtrl,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              labelText: 'Days',
-                              isDense: true,
-                            ),
-                            keyboardType: TextInputType.number,
-                            controller: m.daysCtrl,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              labelText: 'Qty',
-                              isDense: true,
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            controller: m.qtyCtrl,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (_dosageSuggestions.isNotEmpty || _frequencySuggestions.isNotEmpty)
+                    if (showFrequencySuggestions)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            ..._dosageSuggestions.take(4).map(
-                                  (d) => ActionChip(
-                                    label: Text(d, style: const TextStyle(fontSize: 11)),
-                                    onPressed: () => setState(() => m.dosageCtrl.text = d),
-                                  ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: _frequencySuggestions.take(6).map((f) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: ActionChip(
+                                  label: Text(f, style: const TextStyle(fontSize: 11)),
+                                  onPressed: () => setState(() {
+                                    m.freqCtrl.text = f;
+                                    _medicineFrequencySuggestForIndex = null;
+                                  }),
                                 ),
-                            ..._frequencySuggestions.take(4).map(
-                                  (f) => ActionChip(
-                                    label: Text(f, style: const TextStyle(fontSize: 11)),
-                                    onPressed: () => setState(() => m.freqCtrl.text = f),
-                                  ),
-                                ),
-                          ],
+                              );
+                            }).toList(),
+                          ),
                         ),
                       ),
                   ],

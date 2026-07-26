@@ -53,13 +53,6 @@ class _PatientAppointmentListScreenState extends State<PatientAppointmentListScr
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      floatingActionButton: canCreate && !_calendarView
-          ? FloatingActionButton.extended(
-              onPressed: () => context.push('/emr/appointments/new'),
-              icon: const Icon(Icons.add),
-              label: const Text('New appointment'),
-            )
-          : null,
       body: Column(
         children: [
           Container(
@@ -92,6 +85,14 @@ class _PatientAppointmentListScreenState extends State<PatientAppointmentListScr
                           onSubmitted: (_) => setState(() {}),
                         ),
                       ),
+                    if (canCreate) ...[
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        onPressed: () => context.push('/emr/appointments/new'),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('New appointment'),
+                      ),
+                    ],
                   ],
                 ),
                 if (!_calendarView) ...[

@@ -336,5 +336,19 @@ void main() {
       expect(product.reorderLevel, 10);
       expect(product.currentStock, 12.5);
     });
+
+    test('derives current stock from nested inventory rows', () {
+      final product = Product.fromJson({
+        'id': 1289,
+        'name': 'Zipvit 30ml',
+        'track_inventory': true,
+        'inventory': [
+          {'quantity': 40},
+          {'quantity': 60},
+        ],
+      });
+
+      expect(product.currentStock, 100);
+    });
   });
 }

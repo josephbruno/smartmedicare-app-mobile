@@ -323,8 +323,10 @@ class PosCartNotifier extends ChangeNotifier {
     }) async {
       Product? product = embedded;
       final resolvedId = productId ?? product?.id;
-      if (product == null && resolvedId != null && resolvedId > 0) {
-        product = await fetchProduct(resolvedId);
+      // Always refresh from catalog/API — visit-embedded products often omit
+      // current_stock (inventory not eager-loaded), which falsely looks like 0.
+      if (resolvedId != null && resolvedId > 0) {
+        product = await fetchProduct(resolvedId) ?? product;
       }
       if (product == null) {
         skipped.add(label);

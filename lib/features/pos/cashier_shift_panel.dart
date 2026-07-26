@@ -18,6 +18,7 @@ class CashierShiftPanel extends StatelessWidget {
     required this.dayClosed,
     required this.loading,
     required this.onRefresh,
+    this.suggestedOpening,
     this.compact = false,
   });
 
@@ -26,6 +27,7 @@ class CashierShiftPanel extends StatelessWidget {
   final bool dayClosed;
   final bool loading;
   final Future<void> Function() onRefresh;
+  final CashierSuggestedOpening? suggestedOpening;
   final bool compact;
 
   @override
@@ -88,13 +90,23 @@ class CashierShiftPanel extends StatelessWidget {
                             ? '₹${session!.amountInHand.toStringAsFixed(2)}'
                             : (dayClosed
                                 ? 'No new shifts today'
-                                : 'Enter opening cash to begin'),
+                                : (suggestedOpening?.hasSuggestion == true
+                                    ? 'Available ₹${suggestedOpening!.amount!.toStringAsFixed(2)}'
+                                    : 'Enter opening cash to begin')),
                         style: TextStyle(
                           fontSize: compact ? 15 : 16,
                           fontWeight: FontWeight.w900,
                           color: AppTheme.textPrimary,
                         ),
                       ),
+                      if (!open && !dayClosed && suggestedOpening?.label != null)
+                        Text(
+                          suggestedOpening!.label!,
+                          style: TextStyle(
+                            fontSize: compact ? 11 : 12,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
                       if (open)
                         Text(
                           'Opening ₹${session!.openingAmount.toStringAsFixed(0)}'
@@ -170,7 +182,11 @@ class CashierShiftPanel extends StatelessWidget {
   }
 
   Future<void> _startShift(BuildContext context) async {
-    final amountCtrl = TextEditingController();
+    final suggestion = suggestedOpening;
+    final prefill = suggestion?.amount;
+    final amountCtrl = TextEditingController(
+      text: prefill != null ? prefill.toStringAsFixed(2) : '',
+    );
     final notesCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -178,11 +194,75 @@ class CashierShiftPanel extends StatelessWidget {
         title: const Text('Start shift'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'Enter the cash amount currently in hand (opening float).',
               style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
             ),
+            if (suggestion != null &&
+                (suggestion.previousShiftAmount != null ||
+                    suggestion.lastDayCloseAmount != null)) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.accent.withValues(alpha: 0.25)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Available cash reference',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (suggestion.previousShiftAmount != null)
+                      Text(
+                        'Previous shift: ₹${suggestion.previousShiftAmount!.toStringAsFixed(2)}'
+                        '${suggestion.previousShiftDate != null ? ' · ${suggestion.previousShiftDate}' : ''}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    if (suggestion.lastDayCloseAmount != null) ...[
+                      if (suggestion.previousShiftAmount != null) const SizedBox(height: 4),
+                      Text(
+                        'Last day close: ₹${suggestion.lastDayCloseAmount!.toStringAsFixed(2)}'
+                        '${suggestion.lastDayCloseDate != null ? ' · ${suggestion.lastDayCloseDate}' : ''}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      if ((suggestion.lastDayCloseNotes ?? '').isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            suggestion.lastDayCloseNotes!,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ),
+                    ],
+                    if (suggestion.hasSuggestion) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Opening field prefilled with ₹${suggestion.amount!.toStringAsFixed(2)}'
+                        '${suggestion.label != null ? ' (${suggestion.label})' : ''}. Edit if needed.',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: amountCtrl,

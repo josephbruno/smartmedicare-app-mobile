@@ -51,6 +51,7 @@ class _PosScreenState extends State<PosScreen> {
 
   CashierCashSession? _cashSession;
   CashierDayStatus? _dayStatus;
+  CashierSuggestedOpening? _suggestedOpening;
   bool _dayClosed = false;
   bool _loadingCashSession = false;
 
@@ -170,6 +171,7 @@ class _PosScreenState extends State<PosScreen> {
         _cashSession = current.session;
         _dayClosed = current.dayClosed;
         _dayStatus = day;
+        _suggestedOpening = current.suggestedOpening;
       });
     } catch (_) {
       // Keep POS usable if cash-session API is unavailable.
@@ -189,7 +191,6 @@ class _PosScreenState extends State<PosScreen> {
     final cart = context.read<PosCartNotifier>();
     final auth = context.read<AuthSession>();
     final branchId = auth.currentBranchId;
-    final online = context.read<ConnectivityNotifier>().isOnline;
     final productRepo = context.read<PosProductRepository>();
 
     try {
@@ -212,14 +213,15 @@ class _PosScreenState extends State<PosScreen> {
 
       Future<Product?> fetchProduct(int productId) async {
         if (productId <= 0) return null;
+        // Prefer local POS catalog — /products/{id} often omits current_stock,
+        // while the POS sync payload includes inventory quantities.
+        if (branchId != null) {
+          final local = await productRepo.findById(branchId, productId);
+          if (local != null) return local;
+        }
         try {
           return await services.products.get(productId);
         } catch (_) {
-          if (branchId == null) return null;
-          final local = await productRepo.search(branchId, '', online: online);
-          for (final p in local) {
-            if (p.id == productId) return p;
-          }
           try {
             final bySku = await services.products.findByBarcode('SVC-CONSULT');
             if (bySku?.id == productId) return bySku;
@@ -698,6 +700,7 @@ class _PosScreenState extends State<PosScreen> {
               session: _cashSession,
               dayStatus: _dayStatus,
               dayClosed: _dayClosed,
+              suggestedOpening: _suggestedOpening,
               loading: _loadingCashSession,
               onRefresh: _refreshCashSession,
               compact: _desktop,

@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../../app_services.dart';
 import '../../core/app_config.dart';
 import '../../core/extensions/permission_extensions.dart';
-import '../../core/responsive/desktop_layout_helper.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
@@ -164,7 +163,6 @@ class _UsersScreenState extends State<UsersScreen> {
     final services = context.read<AppServices>();
     final canCreate = context.watch<AuthSession>().hasPermission(AppPermissions.usersCreate);
     final canEdit = context.watch<AuthSession>().hasPermission(AppPermissions.usersEdit);
-    final isMobile = ResponsiveLayout.isMobile(context);
 
     final columns = <TableColumnDef<User>>[
       const TableColumnDef(label: 'User', flex: 2, cellBuilder: _userCell),
@@ -196,13 +194,6 @@ class _UsersScreenState extends State<UsersScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      floatingActionButton: canCreate && isMobile
-          ? FloatingActionButton.extended(
-              onPressed: () => _openForm(),
-              icon: const Icon(Icons.person_add_outlined),
-              label: const Text('Add user'),
-            )
-          : null,
       body: AppPaginatedTable<User>(
         key: _tableKey,
         loadPage: ({required page, required perPage}) =>

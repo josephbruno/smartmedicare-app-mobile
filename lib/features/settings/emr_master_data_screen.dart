@@ -30,6 +30,8 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     'medicines',
     'dosages',
     'frequencies',
+    'observations',
+    'investigations',
     'service_kits',
   ];
 
@@ -40,6 +42,8 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     'Medicines',
     'Dosages',
     'Frequencies',
+    'Observations',
+    'Investigations',
     'Service kits',
   ];
 
@@ -87,6 +91,8 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
         'medicines' => await svc.listMedicines(search: q.isEmpty ? null : q),
         'dosages' => await svc.listDosages(search: q.isEmpty ? null : q),
         'frequencies' => await svc.listFrequencies(search: q.isEmpty ? null : q),
+        'observations' => await svc.listObservations(search: q.isEmpty ? null : q),
+        'investigations' => await svc.listInvestigations(search: q.isEmpty ? null : q),
         _ => <EmrTemplateItem>[],
       };
       if (mounted) setState(() => _items = list);
@@ -267,6 +273,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
             await svc.updateDosage(item!.id, body);
           case 'frequencies':
             await svc.updateFrequency(item!.id, body);
+          case 'observations':
+            await svc.updateObservation(item!.id, body);
+          case 'investigations':
+            await svc.updateInvestigation(item!.id, body);
         }
       } else {
         switch (_currentKey) {
@@ -282,6 +292,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
             await svc.createDosage(body);
           case 'frequencies':
             await svc.createFrequency(body);
+          case 'observations':
+            await svc.createObservation(body);
+          case 'investigations':
+            await svc.createInvestigation(body);
         }
       }
       _load();
@@ -317,6 +331,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
           await svc.deleteDosage(item.id);
         case 'frequencies':
           await svc.deleteFrequency(item.id);
+        case 'observations':
+          await svc.deleteObservation(item.id);
+        case 'investigations':
+          await svc.deleteInvestigation(item.id);
       }
       _load();
     } catch (e) {
@@ -329,15 +347,18 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('EMR Master Data'),
+        actions: [
+          IconButton(
+            tooltip: 'Add',
+            onPressed: () => _openForm(),
+            icon: const Icon(Icons.add),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,
           tabs: _tabLabels.map((l) => Tab(text: l)).toList(),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openForm(),
-        child: const Icon(Icons.add),
       ),
       body: Column(
         children: [

@@ -101,6 +101,18 @@ class ProductLocalDao {
     return list.isEmpty ? null : list.first;
   }
 
+  Future<Product?> findById(int branchId, int productId) async {
+    final db = await AppDatabase.instance();
+    final rows = await db.query(
+      'products',
+      where: 'branch_id = ? AND id = ? AND is_active = 1',
+      whereArgs: [branchId, productId],
+      limit: 1,
+    );
+    final list = _rowsToProducts(rows);
+    return list.isEmpty ? null : list.first;
+  }
+
   /// Removes local products for [branchId] that are not in [keepIds].
   /// Used after a full catalog sync so deleted/replaced products disappear.
   Future<int> pruneBranchExcept(int branchId, Set<int> keepIds) async {

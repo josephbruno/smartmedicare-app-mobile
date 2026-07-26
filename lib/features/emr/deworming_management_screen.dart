@@ -128,13 +128,17 @@ class _DewormingManagementScreenState extends State<DewormingManagementScreen> {
         context.watch<AuthSession>().hasPermission(AppPermissions.emrDewormingCreate);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Deworming')),
-      floatingActionButton: canCreate
-          ? FloatingActionButton(
+      appBar: AppBar(
+        title: const Text('Deworming'),
+        actions: [
+          if (canCreate)
+            IconButton(
+              tooltip: 'Add record',
               onPressed: _showAddForm,
-              child: const Icon(Icons.add),
-            )
-          : null,
+              icon: const Icon(Icons.add),
+            ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () async => setState(_reload),
         child: FutureBuilder<List<PetDeworming>>(

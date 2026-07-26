@@ -1241,41 +1241,6 @@ Future<bool> showPosCheckoutDialog({
                     SizedBox(height: largeUi ? 14 : 10),
                     buildPaymentSummary(),
                   ],
-                  SizedBox(height: largeUi ? 20 : 14),
-                  if (!paymentSaved || hasOpenBalance())
-                    SizedBox(
-                      width: double.infinity,
-                      height: largeUi ? 54 : 46,
-                      child: ElevatedButton.icon(
-                        onPressed: recordingPayment ? null : confirmCheckout,
-                        icon: recordingPayment
-                            ? SizedBox(
-                                width: alertIc(18),
-                                height: alertIc(18),
-                                child: const CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Icon(Icons.verified_rounded, size: alertIc(22)),
-                        label: Text(
-                          recordingPayment
-                              ? 'Saving…'
-                              : hasOpenBalance()
-                                  ? 'Pay Remaining Balance'
-                                  : 'Confirm Payment',
-                          style: TextStyle(
-                            fontSize: alertFs(16),
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
               );
             }
@@ -1816,7 +1781,7 @@ Future<bool> showPosCheckoutDialog({
                       child: SizedBox(
                         width: double.infinity,
                         height: largeUi ? 50 : 44,
-                        child: paymentSaved
+                        child: paymentSaved && !hasOpenBalance()
                             ? OutlinedButton(
                                 onPressed: closeAndNewBill,
                                 style: OutlinedButton.styleFrom(
@@ -1881,7 +1846,7 @@ Future<bool> showPosCheckoutDialog({
                                         ),
                                       ),
                                       child: Text(
-                                        'Cancel',
+                                        paymentSaved ? 'Close' : 'Cancel',
                                         style: TextStyle(
                                           fontWeight: FontWeight.w700,
                                           fontSize: alertFs(15),
@@ -1905,7 +1870,9 @@ Future<bool> showPosCheckoutDialog({
                                       child: Text(
                                         recordingPayment
                                             ? 'Saving…'
-                                            : 'Confirm Payment',
+                                            : hasOpenBalance()
+                                                ? 'Pay Remaining Balance'
+                                                : 'Confirm Payment',
                                         style: TextStyle(
                                           fontWeight: FontWeight.w700,
                                           fontSize: alertFs(15),

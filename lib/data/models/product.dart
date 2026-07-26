@@ -121,11 +121,25 @@ class Product {
       isService: j['is_service'] as bool? ?? false,
       isMedicine: j['is_medicine'] as bool? ?? false,
       isActive: j['is_active'] as bool? ?? true,
-      currentStock: numOrNull(j['current_stock']),
+      currentStock: numOrNull(j['current_stock']) ?? _stockFromInventory(j['inventory']),
       categoryName: cat?['name']?.toString(),
       brandName: brand?['name']?.toString(),
       unitAbbrev: unit?['abbreviation']?.toString(),
     );
+  }
+
+  static double? _stockFromInventory(dynamic raw) {
+    if (raw is! List || raw.isEmpty) return null;
+    var total = 0.0;
+    var sawQty = false;
+    for (final row in raw) {
+      if (row is! Map) continue;
+      final qty = numOrNull(row['quantity']);
+      if (qty == null) continue;
+      sawQty = true;
+      total += qty;
+    }
+    return sawQty ? total : null;
   }
 }
 
