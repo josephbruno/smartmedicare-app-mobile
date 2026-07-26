@@ -842,6 +842,8 @@ List<_MenuItem> _menuItems(AuthSession auth) {
   addSection('INVENTORY', [
     if (can('products.view'))
       _MenuItem(label: 'Products', icon: Icons.inventory_2_outlined, path: '/products'),
+    if (can('products.edit') || can('categories.create') || can('brands.create'))
+      _MenuItem(label: 'Catalog', icon: Icons.sell_outlined, path: '/settings/catalog'),
     if (can('inventory.view')) ...[
       _MenuItem(label: 'Inventory', icon: Icons.warehouse_outlined, path: '/inventory'),
       _MenuItem(label: 'Stock Alerts', icon: Icons.notification_important_outlined, path: '/stock-alerts'),
@@ -875,8 +877,6 @@ List<_MenuItem> _menuItems(AuthSession auth) {
       _MenuItem(label: 'Suppliers', icon: Icons.local_shipping_outlined, path: '/suppliers'),
     if (can('doctors.manage'))
       _MenuItem(label: 'Doctors', icon: Icons.medical_information_outlined, path: '/settings/doctors'),
-    if (can('products.edit'))
-      _MenuItem(label: 'Catalog', icon: Icons.sell_outlined, path: '/settings/catalog'),
     if (can('emr.master_data.manage'))
       _MenuItem(label: 'EMR Master Data', icon: Icons.list_alt_outlined, path: '/settings/emr-master-data'),
     if (can('shop.manage'))

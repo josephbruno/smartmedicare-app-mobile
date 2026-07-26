@@ -6,6 +6,12 @@ abstract class AppPermissions {
   static const String productsCreate = 'products.create';
   static const String productsEdit = 'products.edit';
   static const String productsDelete = 'products.delete';
+  static const String categoriesView = 'categories.view';
+  static const String categoriesCreate = 'categories.create';
+  static const String categoriesEdit = 'categories.edit';
+  static const String brandsView = 'brands.view';
+  static const String brandsCreate = 'brands.create';
+  static const String brandsEdit = 'brands.edit';
 
   // Inventory
   static const String inventoryView = 'inventory.view';
@@ -111,7 +117,22 @@ abstract class AppRoles {
   /// Default cashier permissions (mirrors RolePermissionSeeder).
   static const List<String> cashierPermissions = [
     AppPermissions.productsView,
+    AppPermissions.productsCreate,
+    AppPermissions.productsEdit,
+    AppPermissions.categoriesView,
+    AppPermissions.categoriesCreate,
+    AppPermissions.categoriesEdit,
+    AppPermissions.brandsView,
+    AppPermissions.brandsCreate,
+    AppPermissions.brandsEdit,
     AppPermissions.inventoryView,
+    AppPermissions.inventoryAdjust,
+    AppPermissions.purchasesView,
+    AppPermissions.purchasesCreate,
+    AppPermissions.purchasesEdit,
+    AppPermissions.suppliersView,
+    AppPermissions.suppliersCreate,
+    AppPermissions.suppliersEdit,
     AppPermissions.invoicesView,
     AppPermissions.invoicesCreate,
     AppPermissions.paymentsCreate,
