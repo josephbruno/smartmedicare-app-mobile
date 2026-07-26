@@ -45,7 +45,7 @@ class SyncCoordinator extends ChangeNotifier {
     _posLoopActive = true;
     unawaited(_syncPosCatalog(branchId, forceFull: true));
     _posTimer?.cancel();
-    _posTimer = Timer.periodic(const Duration(seconds: 120), (_) {
+    _posTimer = Timer.periodic(const Duration(minutes: 10), (_) {
       final id = _posBranchId;
       if (id != null) unawaited(_syncPosCatalog(id));
     });
