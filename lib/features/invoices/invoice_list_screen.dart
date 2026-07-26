@@ -225,8 +225,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
                   align: TextAlign.right,
                   cellBuilder: (c, inv) {
                     final cash = inv.cashReceivedTotal;
-                    // Exact cash / UPI → empty
-                    if (cash == null) {
+                    if (cash == null || cash <= 0.009) {
                       return const Text(
                         '',
                         style: TextStyle(color: AppTheme.textSecondary),

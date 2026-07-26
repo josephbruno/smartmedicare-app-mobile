@@ -304,11 +304,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   }
 
   Future<void> _addProcedureKit() async {
-    final kit = await showModalBottomSheet<ProcedureKit>(
+    final kit = await showAppDialog<ProcedureKit>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (ctx) => const _ProcedureKitPickerSheet(),
+      builder: (ctx) => const _ProcedureKitPickerDialog(),
     );
     if (kit == null || !mounted) return;
     if (kit.items.isEmpty) {
@@ -1571,18 +1569,18 @@ class _ProductPickerDialog extends StatefulWidget {
 
 class _ProductPickerDialogState extends State<_ProductPickerDialog> {
   late final TextEditingController _search;
+  List<Product> _catalog = [];
   List<Product> _results = [];
+  var _loadingCatalog = true;
   var _searching = false;
   var _searchSeq = 0;
+  String? _loadError;
 
   @override
   void initState() {
     super.initState();
     _search = TextEditingController(text: widget.initialQuery ?? '');
-    final initial = widget.initialQuery ?? '';
-    if (initial.trim().length >= 2) {
-      _runSearch(initial);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCatalog());
   }
 
   @override
@@ -1591,28 +1589,77 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
     super.dispose();
   }
 
+  Future<void> _loadCatalog() async {
+    setState(() {
+      _loadingCatalog = true;
+      _loadError = null;
+    });
+    try {
+      final list = await context.read<AppServices>().products.list(
+            query: {
+              'per_page': 500,
+              'is_active': 1,
+              'type': widget.type,
+            },
+          );
+      if (!mounted) return;
+      setState(() {
+        _catalog = list;
+        _loadingCatalog = false;
+      });
+      await _runSearch(_search.text);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingCatalog = false;
+        _loadError = e.toString();
+      });
+    }
+  }
+
   Future<List<Product>> _fetch(String q) async {
-    if (q.trim().length < 2) return [];
     return context.read<AppServices>().products.list(
           query: {
-            'search': q.trim(),
-            'per_page': 20,
+            'search': q,
+            'per_page': 50,
             'is_active': 1,
             'type': widget.type,
           },
         );
   }
 
-  Future<void> _runSearch(String q) async {
+  List<Product> _filterLocal(String q) {
+    final needle = q.toLowerCase();
+    return _catalog.where((p) {
+      return p.name.toLowerCase().contains(needle) ||
+          (p.sku?.toLowerCase().contains(needle) ?? false) ||
+          (p.barcode?.toLowerCase().contains(needle) ?? false);
+    }).toList();
+  }
+
+  Future<void> _runSearch(String raw) async {
+    final q = raw.trim();
     final seq = ++_searchSeq;
-    if (q.length < 2) {
+
+    if (q.isEmpty) {
       if (!mounted) return;
       setState(() {
-        _results = [];
+        _results = List<Product>.from(_catalog);
         _searching = false;
       });
       return;
     }
+
+    // Short query: filter the already-loaded catalog immediately.
+    if (q.length < 2) {
+      if (!mounted) return;
+      setState(() {
+        _results = _filterLocal(q);
+        _searching = false;
+      });
+      return;
+    }
+
     setState(() => _searching = true);
     try {
       final list = await _fetch(q);
@@ -1623,7 +1670,10 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
       });
     } catch (_) {
       if (!mounted || seq != _searchSeq) return;
-      setState(() => _searching = false);
+      setState(() {
+        _results = _filterLocal(q);
+        _searching = false;
+      });
     }
   }
 
@@ -1663,6 +1713,16 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
       _ => 'Search products...',
     };
 
+    final emptyMessage = _loadError != null
+        ? 'Could not load products.\n$_loadError'
+        : (_search.text.trim().isEmpty
+            ? (type == 'medicine'
+                ? 'No medicine products in catalog'
+                : type == 'service'
+                    ? 'No service products in catalog'
+                    : 'No products in catalog')
+            : 'No matching products found');
+
     return AppFormDialogShell(
       title: title,
       subtitle: subtitle,
@@ -1678,7 +1738,7 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
             decoration: InputDecoration(
               hintText: searchHint,
               prefixIcon: const Icon(Icons.search, size: 22),
-              suffixIcon: _searching
+              suffixIcon: (_searching || _loadingCatalog)
                   ? const Padding(
                       padding: EdgeInsets.all(12),
                       child: SizedBox(
@@ -1693,10 +1753,7 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                           icon: const Icon(Icons.close, size: 20),
                           onPressed: () {
                             _search.clear();
-                            setState(() {
-                              _results = [];
-                              _searching = false;
-                            });
+                            _runSearch('');
                           },
                         )
                       : null),
@@ -1706,7 +1763,7 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
           const SizedBox(height: 12),
           SizedBox(
             height: 320,
-            child: _searching && _results.isEmpty
+            child: _loadingCatalog && _results.isEmpty
                 ? const Center(
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
@@ -1714,14 +1771,24 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
-                          child: Text(
-                            _search.text.trim().length < 2
-                                ? 'Type at least 2 characters to search'
-                                : 'No matching products found',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: AppTheme.textSecondary,
-                            ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                emptyMessage,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                              if (_loadError != null) ...[
+                                const SizedBox(height: 12),
+                                TextButton(
+                                  onPressed: _loadCatalog,
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       )
@@ -2215,23 +2282,26 @@ class _MultiProductPickerSheetState extends State<_MultiProductPickerSheet> {
   }
 }
 
-class _ProcedureKitPickerSheet extends StatefulWidget {
-  const _ProcedureKitPickerSheet();
+class _ProcedureKitPickerDialog extends StatefulWidget {
+  const _ProcedureKitPickerDialog();
 
   @override
-  State<_ProcedureKitPickerSheet> createState() => _ProcedureKitPickerSheetState();
+  State<_ProcedureKitPickerDialog> createState() =>
+      _ProcedureKitPickerDialogState();
 }
 
-class _ProcedureKitPickerSheetState extends State<_ProcedureKitPickerSheet> {
+class _ProcedureKitPickerDialogState extends State<_ProcedureKitPickerDialog> {
   final _search = TextEditingController();
+  List<ProcedureKit> _all = [];
   List<ProcedureKit> _kits = [];
   bool _loading = true;
   String? _error;
+  var _searchSeq = 0;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
@@ -2241,19 +2311,29 @@ class _ProcedureKitPickerSheetState extends State<_ProcedureKitPickerSheet> {
   }
 
   Future<void> _load([String? q]) async {
+    final seq = ++_searchSeq;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final kits = await context.read<AppServices>().emr.getProcedureKits(q: q);
-      if (!mounted) return;
+      final kits = await context.read<AppServices>().emr.getProcedureKits(
+            q: (q != null && q.trim().length >= 2) ? q.trim() : null,
+          );
+      if (!mounted || seq != _searchSeq) return;
       setState(() {
-        _kits = kits;
+        if (q == null || q.trim().isEmpty) {
+          _all = kits;
+          _kits = kits;
+        } else if (q.trim().length < 2) {
+          _kits = _filterLocal(q.trim());
+        } else {
+          _kits = kits;
+        }
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _searchSeq) return;
       setState(() {
         _error = '$e';
         _loading = false;
@@ -2261,78 +2341,208 @@ class _ProcedureKitPickerSheetState extends State<_ProcedureKitPickerSheet> {
     }
   }
 
+  List<ProcedureKit> _filterLocal(String q) {
+    final needle = q.toLowerCase();
+    return _all.where((k) {
+      return k.name.toLowerCase().contains(needle) ||
+          (k.procedureCode?.toLowerCase().contains(needle) ?? false);
+    }).toList();
+  }
+
+  void _onSearchChanged(String raw) {
+    final q = raw.trim();
+    if (q.isEmpty) {
+      setState(() => _kits = List<ProcedureKit>.from(_all));
+      return;
+    }
+    if (q.length < 2) {
+      setState(() => _kits = _filterLocal(q));
+      return;
+    }
+    _load(q);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.viewInsetsOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.65,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Text(
-                'Add procedure kit',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+    return AppFormDialogShell(
+      title: 'Add procedure kit',
+      subtitle: 'Add all kit products to this visit in one step',
+      icon: Icons.medical_services_outlined,
+      maxWidth: 520,
+      onClose: () => Navigator.pop(context),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _search,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'Search kits by name or code…',
+              prefixIcon: const Icon(Icons.search, size: 22),
+              suffixIcon: _loading
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : (_search.text.isNotEmpty
+                      ? IconButton(
+                          tooltip: 'Clear',
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () {
+                            _search.clear();
+                            _onSearchChanged('');
+                          },
+                        )
+                      : null),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _search,
-                decoration: const InputDecoration(
-                  hintText: 'Search kits...',
-                  prefixIcon: Icon(Icons.search),
-                  isDense: true,
-                ),
-                onChanged: (v) {
-                  if (v.isEmpty || v.length >= 2) _load(v);
-                },
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                      ? Center(child: Text(_error!, textAlign: TextAlign.center))
-                      : _kits.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'No procedure kits yet.\nCreate them under EMR → Procedure kits.',
+            onChanged: _onSearchChanged,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 320,
+            child: _loading && _kits.isEmpty
+                ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _error!,
                                 textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppTheme.danger),
                               ),
-                            )
-                          : ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
-                              itemCount: _kits.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              itemBuilder: (context, i) {
-                                final kit = _kits[i];
-                                final total = kit.itemsTotal > 0
-                                    ? kit.itemsTotal
-                                    : kit.defaultPrice;
-                                return ListTile(
-                                  title: Text(kit.name),
-                                  subtitle: Text(
-                                    [
-                                      '${kit.items.length} items',
-                                      if (total != null && total > 0)
-                                        '₹${total.toStringAsFixed(0)}',
-                                      if (kit.procedureCode != null &&
-                                          kit.procedureCode!.isNotEmpty)
-                                        kit.procedureCode!,
-                                    ].join(' · '),
+                              const SizedBox(height: 12),
+                              TextButton(
+                                onPressed: () => _load(),
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : _kits.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 64,
+                                    height: 64,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEFF6FF),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: const Icon(
+                                      Icons.inventory_2_outlined,
+                                      size: 30,
+                                      color: AppTheme.primary,
+                                    ),
                                   ),
-                                  trailing: const Icon(Icons.add_circle_outline),
-                                  onTap: () => Navigator.pop(context, kit),
-                                );
-                              },
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    _search.text.trim().isEmpty
+                                        ? 'No procedure kits yet'
+                                        : 'No kits match your search',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _search.text.trim().isEmpty
+                                        ? 'Create kits under EMR → Procedure kits, then add them here.'
+                                        : 'Try another name or clear the search.',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: AppTheme.textSecondary,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-            ),
-          ],
+                          )
+                        : ListView.separated(
+                            itemCount: _kits.length,
+                            separatorBuilder: (_, __) => const Divider(
+                              height: 1,
+                              color: Color(0xFFE2E8F0),
+                            ),
+                            itemBuilder: (context, i) {
+                              final kit = _kits[i];
+                              final total = kit.itemsTotal > 0
+                                  ? kit.itemsTotal
+                                  : kit.defaultPrice;
+                              final meta = [
+                                '${kit.items.length} item${kit.items.length == 1 ? '' : 's'}',
+                                if (total != null && total > 0)
+                                  '₹${total.toStringAsFixed(0)}',
+                                if (kit.procedureCode != null &&
+                                    kit.procedureCode!.isNotEmpty)
+                                  kit.procedureCode!,
+                              ].join(' · ');
+                              return ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 2,
+                                ),
+                                leading: CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor:
+                                      AppTheme.primary.withValues(alpha: 0.12),
+                                  child: const Icon(
+                                    Icons.medical_services_outlined,
+                                    size: 18,
+                                    color: AppTheme.primary,
+                                  ),
+                                ),
+                                title: Text(
+                                  kit.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  meta,
+                                  style: const TextStyle(
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                                trailing: const Icon(
+                                  Icons.add_circle_outline_rounded,
+                                  color: AppTheme.primary,
+                                ),
+                                onTap: () => Navigator.pop(context, kit),
+                              );
+                            },
+                          ),
+          ),
+        ],
+      ),
+      footer: Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
         ),
       ),
     );

@@ -262,18 +262,35 @@ class Invoice {
   Iterable<InvoicePayment> get cashTenderPayments =>
       (payments ?? const <InvoicePayment>[]).where((p) => p.hasCashTenderDetail);
 
-  /// Total cash received from customer when change was given; null if none.
+  Iterable<InvoicePayment> get cashPayments => (payments ?? const <InvoicePayment>[])
+      .where((p) => p.paymentMode.toLowerCase() == 'cash' && p.amount > 0.009);
+
+  /// Cash received for list/UI:
+  /// - Overpay with change on a settled bill → tendered amount
+  /// - Exact / partial cash → amount applied to the invoice
+  /// Balance due always comes from [dueAmount], not this field.
   double? get cashReceivedTotal {
-    final list = cashTenderPayments.toList();
+    final list = cashPayments.toList();
     if (list.isEmpty) return null;
-    return list.fold<double>(0, (s, p) => s + (p.tenderedAmount ?? 0));
+    var total = 0.0;
+    for (final p in list) {
+      if (p.hasCashTenderDetail && dueAmount <= 0.009) {
+        total += p.tenderedAmount ?? p.amount;
+      } else {
+        total += p.amount;
+      }
+    }
+    return total;
   }
 
-  /// Total change returned; null if none (exact cash / UPI / etc.).
+  /// Total change returned; only when the invoice has no remaining due.
+  /// Partial invoices never show change (avoids fake tender notes).
   double? get changeReturnTotal {
+    if (dueAmount > 0.009) return null;
     final list = cashTenderPayments.toList();
     if (list.isEmpty) return null;
-    return list.fold<double>(0, (s, p) => s + (p.changeReturn ?? 0));
+    final total = list.fold<double>(0, (s, p) => s + (p.changeReturn ?? 0));
+    return total > 0.009 ? total : null;
   }
 
   bool get hasChangeReturn => (changeReturnTotal ?? 0) > 0.009;
@@ -281,7 +298,6 @@ class Invoice {
   bool get hasBalanceDue => dueAmount > 0.009;
 
   /// Separate cash summary: only when change was given and/or balance remains.
-  /// Exact cash and UPI-only invoices leave this empty.
   bool get hasCashPaymentSummary => hasChangeReturn || hasBalanceDue;
 
   factory Invoice.fromJson(Map<String, dynamic> j) {
