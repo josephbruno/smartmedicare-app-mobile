@@ -81,6 +81,9 @@ class ProcedureKit {
     required this.name,
     this.procedureCode,
     this.defaultPrice,
+    this.notes,
+    this.isActive = true,
+    this.itemsCount = 0,
     this.itemsTotal = 0,
     this.items = const [],
   });
@@ -89,6 +92,9 @@ class ProcedureKit {
   final String name;
   final String? procedureCode;
   final double? defaultPrice;
+  final String? notes;
+  final bool isActive;
+  final int itemsCount;
   final double itemsTotal;
   final List<ProcedureKitItem> items;
 
@@ -101,6 +107,10 @@ class ProcedureKit {
       defaultPrice: json['default_price'] != null
           ? double.tryParse(json['default_price'].toString())
           : null,
+      notes: json['notes']?.toString(),
+      isActive: json['is_active'] != false,
+      itemsCount: (json['items_count'] as num?)?.toInt() ??
+          (rawItems is List ? rawItems.length : 0),
       itemsTotal: json['items_total'] != null
           ? (double.tryParse(json['items_total'].toString()) ?? 0)
           : 0,
@@ -122,6 +132,7 @@ class ProcedureKitItem {
     required this.treatmentName,
     this.procedureCode,
     this.productName,
+    this.unitPriceOverride,
   });
 
   final int productId;
@@ -130,6 +141,13 @@ class ProcedureKitItem {
   final String treatmentName;
   final String? procedureCode;
   final String? productName;
+  final double? unitPriceOverride;
+
+  Map<String, dynamic> toBody() => {
+        'product_id': productId,
+        'quantity': quantity,
+        if (unitPriceOverride != null) 'unit_price_override': unitPriceOverride,
+      };
 
   factory ProcedureKitItem.fromJson(Map<String, dynamic> json) {
     final product = json['product'];
@@ -146,6 +164,9 @@ class ProcedureKitItem {
           '',
       procedureCode: json['procedure_code']?.toString(),
       productName: productMap?['name']?.toString(),
+      unitPriceOverride: json['unit_price_override'] != null
+          ? double.tryParse(json['unit_price_override'].toString())
+          : null,
     );
   }
 }
@@ -244,6 +265,49 @@ class EmrMasterDataService {
       _update('$_base/frequencies/$id', body);
 
   Future<void> deleteFrequency(int id) => _delete('$_base/frequencies/$id');
+
+  // ── Procedure / service kits ──────────────────────────────────────
+
+  Future<List<ProcedureKit>> listProcedureKits({String? search}) async {
+    try {
+      final res = await _client.get(
+        '$_base/procedure-kits',
+        queryParameters: search != null && search.isNotEmpty ? {'search': search} : null,
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, ProcedureKit.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<ProcedureKit> createProcedureKit(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('$_base/procedure-kits', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => ProcedureKit.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<ProcedureKit> updateProcedureKit(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('$_base/procedure-kits/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => ProcedureKit.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deleteProcedureKit(int id) => _delete('$_base/procedure-kits/$id');
 
   Future<List<EmrTemplateItem>> _list(String path, String? search) async {
     try {

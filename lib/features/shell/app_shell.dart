@@ -905,6 +905,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/customers')) return 'Customers';
   if (path.startsWith('/patients')) return 'Patient List';
   if (path.startsWith('/emr/pets') && path.contains('/timeline')) return 'Pet Timeline';
+  if (path.startsWith('/emr/pets') && path.contains('/visit-summary')) return 'Visit Summary';
   if (path.startsWith('/emr/pets') && path.contains('/deworming')) return 'Deworming';
   if (path.startsWith('/emr/pets') && path.contains('/surgeries')) return 'Surgeries';
   if (path.startsWith('/emr/pets') && path.contains('/lab-reports')) return 'Lab Reports';

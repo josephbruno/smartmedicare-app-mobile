@@ -10,6 +10,7 @@ import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
 import 'emr_pet_hub.dart';
 import 'visit_pdf.dart';
+import 'visit_print_preview_screen.dart';
 import 'widgets/visit_card.dart';
 
 class VisitDetailScreen extends StatefulWidget {
@@ -70,7 +71,11 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
     try {
       final visit = await services.emr.completeVisit(widget.visitId);
       if (!mounted) return;
-      await VisitPdf.printVisit(visit, clinic: _clinicInfo());
+      await VisitPrintPreviewScreen.open(
+        context,
+        visit: visit,
+        clinic: _clinicInfo(),
+      );
       if (!mounted) return;
       AppMessenger.show(
         context,
@@ -240,7 +245,11 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
                       statusLabel: _statusLabel(v.status),
                       visitTypeLabel: _visitTypeLabel(v.visitType),
                       timeLabel: _formatTime(v.visitTime),
-                      onPrint: () => VisitPdf.printVisit(v, clinic: _clinicInfo()),
+                      onPreview: () => VisitPrintPreviewScreen.open(
+                        context,
+                        visit: v,
+                        clinic: _clinicInfo(),
+                      ),
                       onDownload: () => VisitPdf.downloadVisit(v, clinic: _clinicInfo()),
                       onEdit: canEdit &&
                               (v.status == 'open' || v.status == 'bill_on_hold')
@@ -561,7 +570,7 @@ class _HeaderCard extends StatelessWidget {
     required this.statusLabel,
     required this.visitTypeLabel,
     required this.timeLabel,
-    required this.onPrint,
+    required this.onPreview,
     required this.onDownload,
     this.onEdit,
     this.primaryAction,
@@ -572,7 +581,7 @@ class _HeaderCard extends StatelessWidget {
   final String statusLabel;
   final String visitTypeLabel;
   final String timeLabel;
-  final VoidCallback onPrint;
+  final VoidCallback onPreview;
   final VoidCallback onDownload;
   final VoidCallback? onEdit;
   final Widget? primaryAction;
@@ -719,9 +728,9 @@ class _HeaderCard extends StatelessWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     _ActionChipButton(
-                      icon: Icons.print_outlined,
-                      label: 'Print',
-                      onPressed: onPrint,
+                      icon: Icons.preview_outlined,
+                      label: 'Preview',
+                      onPressed: onPreview,
                     ),
                     _ActionChipButton(
                       icon: Icons.download_outlined,

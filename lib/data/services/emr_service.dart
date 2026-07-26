@@ -195,6 +195,7 @@ class EmrService {
       perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
       status: query?['status']?.toString(),
       search: query?['search']?.toString(),
+      petId: int.tryParse(query?['pet_id']?.toString() ?? ''),
     );
     return result.items;
   }
@@ -204,6 +205,7 @@ class EmrService {
     int perPage = 20,
     String? status,
     String? search,
+    int? petId,
   }) async {
     try {
       final res = await _client.get('/visits', queryParameters: {
@@ -211,11 +213,30 @@ class EmrService {
         'per_page': perPage,
         if (status != null && status.isNotEmpty && status != 'all') 'status': status,
         if (search != null && search.isNotEmpty) 'search': search,
+        if (petId != null) 'pet_id': petId,
       });
       return parseEnvelopeList(res, PetVisit.fromJson);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
+  }
+
+  /// All visits for one pet (paginates until exhausted). Includes clinical lines.
+  Future<List<PetVisit>> listVisitsForPet(int petId, {int perPage = 100}) async {
+    final all = <PetVisit>[];
+    var page = 1;
+    while (true) {
+      final result = await listVisitsPaginated(
+        page: page,
+        perPage: perPage,
+        petId: petId,
+      );
+      all.addAll(result.items);
+      final last = result.meta?.lastPage ?? 1;
+      if (page >= last || result.items.isEmpty) break;
+      page++;
+    }
+    return all;
   }
 
   Future<PetVisit> getVisit(int id) async {

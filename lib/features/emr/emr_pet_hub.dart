@@ -18,6 +18,12 @@ class EmrPetHub extends StatelessWidget {
     final links = <_HubLink>[
       if (auth.hasPermission('emr.visits.view'))
         _HubLink('Timeline', Icons.timeline_outlined, '/emr/pets/$petId/timeline'),
+      if (auth.hasPermission('emr.visits.view'))
+        _HubLink(
+          'Visit summary',
+          Icons.description_outlined,
+          '/emr/pets/$petId/visit-summary',
+        ),
       if (auth.hasPermission('emr.deworming.view'))
         _HubLink('Deworming', Icons.medication_outlined, '/emr/pets/$petId/deworming'),
       if (auth.hasPermission('emr.surgeries.view'))

@@ -6,6 +6,7 @@ import '../../app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/services/emr_master_data_service.dart';
+import 'procedure_kits_master_tab.dart';
 
 class EmrMasterDataScreen extends StatefulWidget {
   const EmrMasterDataScreen({super.key});
@@ -18,6 +19,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   final _search = TextEditingController();
+  final _kitsTabKey = GlobalKey<ProcedureKitsMasterTabState>();
   bool _loading = false;
   List<EmrTemplateItem> _items = [];
 
@@ -28,6 +30,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     'medicines',
     'dosages',
     'frequencies',
+    'service_kits',
   ];
 
   static const _tabLabels = [
@@ -37,14 +40,24 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     'Medicines',
     'Dosages',
     'Frequencies',
+    'Service kits',
   ];
+
+  bool get _isKitsTab => _currentKey == 'service_kits';
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: _tabKeys.length, vsync: this);
     _tabs.addListener(() {
-      if (!_tabs.indexIsChanging) _load();
+      if (!_tabs.indexIsChanging) {
+        if (_isKitsTab) {
+          setState(() {});
+          _kitsTabKey.currentState?.reload();
+        } else {
+          _load();
+        }
+      }
     });
     _load();
   }
@@ -59,6 +72,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
   String get _currentKey => _tabKeys[_tabs.index];
 
   Future<void> _load() async {
+    if (_isKitsTab) {
+      await _kitsTabKey.currentState?.reload();
+      return;
+    }
     setState(() => _loading = true);
     try {
       final svc = context.read<AppServices>().emrMasterData;
@@ -81,6 +98,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
   }
 
   Future<void> _openForm({EmrTemplateItem? item}) async {
+    if (_isKitsTab) {
+      await _kitsTabKey.currentState?.openForm();
+      return;
+    }
     final isEdit = item != null;
     final name = TextEditingController(text: item?.name ?? '');
     final label = TextEditingController(text: item?.label ?? '');
@@ -232,20 +253,20 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
 
     try {
       final svc = context.read<AppServices>().emrMasterData;
-      if (isEdit && item != null) {
+      if (isEdit) {
         switch (_currentKey) {
           case 'complaints':
-            await svc.updateComplaint(item.id, body);
+            await svc.updateComplaint(item!.id, body);
           case 'diagnoses':
-            await svc.updateDiagnosis(item.id, body);
+            await svc.updateDiagnosis(item!.id, body);
           case 'treatments':
-            await svc.updateTreatment(item.id, body);
+            await svc.updateTreatment(item!.id, body);
           case 'medicines':
-            await svc.updateMedicine(item.id, body);
+            await svc.updateMedicine(item!.id, body);
           case 'dosages':
-            await svc.updateDosage(item.id, body);
+            await svc.updateDosage(item!.id, body);
           case 'frequencies':
-            await svc.updateFrequency(item.id, body);
+            await svc.updateFrequency(item!.id, body);
         }
       } else {
         switch (_currentKey) {
@@ -336,47 +357,52 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
             ),
           ),
           Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _items.isEmpty
-                    ? const Center(child: Text('No items yet'))
-                    : ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: _items.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (ctx, i) {
-                          final item = _items[i];
-                          final subtitle = _subtitleFor(item);
-                          return ListTile(
-                            title: Text(item.displayName),
-                            subtitle: subtitle != null ? Text(subtitle) : null,
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (!item.isActive)
-                                  const Padding(
-                                    padding: EdgeInsets.only(right: 8),
-                                    child: Text(
-                                      'Inactive',
-                                      style: TextStyle(
-                                        color: AppTheme.textSecondary,
-                                        fontSize: 12,
+            child: _isKitsTab
+                ? ProcedureKitsMasterTab(
+                    key: _kitsTabKey,
+                    searchQuery: _search.text.trim(),
+                  )
+                : _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _items.isEmpty
+                        ? const Center(child: Text('No items yet'))
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            itemCount: _items.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (ctx, i) {
+                              final item = _items[i];
+                              final subtitle = _subtitleFor(item);
+                              return ListTile(
+                                title: Text(item.displayName),
+                                subtitle: subtitle != null ? Text(subtitle) : null,
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (!item.isActive)
+                                      const Padding(
+                                        padding: EdgeInsets.only(right: 8),
+                                        child: Text(
+                                          'Inactive',
+                                          style: TextStyle(
+                                            color: AppTheme.textSecondary,
+                                            fontSize: 12,
+                                          ),
+                                        ),
                                       ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined),
+                                      onPressed: () => _openForm(item: item),
                                     ),
-                                  ),
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined),
-                                  onPressed: () => _openForm(item: item),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
+                                      onPressed: () => _deactivate(item),
+                                    ),
+                                  ],
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
-                                  onPressed: () => _deactivate(item),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                              );
+                            },
+                          ),
           ),
         ],
       ),

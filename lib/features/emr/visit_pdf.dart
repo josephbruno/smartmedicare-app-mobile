@@ -39,101 +39,112 @@ class VisitPdf {
     PetVisit visit, {
     VisitClinicInfo? clinic,
   }) async {
+    return buildAll([visit], clinic: clinic);
+  }
+
+  /// One A5 landscape page per visit (same layout as single-visit print).
+  static Future<pw.Document> buildAll(
+    List<PetVisit> visits, {
+    VisitClinicInfo? clinic,
+  }) async {
     final doc = pw.Document();
-    final petName = visit.pet?.name ?? 'Pet #${visit.petId}';
-    final time = _formatTime(visit.visitTime);
-    final typeLabel = _titleCase(visit.visitType);
     final clinicName = clinic?.name.trim().isNotEmpty == true
         ? clinic!.name.trim()
         : 'Clinic';
     final clinicAddress = clinic?.address.trim() ?? '';
     final clinicPhone = clinic?.phone?.trim();
 
-    doc.addPage(
-      pw.Page(
-        pageFormat: _pageFormat,
-        margin: const pw.EdgeInsets.fromLTRB(_marginL, _marginT, _marginR, _marginB),
-        build: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-          children: [
-            _clinicHeader(
-              name: clinicName,
-              address: clinicAddress,
-              phone: clinicPhone,
-            ),
-            pw.SizedBox(height: 4),
-            _ownerPetRow(
-              visit: visit,
-              petName: petName,
-              meta: [
-                visit.visitNumber,
-                visit.visitDate,
-                if (time.isNotEmpty) time,
-                typeLabel,
-              ].join(' · '),
-            ),
-            pw.SizedBox(height: 4),
-            pw.Expanded(
-              child: pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                children: [
-                  pw.Expanded(
-                    child: _panel(
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          _sectionTitle('Complaint'),
-                          _bodyText(
-                            visit.chiefComplaint?.trim().isNotEmpty == true
-                                ? visit.chiefComplaint!
-                                : '—',
-                          ),
-                          _divider(),
-                          _sectionTitle('Observation'),
-                          _observationBody(visit),
-                          _divider(),
-                          _sectionTitle('Investigation'),
-                          _bodyText(
-                            visit.investigation?.trim().isNotEmpty == true
-                                ? visit.investigation!
-                                : '—',
-                          ),
-                          _divider(),
-                          _sectionTitle('Treatment'),
-                          _medicinesBody(visit),
-                          if (visit.followUpDate != null) ...[
-                            _divider(),
-                            _sectionTitle('Follow-up'),
-                            _bodyText(visit.followUpDate!, bold: true),
-                            if (visit.followUpNotes != null &&
-                                visit.followUpNotes!.trim().isNotEmpty)
-                              _bodyText(visit.followUpNotes!, muted: true),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  pw.SizedBox(width: 6),
-                  pw.Expanded(
-                    child: _panel(
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          _sectionTitle('Procedures'),
-                          _proceduresBody(visit),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+    for (final visit in visits) {
+      final petName = visit.pet?.name ?? 'Pet #${visit.petId}';
+      final time = _formatTime(visit.visitTime);
+      final typeLabel = _titleCase(visit.visitType);
+
+      doc.addPage(
+        pw.Page(
+          pageFormat: _pageFormat,
+          margin: const pw.EdgeInsets.fromLTRB(_marginL, _marginT, _marginR, _marginB),
+          build: (context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              _clinicHeader(
+                name: clinicName,
+                address: clinicAddress,
+                phone: clinicPhone,
               ),
-            ),
-            pw.SizedBox(height: 3),
-            _pageFooter(context),
-          ],
+              pw.SizedBox(height: 4),
+              _ownerPetRow(
+                visit: visit,
+                petName: petName,
+                meta: [
+                  visit.visitNumber,
+                  visit.visitDate,
+                  if (time.isNotEmpty) time,
+                  typeLabel,
+                ].join(' · '),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Expanded(
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                  children: [
+                    pw.Expanded(
+                      child: _panel(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            _sectionTitle('Complaint'),
+                            _bodyText(
+                              visit.chiefComplaint?.trim().isNotEmpty == true
+                                  ? visit.chiefComplaint!
+                                  : '—',
+                            ),
+                            _divider(),
+                            _sectionTitle('Observation'),
+                            _observationBody(visit),
+                            _divider(),
+                            _sectionTitle('Investigation'),
+                            _bodyText(
+                              visit.investigation?.trim().isNotEmpty == true
+                                  ? visit.investigation!
+                                  : '—',
+                            ),
+                            _divider(),
+                            _sectionTitle('Treatment'),
+                            _medicinesBody(visit),
+                            if (visit.followUpDate != null) ...[
+                              _divider(),
+                              _sectionTitle('Follow-up'),
+                              _bodyText(visit.followUpDate!, bold: true),
+                              if (visit.followUpNotes != null &&
+                                  visit.followUpNotes!.trim().isNotEmpty)
+                                _bodyText(visit.followUpNotes!, muted: true),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    pw.SizedBox(width: 6),
+                    pw.Expanded(
+                      child: _panel(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            _sectionTitle('Procedures'),
+                            _proceduresBody(visit),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 3),
+              _pageFooter(context),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    }
     return doc;
   }
 
@@ -475,23 +486,53 @@ class VisitPdf {
     PetVisit visit, {
     VisitClinicInfo? clinic,
   }) async {
-    final doc = await build(visit, clinic: clinic);
-    await Printing.layoutPdf(
-      onLayout: (_) => doc.save(),
-      format: _pageFormat,
-      name: 'Visit ${visit.visitNumber}',
-    );
+    await printVisits([visit], clinic: clinic, name: 'Visit ${visit.visitNumber}');
   }
 
   static Future<void> downloadVisit(
     PetVisit visit, {
     VisitClinicInfo? clinic,
   }) async {
-    final doc = await build(visit, clinic: clinic);
+    await downloadVisits(
+      [visit],
+      clinic: clinic,
+      filename: 'visit-${visit.visitNumber}.pdf',
+    );
+  }
+
+  static Future<void> printVisits(
+    List<PetVisit> visits, {
+    VisitClinicInfo? clinic,
+    String? name,
+  }) async {
+    if (visits.isEmpty) return;
+    final doc = await buildAll(visits, clinic: clinic);
+    final label = name ??
+        (visits.length == 1
+            ? 'Visit ${visits.first.visitNumber}'
+            : 'Visit summary (${visits.length})');
+    await Printing.layoutPdf(
+      onLayout: (_) => doc.save(),
+      format: _pageFormat,
+      name: label,
+    );
+  }
+
+  static Future<void> downloadVisits(
+    List<PetVisit> visits, {
+    VisitClinicInfo? clinic,
+    String? filename,
+  }) async {
+    if (visits.isEmpty) return;
+    final doc = await buildAll(visits, clinic: clinic);
     final bytes = await doc.save();
+    final rawName = visits.first.pet?.name.trim() ?? '';
+    final petName = rawName.isNotEmpty
+        ? rawName.replaceAll(RegExp(r'[^\w\-]+'), '_')
+        : 'pet-${visits.first.petId}';
     await Printing.sharePdf(
       bytes: bytes,
-      filename: 'visit-${visit.visitNumber}.pdf',
+      filename: filename ?? 'visit-summary-$petName.pdf',
     );
   }
 }

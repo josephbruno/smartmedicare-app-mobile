@@ -25,6 +25,7 @@ import '../../features/emr/lab_reports_screen.dart';
 import '../../features/emr/patient_appointment_list_screen.dart';
 import '../../features/emr/patient_list_screen.dart';
 import '../../features/emr/pet_timeline_screen.dart';
+import '../../features/emr/pet_visit_summary_screen.dart';
 import '../../features/emr/reminder_dashboard_screen.dart';
 import '../../features/emr/surgery_management_screen.dart';
 import '../../features/emr/visit_detail_screen.dart';
@@ -136,6 +137,9 @@ GoRouter createAppRouter({
         return denied;
       }
       if (path.contains('/timeline') && need(AppPermissions.emrVisitsView)) {
+        return denied;
+      }
+      if (path.contains('/visit-summary') && need(AppPermissions.emrVisitsView)) {
         return denied;
       }
     }
@@ -422,6 +426,14 @@ GoRouter createAppRouter({
             builder: (c, s) {
               final petId = int.tryParse(s.pathParameters['petId'] ?? '') ?? 0;
               return PetTimelineScreen(petId: petId);
+            },
+          ),
+          GoRoute(
+            path: '/emr/pets/:petId/visit-summary',
+            name: 'PetVisitSummary',
+            builder: (c, s) {
+              final petId = int.tryParse(s.pathParameters['petId'] ?? '') ?? 0;
+              return PetVisitSummaryScreen(petId: petId);
             },
           ),
           GoRoute(
