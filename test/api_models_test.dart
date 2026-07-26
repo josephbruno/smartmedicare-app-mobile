@@ -169,7 +169,77 @@ void main() {
       expect(inv.payments?.single.tenderedAmount, 1500);
       expect(inv.payments?.single.changeReturn, 320);
       expect(inv.payments?.single.hasCashTenderDetail, isTrue);
+      expect(inv.cashReceivedTotal, 1500);
+      expect(inv.changeReturnTotal, 320);
+      expect(inv.hasChangeReturn, isTrue);
+      expect(inv.hasCashPaymentSummary, isTrue);
       expect(inv.totalGst, 180);
+    });
+
+    test('exact cash / upi leave cash summary empty', () {
+      final exactCash = Invoice.fromJson({
+        'id': 2,
+        'invoice_number': 'INV-00002',
+        'type': 'tax_invoice',
+        'status': 'paid',
+        'invoice_date': '2026-06-01',
+        'total_amount': 500,
+        'paid_amount': 500,
+        'due_amount': 0,
+        'payments': [
+          {
+            'id': 1,
+            'payment_mode': 'cash',
+            'amount': 500,
+            'payment_date': '2026-06-01',
+          },
+        ],
+      });
+      expect(exactCash.cashReceivedTotal, isNull);
+      expect(exactCash.changeReturnTotal, isNull);
+      expect(exactCash.hasCashPaymentSummary, isFalse);
+
+      final upi = Invoice.fromJson({
+        'id': 3,
+        'invoice_number': 'INV-00003',
+        'type': 'tax_invoice',
+        'status': 'paid',
+        'invoice_date': '2026-06-01',
+        'total_amount': 500,
+        'paid_amount': 500,
+        'due_amount': 0,
+        'payments': [
+          {
+            'id': 1,
+            'payment_mode': 'upi',
+            'amount': 500,
+            'payment_date': '2026-06-01',
+          },
+        ],
+      });
+      expect(upi.hasCashPaymentSummary, isFalse);
+
+      final partial = Invoice.fromJson({
+        'id': 4,
+        'invoice_number': 'INV-00004',
+        'type': 'tax_invoice',
+        'status': 'partial',
+        'invoice_date': '2026-06-01',
+        'total_amount': 1000,
+        'paid_amount': 400,
+        'due_amount': 600,
+        'payments': [
+          {
+            'id': 1,
+            'payment_mode': 'cash',
+            'amount': 400,
+            'payment_date': '2026-06-01',
+          },
+        ],
+      });
+      expect(partial.hasBalanceDue, isTrue);
+      expect(partial.hasCashPaymentSummary, isTrue);
+      expect(partial.cashReceivedTotal, isNull);
     });
   });
 

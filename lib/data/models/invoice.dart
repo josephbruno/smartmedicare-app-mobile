@@ -258,6 +258,32 @@ class Invoice {
   bool get isPaid => status == 'paid';
   bool get isUnpaid => status == 'partial' || status == 'confirmed' || status == 'draft';
 
+  /// Cash payments that recorded tendered amount + change (tendered > applied).
+  Iterable<InvoicePayment> get cashTenderPayments =>
+      (payments ?? const <InvoicePayment>[]).where((p) => p.hasCashTenderDetail);
+
+  /// Total cash received from customer when change was given; null if none.
+  double? get cashReceivedTotal {
+    final list = cashTenderPayments.toList();
+    if (list.isEmpty) return null;
+    return list.fold<double>(0, (s, p) => s + (p.tenderedAmount ?? 0));
+  }
+
+  /// Total change returned; null if none (exact cash / UPI / etc.).
+  double? get changeReturnTotal {
+    final list = cashTenderPayments.toList();
+    if (list.isEmpty) return null;
+    return list.fold<double>(0, (s, p) => s + (p.changeReturn ?? 0));
+  }
+
+  bool get hasChangeReturn => (changeReturnTotal ?? 0) > 0.009;
+
+  bool get hasBalanceDue => dueAmount > 0.009;
+
+  /// Separate cash summary: only when change was given and/or balance remains.
+  /// Exact cash and UPI-only invoices leave this empty.
+  bool get hasCashPaymentSummary => hasChangeReturn || hasBalanceDue;
+
   factory Invoice.fromJson(Map<String, dynamic> j) {
     Customer? c;
     if (j['customer'] is Map) {

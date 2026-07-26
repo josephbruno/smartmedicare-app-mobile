@@ -219,6 +219,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               _buildItemsCard(items),
               const SizedBox(height: 16),
               _buildSummaryCard(inv),
+              if (inv.hasCashPaymentSummary) ...[
+                const SizedBox(height: 16),
+                _buildCashSummaryCard(inv),
+              ],
               if (inv.payments != null && inv.payments!.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 _buildPaymentsCard(inv.payments!),
@@ -495,6 +499,44 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     );
   }
 
+  Widget _buildCashSummaryCard(Invoice inv) {
+    final cash = inv.cashReceivedTotal;
+    final change = inv.changeReturnTotal;
+    return _section(
+      title: 'Cash Summary',
+      icon: Icons.payments_rounded,
+      child: Column(
+        children: [
+          if (cash != null) ...[
+            _summaryRow(
+              'Cash received',
+              _money(cash),
+              valueColor: AppTheme.textPrimary,
+            ),
+            if (change != null && change > 0) ...[
+              const SizedBox(height: 8),
+              _summaryRow(
+                'Change return',
+                _money(change),
+                bold: true,
+                valueColor: AppTheme.accent,
+              ),
+            ],
+          ],
+          if (inv.hasBalanceDue) ...[
+            if (cash != null) const SizedBox(height: 8),
+            _summaryRow(
+              'Balance due',
+              _money(inv.dueAmount),
+              bold: true,
+              valueColor: AppTheme.warning,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildPaymentsCard(List<InvoicePayment> payments) {
     return _section(
       title: 'Payments',
@@ -532,26 +574,6 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                         Text(
                           'Ref: ${payments[i].referenceNumber}',
                           style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                        ),
-                      ],
-                      if (payments[i].hasCashTenderDetail) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          'Cash received: ${_money(payments[i].tenderedAmount!)}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Change given: ${_money(payments[i].changeReturn!)}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.accent,
-                          ),
                         ),
                       ],
                     ],

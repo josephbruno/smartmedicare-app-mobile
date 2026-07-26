@@ -46,6 +46,8 @@ class BillingService {
     final query = <String, dynamic>{
       'page': page,
       'per_page': perPage,
+      // Needed for per-invoice cash received / change columns on the list.
+      'with_payments': true,
       if (customerId != null) 'customer_id': customerId,
       if (search != null && search.isNotEmpty) 'search': search,
       if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,

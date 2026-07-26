@@ -219,6 +219,66 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
+                TableColumnDef(
+                  label: 'Cash recv',
+                  flex: 1,
+                  align: TextAlign.right,
+                  cellBuilder: (c, inv) {
+                    final cash = inv.cashReceivedTotal;
+                    // Exact cash / UPI → empty
+                    if (cash == null) {
+                      return const Text(
+                        '',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      );
+                    }
+                    return Text(
+                      '₹${cash.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    );
+                  },
+                ),
+                TableColumnDef(
+                  label: 'Change',
+                  flex: 0.9,
+                  align: TextAlign.right,
+                  cellBuilder: (c, inv) {
+                    final change = inv.changeReturnTotal;
+                    if (change == null || change <= 0.009) {
+                      return const Text(
+                        '',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      );
+                    }
+                    return Text(
+                      '₹${change.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.accent,
+                      ),
+                    );
+                  },
+                ),
+                TableColumnDef(
+                  label: 'Balance due',
+                  flex: 1,
+                  align: TextAlign.right,
+                  cellBuilder: (c, inv) {
+                    if (!inv.hasBalanceDue) {
+                      return const Text(
+                        '',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      );
+                    }
+                    return Text(
+                      '₹${inv.dueAmount.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.warning,
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
