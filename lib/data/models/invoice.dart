@@ -43,6 +43,7 @@ class InvoiceItem {
     this.batchId,
     required this.quantity,
     required this.unitPrice,
+    this.mrp = 0,
     this.discountPercent = 0,
     this.discountAmount = 0,
     this.taxableAmount = 0,
@@ -61,7 +62,10 @@ class InvoiceItem {
   final String? hsnCode;
   final int? batchId;
   final double quantity;
+  /// Selling price charged on this line.
   final double unitPrice;
+  /// Catalog MRP (for receipt display).
+  final double mrp;
   final double discountPercent;
   final double discountAmount;
   final double taxableAmount;
@@ -84,20 +88,25 @@ class InvoiceItem {
 
   factory InvoiceItem.fromJson(Map<String, dynamic> j) {
     String type = j['product_type']?.toString() ?? '';
-    if (type.isEmpty) {
-      final product = j['product'];
-      if (product is Map) {
-        type = product['product_type']?.toString() ?? '';
-        if (type.isEmpty) {
-          if (product['is_service'] == true) {
-            type = 'service';
-          } else if (product['is_medicine'] == true) {
-            type = 'medicine';
-          }
+    Map<String, dynamic>? product;
+    if (j['product'] is Map) {
+      product = Map<String, dynamic>.from(j['product'] as Map);
+    }
+    if (type.isEmpty && product != null) {
+      type = product['product_type']?.toString() ?? '';
+      if (type.isEmpty) {
+        if (product['is_service'] == true) {
+          type = 'service';
+        } else if (product['is_medicine'] == true) {
+          type = 'medicine';
         }
       }
     }
     if (type.isEmpty) type = 'product';
+
+    final mrp = numOrNull(j['mrp']) ??
+        (product != null ? numOrNull(product['mrp']) : null) ??
+        0;
 
     return InvoiceItem(
         id: intOrNull(j['id']) ?? 0,
@@ -108,6 +117,7 @@ class InvoiceItem {
         batchId: intOrNull(j['batch_id']),
         quantity: numOrNull(j['quantity']) ?? 0,
         unitPrice: numOrNull(j['unit_price']) ?? 0,
+        mrp: mrp,
         discountPercent: numOrNull(j['discount_percent']) ?? 0,
         discountAmount: numOrNull(j['discount_amount']) ?? 0,
         taxableAmount: numOrNull(j['taxable_amount']) ?? 0,
@@ -400,6 +410,7 @@ class CartItem {
     this.batchId,
     required this.quantity,
     required this.unitPrice,
+    this.mrp = 0,
     this.unitPriceTaxable,
     required this.discountPercent,
     required this.discountAmount,
@@ -423,6 +434,7 @@ class CartItem {
   final int? batchId;
   int quantity;
   double unitPrice;
+  double mrp;
   double? unitPriceTaxable;
   double discountPercent;
   double discountAmount;
@@ -448,6 +460,7 @@ class CartItem {
         if (batchId != null && batchId! > 0) 'batch_id': batchId,
         'quantity': quantity,
         'unit_price': unitPrice,
+        'mrp': mrp,
         'discount_percent': discountPercent,
         'discount_amount': discountAmount,
         'taxable_amount': taxableAmount,

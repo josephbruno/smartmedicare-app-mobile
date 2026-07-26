@@ -427,6 +427,7 @@ class _PosScreenState extends State<PosScreen> {
             productName: c.productName,
             quantity: c.quantity.toDouble(),
             unitPrice: c.unitPrice,
+            mrp: c.mrp,
             totalAmount: c.totalAmount,
           ),
         )

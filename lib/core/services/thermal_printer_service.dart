@@ -158,8 +158,7 @@ class ThermalPrinterService {
         ),
         if (shopPhone != null)
           pw.Text(shopPhone, style: const pw.TextStyle(fontSize: 8)),
-        if (shopGstin != null)
-          pw.Text('GSTIN: $shopGstin', style: const pw.TextStyle(fontSize: 8)),
+        // GSTIN intentionally omitted from receipt print.
         pw.Divider(borderStyle: pw.BorderStyle.dashed, height: 1),
       ],
     );
@@ -213,45 +212,72 @@ class ThermalPrinterService {
         pw.Row(
           children: [
             pw.Expanded(
-              flex: 4,
-              child: pw.Text('Item', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
-            ),
-            pw.Expanded(
-              flex: 1,
-              child: pw.Text('Qty', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right),
+              flex: 3,
+              child: pw.Text('Item', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold)),
             ),
             pw.Expanded(
               flex: 2,
-              child: pw.Text('Amt', style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right),
+              child: pw.Text('MRP', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right),
+            ),
+            pw.Expanded(
+              flex: 2,
+              child: pw.Text('Rate', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right),
+            ),
+            pw.Expanded(
+              flex: 1,
+              child: pw.Text('Qty', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right),
+            ),
+            pw.Expanded(
+              flex: 2,
+              child: pw.Text('Amt', style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right),
             ),
           ],
         ),
         pw.Divider(borderStyle: pw.BorderStyle.dashed, height: 1),
         ...items.map(
-          (item) => pw.Row(
-            children: [
-              pw.Expanded(
-                flex: 4,
-                child: pw.Text(item.productName, style: const pw.TextStyle(fontSize: 7), maxLines: 1),
-              ),
-              pw.Expanded(
-                flex: 1,
-                child: pw.Text(
-                  item.quantity.toStringAsFixed(0),
-                  style: const pw.TextStyle(fontSize: 7),
-                  textAlign: pw.TextAlign.right,
+          (item) {
+            final mrp = item.mrp > 0 ? item.mrp : item.unitPrice;
+            return pw.Row(
+              children: [
+                pw.Expanded(
+                  flex: 3,
+                  child: pw.Text(item.productName, style: const pw.TextStyle(fontSize: 6), maxLines: 1),
                 ),
-              ),
-              pw.Expanded(
-                flex: 2,
-                child: pw.Text(
-                  '₹${item.totalAmount.toStringAsFixed(2)}',
-                  style: const pw.TextStyle(fontSize: 7),
-                  textAlign: pw.TextAlign.right,
+                pw.Expanded(
+                  flex: 2,
+                  child: pw.Text(
+                    mrp.toStringAsFixed(2),
+                    style: const pw.TextStyle(fontSize: 6),
+                    textAlign: pw.TextAlign.right,
+                  ),
                 ),
-              ),
-            ],
-          ),
+                pw.Expanded(
+                  flex: 2,
+                  child: pw.Text(
+                    item.unitPrice.toStringAsFixed(2),
+                    style: const pw.TextStyle(fontSize: 6),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+                pw.Expanded(
+                  flex: 1,
+                  child: pw.Text(
+                    item.quantity.toStringAsFixed(0),
+                    style: const pw.TextStyle(fontSize: 6),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+                pw.Expanded(
+                  flex: 2,
+                  child: pw.Text(
+                    item.totalAmount.toStringAsFixed(2),
+                    style: const pw.TextStyle(fontSize: 6),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         pw.Divider(borderStyle: pw.BorderStyle.dashed, height: 1),
       ],
@@ -268,9 +294,7 @@ class ThermalPrinterService {
       children: [
         _buildTotalRow('Subtotal', invoice.subtotal),
         if (invoice.discountAmount > 0) _buildTotalRow('Discount', -invoice.discountAmount),
-        if (invoice.cgstAmount > 0) _buildTotalRow('CGST', invoice.cgstAmount),
-        if (invoice.sgstAmount > 0) _buildTotalRow('SGST', invoice.sgstAmount),
-        if (invoice.igstAmount > 0) _buildTotalRow('IGST', invoice.igstAmount),
+        // CGST / SGST / IGST intentionally omitted from receipt print.
         if (invoice.roundOff != 0) _buildTotalRow('Round Off', invoice.roundOff),
         pw.Divider(borderStyle: pw.BorderStyle.solid, height: 1),
         pw.Text(

@@ -44,12 +44,7 @@ class EscPosReceiptBuilder {
         styles: const PosStyles(align: PosAlign.center),
       );
     }
-    if (shopGstin != null && shopGstin.trim().isNotEmpty) {
-      bytes += g.text(
-        'GSTIN: ${shopGstin.trim()}',
-        styles: const PosStyles(align: PosAlign.center),
-      );
-    }
+    // GSTIN intentionally omitted from thermal print.
     bytes += g.hr();
 
     bytes += g.text(
@@ -72,8 +67,18 @@ class EscPosReceiptBuilder {
     bytes += g.row([
       PosColumn(
         text: 'Item',
-        width: 6,
+        width: 3,
         styles: const PosStyles(bold: true),
+      ),
+      PosColumn(
+        text: 'MRP',
+        width: 2,
+        styles: const PosStyles(bold: true, align: PosAlign.right),
+      ),
+      PosColumn(
+        text: 'Rate',
+        width: 2,
+        styles: const PosStyles(bold: true, align: PosAlign.right),
       ),
       PosColumn(
         text: 'Qty',
@@ -82,26 +87,37 @@ class EscPosReceiptBuilder {
       ),
       PosColumn(
         text: 'Amt',
-        width: 4,
+        width: 3,
         styles: const PosStyles(bold: true, align: PosAlign.right),
       ),
     ]);
     bytes += g.hr(ch: '-');
 
     for (final item in items) {
-      final label = _clip(item.productName, paperWidthMm <= 58 ? 18 : 24);
+      final mrp = item.mrp > 0 ? item.mrp : item.unitPrice;
+      final label = _clip(item.productName, paperWidthMm <= 58 ? 8 : 10);
       bytes += g.row([
-        PosColumn(text: label, width: 6),
+        PosColumn(text: label, width: 3),
+        PosColumn(
+          text: _money(mrp),
+          width: 2,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+        PosColumn(
+          text: _money(item.unitPrice),
+          width: 2,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
         PosColumn(
           text: item.quantity.toStringAsFixed(
-            item.quantity == item.quantity.roundToDouble() ? 0 : 2,
+            item.quantity == item.quantity.roundToDouble() ? 0 : 1,
           ),
           width: 2,
           styles: const PosStyles(align: PosAlign.right),
         ),
         PosColumn(
           text: item.totalAmount.toStringAsFixed(2),
-          width: 4,
+          width: 3,
           styles: const PosStyles(align: PosAlign.right),
         ),
       ]);
@@ -112,15 +128,7 @@ class EscPosReceiptBuilder {
     if (invoice.discountAmount > 0) {
       bytes += _moneyRow(g, 'Discount', -invoice.discountAmount);
     }
-    if (invoice.cgstAmount > 0) {
-      bytes += _moneyRow(g, 'CGST', invoice.cgstAmount);
-    }
-    if (invoice.sgstAmount > 0) {
-      bytes += _moneyRow(g, 'SGST', invoice.sgstAmount);
-    }
-    if (invoice.igstAmount > 0) {
-      bytes += _moneyRow(g, 'IGST', invoice.igstAmount);
-    }
+    // CGST / SGST / IGST intentionally omitted from thermal print.
     if (invoice.roundOff != 0) {
       bytes += _moneyRow(g, 'Round Off', invoice.roundOff);
     }
@@ -181,14 +189,18 @@ class EscPosReceiptBuilder {
     );
     bytes += g.hr();
     bytes += g.row([
-      PosColumn(text: 'Consultation', width: 6),
+      PosColumn(text: 'Consult', width: 3),
+      PosColumn(text: '300', width: 2, styles: const PosStyles(align: PosAlign.right)),
+      PosColumn(text: '300', width: 2, styles: const PosStyles(align: PosAlign.right)),
       PosColumn(text: '1', width: 2, styles: const PosStyles(align: PosAlign.right)),
-      PosColumn(text: '300.00', width: 4, styles: const PosStyles(align: PosAlign.right)),
+      PosColumn(text: '300.00', width: 3, styles: const PosStyles(align: PosAlign.right)),
     ]);
     bytes += g.row([
-      PosColumn(text: 'Suture pack', width: 6),
+      PosColumn(text: 'Suture', width: 3),
+      PosColumn(text: '220', width: 2, styles: const PosStyles(align: PosAlign.right)),
+      PosColumn(text: '200', width: 2, styles: const PosStyles(align: PosAlign.right)),
       PosColumn(text: '2', width: 2, styles: const PosStyles(align: PosAlign.right)),
-      PosColumn(text: '400.00', width: 4, styles: const PosStyles(align: PosAlign.right)),
+      PosColumn(text: '400.00', width: 3, styles: const PosStyles(align: PosAlign.right)),
     ]);
     bytes += g.hr();
     bytes += g.text(
@@ -214,6 +226,8 @@ class EscPosReceiptBuilder {
       ),
     ]);
   }
+
+  static String _money(double amount) => amount.toStringAsFixed(2);
 
   static String _clip(String value, int max) {
     final t = value.trim();
