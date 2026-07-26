@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/services/thermal_printer_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/models/customer.dart';
 import '../../data/models/invoice.dart';
+import '../reports/report_formatters.dart';
 
 class InvoiceDetailScreen extends StatefulWidget {
   const InvoiceDetailScreen({super.key, required this.id});
@@ -19,7 +24,16 @@ class InvoiceDetailScreen extends StatefulWidget {
 }
 
 class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
+  static final _moneyFmt = NumberFormat.currency(
+    locale: 'en_IN',
+    symbol: '₹',
+    decimalDigits: 2,
+  );
+  static final _dateFmt = DateFormat('d MMM yyyy');
+  static final _dateTimeFmt = DateFormat('d MMM yyyy • h:mm a');
+
   late Future<Invoice> _future;
+  bool _downloadingPdf = false;
 
   @override
   void initState() {
@@ -34,7 +48,23 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     await _future;
   }
 
-  String _money(num n) => '₹${n.toStringAsFixed(2)}';
+  String _money(num n) => _moneyFmt.format(n);
+
+  String _prettyDate(String raw) {
+    if (raw.isEmpty) return '—';
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw;
+    return _dateFmt.format(parsed);
+  }
+
+  String _headerDateTime(Invoice inv) {
+    final created = inv.createdAt;
+    if (created != null && created.isNotEmpty) {
+      final parsed = DateTime.tryParse(created)?.toLocal();
+      if (parsed != null) return _dateTimeFmt.format(parsed);
+    }
+    return _prettyDate(inv.invoiceDate);
+  }
 
   Color _statusColor(String status) {
     return switch (status.toLowerCase()) {
@@ -45,6 +75,49 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       'confirmed' => AppTheme.primary,
       _ => AppTheme.primary,
     };
+  }
+
+  String _statusLabel(String status) => titleCaseStatus(status);
+
+  InvoicePayment? _primaryPayment(Invoice inv) {
+    final payments = inv.payments;
+    if (payments == null || payments.isEmpty) return null;
+    return payments.first;
+  }
+
+  String _customerAddress(Customer? c) {
+    if (c == null) return '';
+    return [
+      if (c.address != null && c.address!.isNotEmpty) c.address!,
+      if (c.city != null && c.city!.isNotEmpty) c.city!,
+      if (c.state != null && c.state!.isNotEmpty) c.state!,
+      if (c.pincode != null && c.pincode!.isNotEmpty) c.pincode!,
+    ].join(', ');
+  }
+
+  double _taxableAmount(Invoice inv) {
+    final items = inv.items;
+    if (items != null && items.isNotEmpty) {
+      final sum = items.fold<double>(0, (s, i) => s + i.taxableAmount);
+      if (sum > 0) return sum;
+    }
+    final sub = inv.subtotal > 0 ? inv.subtotal : inv.totalAmount;
+    return (sub - inv.discountAmount).clamp(0, double.infinity);
+  }
+
+  double? _uniformGstRate(Invoice inv) {
+    final items = inv.items;
+    if (items == null || items.isEmpty) return null;
+    final rates = items.map((i) => i.gstRate).toSet();
+    if (rates.length != 1) return null;
+    final rate = rates.first;
+    return rate > 0 ? rate : null;
+  }
+
+  String _ratePct(double rate) {
+    return rate == rate.roundToDouble()
+        ? rate.toStringAsFixed(0)
+        : rate.toStringAsFixed(1);
   }
 
   Future<void> _handleWhatsApp(Invoice inv) async {
@@ -157,7 +230,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     );
   }
 
-  Future<void> _handleShare(Invoice inv) async {
+  Future<void> _handleShareLink(Invoice inv) async {
     final token = inv.shareToken;
     if (token == null || token.isEmpty) {
       AppMessenger.show(
@@ -173,6 +246,34 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       context,
       const SnackBar(content: Text('Share link copied!')),
     );
+  }
+
+  Future<void> _handleDownloadPdf(Invoice inv) async {
+    if (_downloadingPdf) return;
+    setState(() => _downloadingPdf = true);
+    try {
+      final bytes = await context.read<AppServices>().billing.getPdfBytes(inv.id);
+      if (!mounted) return;
+      if (bytes.isEmpty) {
+        AppMessenger.show(
+          context,
+          const SnackBar(content: Text('PDF could not be downloaded.')),
+        );
+        return;
+      }
+      await Printing.sharePdf(
+        bytes: Uint8List.fromList(bytes),
+        filename: '${inv.invoiceNumber}.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppMessenger.show(
+        context,
+        SnackBar(content: Text('Failed to download PDF: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _downloadingPdf = false);
+    }
   }
 
   @override
@@ -208,29 +309,27 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         return RefreshIndicator(
           onRefresh: _reload,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             children: [
-              _buildHeader(inv),
-              const SizedBox(height: 12),
-              _buildActions(inv),
-              const SizedBox(height: 16),
-              _buildDetailsCard(inv),
-              const SizedBox(height: 16),
-              _buildItemsCard(items),
-              const SizedBox(height: 16),
+              _buildPageHeader(inv),
+              const SizedBox(height: 14),
               _buildSummaryCard(inv),
+              const SizedBox(height: 14),
+              _buildCustomerCard(inv),
+              const SizedBox(height: 14),
+              _buildItemsCard(items),
+              const SizedBox(height: 14),
+              _buildNotesAndTotals(inv),
               if (inv.hasCashPaymentSummary) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 _buildCashSummaryCard(inv),
               ],
-              if (inv.payments != null && inv.payments!.isNotEmpty) ...[
-                const SizedBox(height: 16),
+              if (inv.payments != null && inv.payments!.length > 1) ...[
+                const SizedBox(height: 14),
                 _buildPaymentsCard(inv.payments!),
               ],
-              if (inv.notes != null && inv.notes!.trim().isNotEmpty) ...[
-                const SizedBox(height: 16),
-                _buildNotesCard(inv.notes!.trim()),
-              ],
+              const SizedBox(height: 18),
+              _buildActionButtons(inv),
             ],
           ),
         );
@@ -238,215 +337,56 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     );
   }
 
-  Widget _buildHeader(Invoice inv) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: _cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  inv.invoiceNumber,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                _money(inv.totalAmount),
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _chip(inv.status, _statusColor(inv.status)),
-              if (inv.type.isNotEmpty)
-                _chip(inv.type.replaceAll('_', ' '), AppTheme.primary),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActions(Invoice inv) {
-    final canPrint = inv.items != null && inv.items!.isNotEmpty;
-    final buttonStyle = OutlinedButton.styleFrom(
-      foregroundColor: AppTheme.primary,
-      side: const BorderSide(color: Color(0xFFBFDBFE)),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-    );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final stack = constraints.maxWidth < 520;
-        final whatsapp = FilledButton.icon(
-          onPressed: () => _handleWhatsApp(inv),
-          icon: const Icon(Icons.send_rounded, size: 18),
-          label: const Text('WhatsApp'),
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF16A34A),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-          ),
-        );
-        final printBtn = OutlinedButton.icon(
-          onPressed: canPrint ? () => _handlePrint(inv) : null,
-          icon: const Icon(Icons.print_rounded, size: 18),
-          label: const Text('Print'),
-          style: buttonStyle,
-        );
-        final shareBtn = OutlinedButton.icon(
-          onPressed: () => _handleShare(inv),
-          icon: const Icon(Icons.link_rounded, size: 18),
-          label: const Text('Share Link'),
-          style: buttonStyle,
-        );
-
-        if (stack) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              whatsapp,
-              const SizedBox(height: 8),
-              printBtn,
-              const SizedBox(height: 8),
-              shareBtn,
-            ],
-          );
-        }
-
-        return Row(
-          children: [
-            Expanded(child: whatsapp),
-            const SizedBox(width: 8),
-            Expanded(child: printBtn),
-            const SizedBox(width: 8),
-            Expanded(child: shareBtn),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildDetailsCard(Invoice inv) {
-    final customer = inv.customer;
-    return _section(
-      title: 'Invoice Details',
-      icon: Icons.receipt_long_outlined,
-      child: Column(
-        children: [
-          _kv('Date', inv.displayDate),
-          if (inv.dueDate != null && inv.dueDate!.isNotEmpty) _kv('Due date', inv.dueDate!),
-          _kv('Branch', inv.branchName),
-          const Divider(height: 24),
-          _kv('Customer', customer?.name.isNotEmpty == true ? customer!.name : 'Walk-in', emphasize: true),
-          if (customer?.phone != null && customer!.phone.isNotEmpty) _kv('Phone', customer.phone),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildItemsCard(List<InvoiceItem> items) {
-    return _section(
-      title: 'Line Items',
-      icon: Icons.shopping_cart_outlined,
-      trailing: Text(
-        '${items.length} item${items.length == 1 ? '' : 's'}',
-        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-      ),
-      child: items.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                'No line items',
-                style: TextStyle(color: AppTheme.textSecondary),
-              ),
-            )
-          : Column(
-              children: [
-                for (var i = 0; i < items.length; i++) ...[
-                  if (i > 0) const Divider(height: 20),
-                  _itemTile(i + 1, items[i]),
-                ],
-              ],
-            ),
-    );
-  }
-
-  Widget _itemTile(int index, InvoiceItem item) {
-    final meta = <String>[
-      if (item.hsnCode != null && item.hsnCode!.isNotEmpty) 'HSN: ${item.hsnCode}',
-      if (item.gstRate > 0) 'GST ${item.gstRate.toStringAsFixed(0)}%',
-    ].join(' · ');
-
+  Widget _buildPageHeader(Invoice inv) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 28,
-          height: 28,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: const Color(0xFFEFF6FF),
-            borderRadius: BorderRadius.circular(8),
+        IconButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/invoices');
+            }
+          },
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back',
+          style: IconButton.styleFrom(
+            foregroundColor: AppTheme.textPrimary,
+            side: const BorderSide(color: Color(0xFFE2E8F0)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
+        ),
+        const SizedBox(width: 8),
+        const Expanded(
           child: Text(
-            '$index',
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF2563EB),
-              fontSize: 12,
+            'Invoice Details',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.textPrimary,
             ),
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                item.productName,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              if (meta.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  meta,
-                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-              ],
-              const SizedBox(height: 6),
-              Text(
-                '${item.quantity} × ${_money(item.unitPrice)}',
-                style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-              ),
-            ],
-          ),
-        ),
-        Text(
-          _money(item.totalAmount),
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            color: AppTheme.textPrimary,
+        PopupMenuButton<String>(
+          tooltip: 'More',
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          onSelected: (value) {
+            if (value == 'share_link') _handleShareLink(inv);
+            if (value == 'whatsapp') _handleWhatsApp(inv);
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'whatsapp', child: Text('Send WhatsApp')),
+            PopupMenuItem(value: 'share_link', child: Text('Copy share link')),
+          ],
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              color: Colors.white,
+            ),
+            child: const Icon(Icons.more_vert_rounded, size: 20),
           ),
         ),
       ],
@@ -454,65 +394,494 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   }
 
   Widget _buildSummaryCard(Invoice inv) {
-    return _section(
-      title: 'Amount Summary',
-      icon: Icons.payments_outlined,
+    final payment = _primaryPayment(inv);
+    final statusColor = _statusColor(inv.status);
+    final statusLabel = _statusLabel(inv.status);
+
+    final meta = <(String, Widget)>[
+      ('Invoice No.', Text(inv.invoiceNumber, style: _metaValueStyle)),
+      ('Invoice Date', Text(_prettyDate(inv.invoiceDate), style: _metaValueStyle)),
+      if (inv.dueDate != null && inv.dueDate!.isNotEmpty)
+        ('Due Date', Text(_prettyDate(inv.dueDate!), style: _metaValueStyle)),
+      (
+        'Status',
+        _statusBadge(statusLabel, statusColor, compact: true),
+      ),
+      if (payment != null) ...[
+        (
+          'Payment Method',
+          Text(paymentModeLabel(payment.paymentMode), style: _metaValueStyle),
+        ),
+        if (payment.referenceNumber != null && payment.referenceNumber!.isNotEmpty)
+          (
+            'Payment Ref No.',
+            Text(payment.referenceNumber!, style: _metaValueStyle),
+          ),
+      ],
+      if (inv.branchName.isNotEmpty && inv.branchName != '—')
+        ('Branch', Text(inv.branchName, style: _metaValueStyle)),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _cardDecoration(),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 720;
+          final left = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEFF6FF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.receipt_long_rounded,
+                  color: Color(0xFF2563EB),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      inv.invoiceNumber,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _headerDateTime(inv),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _statusBadge(statusLabel, statusColor),
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          final right = _metaGrid(meta, columns: wide ? 2 : 1);
+
+          if (wide) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 5, child: left),
+                const SizedBox(width: 24),
+                Expanded(flex: 6, child: right),
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              left,
+              const SizedBox(height: 16),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              const SizedBox(height: 12),
+              right,
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCustomerCard(Invoice inv) {
+    final customer = inv.customer;
+    final name = customer?.name.isNotEmpty == true ? customer!.name : 'Walk-in';
+    final phone = customer?.phone;
+    final email = customer?.email;
+    final address = _customerAddress(customer);
+    final canView = customer != null && customer.id > 0;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _cardDecoration(),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _summaryRow('Subtotal', _money(inv.subtotal > 0 ? inv.subtotal : inv.totalAmount)),
-          if (inv.discountAmount > 0) ...[
-            const SizedBox(height: 8),
-            _summaryRow('Discount', '- ${_money(inv.discountAmount)}'),
-          ],
-          if (inv.totalGst > 0) ...[
-            const SizedBox(height: 8),
-            _summaryRow('GST', _money(inv.totalGst)),
-          ],
-          if (inv.roundOff != 0) ...[
-            const SizedBox(height: 8),
-            _summaryRow('Round off', _money(inv.roundOff)),
-          ],
-          const Divider(height: 20),
-          _summaryRow(
-            'Total',
-            _money(inv.totalAmount),
-            bold: true,
-            valueColor: AppTheme.textPrimary,
+          _sectionTitle(Icons.person_outline_rounded, 'Customer Details'),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stack = constraints.maxWidth < 560;
+              final info = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  if (phone != null && phone.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _iconText(Icons.phone_outlined, phone),
+                  ],
+                  if (email != null && email.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _iconText(Icons.mail_outline_rounded, email),
+                  ],
+                  if (address.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _iconText(Icons.location_on_outlined, address),
+                  ],
+                ],
+              );
+
+              final button = OutlinedButton.icon(
+                onPressed: canView ? () => context.push('/customers/${customer.id}') : null,
+                icon: const Icon(Icons.person_outline_rounded, size: 18),
+                label: const Text('View Customer'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2563EB),
+                  side: const BorderSide(color: Color(0xFFBFDBFE)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+              );
+
+              if (stack) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    info,
+                    const SizedBox(height: 14),
+                    Align(alignment: Alignment.centerLeft, child: button),
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: info),
+                  const SizedBox(width: 16),
+                  button,
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 8),
-          _summaryRow(
-            'Paid',
-            _money(inv.paidAmount),
-            valueColor: const Color(0xFF16A34A),
-          ),
-          if (inv.dueAmount > 0) ...[
-            const SizedBox(height: 8),
-            _summaryRow(
-              'Due',
-              _money(inv.dueAmount),
-              bold: true,
-              valueColor: AppTheme.danger,
-            ),
-          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildItemsCard(List<InvoiceItem> items) {
+    const headerStyle = TextStyle(
+      fontWeight: FontWeight.w700,
+      fontSize: 13,
+      color: AppTheme.textSecondary,
+    );
+    const cellStyle = TextStyle(fontSize: 13.5, color: AppTheme.textPrimary);
+    const productStyle = TextStyle(
+      fontSize: 13.5,
+      fontWeight: FontWeight.w600,
+      color: AppTheme.textPrimary,
+    );
+
+    Widget headerCell(String label, {TextAlign align = TextAlign.left}) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        child: Text(label, textAlign: align, style: headerStyle),
+      );
+    }
+
+    Widget bodyCell(
+      String text, {
+      TextAlign align = TextAlign.left,
+      TextStyle style = cellStyle,
+    }) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+        child: Text(text, textAlign: align, style: style),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _sectionTitle(Icons.shopping_cart_outlined, 'Invoice Items'),
+          const SizedBox(height: 14),
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                'No line items',
+                style: TextStyle(color: AppTheme.textSecondary),
+              ),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final minWidth = 780.0;
+                final tableWidth =
+                    constraints.maxWidth < minWidth ? minWidth : constraints.maxWidth;
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: tableWidth,
+                    child: Table(
+                      columnWidths: const {
+                        0: FlexColumnWidth(0.5),
+                        1: FlexColumnWidth(2.8),
+                        2: FlexColumnWidth(1.2),
+                        3: FlexColumnWidth(0.7),
+                        4: FlexColumnWidth(1.2),
+                        5: FlexColumnWidth(1.1),
+                        6: FlexColumnWidth(0.8),
+                        7: FlexColumnWidth(1.2),
+                      },
+                      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                      border: TableBorder(
+                        horizontalInside: BorderSide(
+                          color: const Color(0xFFE2E8F0).withValues(alpha: 0.9),
+                        ),
+                        bottom: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      children: [
+                        TableRow(
+                          decoration: const BoxDecoration(color: Color(0xFFF8FAFC)),
+                          children: [
+                            headerCell('#'),
+                            headerCell('Product'),
+                            headerCell('HSN / SKU'),
+                            headerCell('Qty', align: TextAlign.right),
+                            headerCell('Unit Price', align: TextAlign.right),
+                            headerCell('Discount', align: TextAlign.right),
+                            headerCell('Tax', align: TextAlign.right),
+                            headerCell('Total', align: TextAlign.right),
+                          ],
+                        ),
+                        for (var i = 0; i < items.length; i++)
+                          TableRow(
+                            children: [
+                              bodyCell('${i + 1}'),
+                              bodyCell(items[i].productName, style: productStyle),
+                              bodyCell(
+                                (items[i].hsnCode != null && items[i].hsnCode!.isNotEmpty)
+                                    ? items[i].hsnCode!
+                                    : '—',
+                                style: cellStyle.copyWith(color: AppTheme.textSecondary),
+                              ),
+                              bodyCell(_qty(items[i].quantity), align: TextAlign.right),
+                              bodyCell(_money(items[i].unitPrice), align: TextAlign.right),
+                              bodyCell(_money(items[i].discountAmount), align: TextAlign.right),
+                              bodyCell(
+                                items[i].gstRate > 0
+                                    ? '${items[i].gstRate.toStringAsFixed(0)}%'
+                                    : '—',
+                                align: TextAlign.right,
+                              ),
+                              bodyCell(
+                                _money(items[i].totalAmount),
+                                align: TextAlign.right,
+                                style: productStyle,
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          const SizedBox(height: 12),
+          const Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Thank you for your purchase!',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(width: 6),
+                Icon(Icons.favorite, size: 14, color: Color(0xFFEC4899)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotesAndTotals(Invoice inv) {
+    final notes = inv.notes?.trim();
+    final gstRate = _uniformGstRate(inv);
+    final halfRate = gstRate != null ? gstRate / 2 : null;
+    final isPaid = inv.status.toLowerCase() == 'paid' || inv.dueAmount <= 0.009;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 700;
+        final notesCard = Container(
+          padding: const EdgeInsets.all(18),
+          decoration: _cardDecoration(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _sectionTitle(Icons.description_outlined, 'Notes'),
+              const SizedBox(height: 12),
+              Text(
+                (notes != null && notes.isNotEmpty) ? notes : '—',
+                style: TextStyle(
+                  color: (notes != null && notes.isNotEmpty)
+                      ? AppTheme.textPrimary
+                      : AppTheme.textSecondary,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        );
+
+        final totalsCard = Container(
+          padding: const EdgeInsets.all(18),
+          decoration: _cardDecoration(),
+          child: Column(
+            children: [
+              _summaryRow(
+                'Subtotal',
+                _money(inv.subtotal > 0 ? inv.subtotal : inv.totalAmount),
+              ),
+              if (inv.discountAmount > 0) ...[
+                const SizedBox(height: 8),
+                _summaryRow(
+                  'Discount',
+                  '- ${_money(inv.discountAmount)}',
+                  valueColor: AppTheme.danger,
+                ),
+              ],
+              const SizedBox(height: 8),
+              _summaryRow('Taxable Amount', _money(_taxableAmount(inv))),
+              if (inv.isIgst && inv.igstAmount > 0) ...[
+                const SizedBox(height: 8),
+                _summaryRow(
+                  gstRate != null ? 'IGST (${_ratePct(gstRate)}%)' : 'IGST',
+                  _money(inv.igstAmount),
+                ),
+              ] else ...[
+                if (inv.cgstAmount > 0) ...[
+                  const SizedBox(height: 8),
+                  _summaryRow(
+                    halfRate != null ? 'CGST (${_ratePct(halfRate)}%)' : 'CGST',
+                    _money(inv.cgstAmount),
+                  ),
+                ],
+                if (inv.sgstAmount > 0) ...[
+                  const SizedBox(height: 8),
+                  _summaryRow(
+                    halfRate != null ? 'SGST (${_ratePct(halfRate)}%)' : 'SGST',
+                    _money(inv.sgstAmount),
+                  ),
+                ],
+                if (inv.cgstAmount <= 0 &&
+                    inv.sgstAmount <= 0 &&
+                    inv.totalGst > 0) ...[
+                  const SizedBox(height: 8),
+                  _summaryRow('GST', _money(inv.totalGst)),
+                ],
+              ],
+              if (inv.roundOff != 0) ...[
+                const SizedBox(height: 8),
+                _summaryRow('Round Off', _money(inv.roundOff)),
+              ],
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+              ),
+              _summaryRow(
+                'Grand Total',
+                _money(inv.totalAmount),
+                bold: true,
+                valueColor: const Color(0xFF2563EB),
+                large: true,
+              ),
+              if (isPaid) ...[
+                const SizedBox(height: 4),
+                const Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '(Paid)',
+                    style: TextStyle(
+                      color: Color(0xFF16A34A),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ] else if (inv.dueAmount > 0) ...[
+                const SizedBox(height: 8),
+                _summaryRow(
+                  'Due',
+                  _money(inv.dueAmount),
+                  bold: true,
+                  valueColor: AppTheme.danger,
+                ),
+              ],
+            ],
+          ),
+        );
+
+        if (wide) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: notesCard),
+              const SizedBox(width: 14),
+              Expanded(child: totalsCard),
+            ],
+          );
+        }
+
+        return Column(
+          children: [
+            notesCard,
+            const SizedBox(height: 14),
+            totalsCard,
+          ],
+        );
+      },
     );
   }
 
   Widget _buildCashSummaryCard(Invoice inv) {
     final cash = inv.cashReceivedTotal;
     final change = inv.changeReturnTotal;
-    return _section(
-      title: 'Cash Summary',
-      icon: Icons.payments_rounded,
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _cardDecoration(),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _sectionTitle(Icons.payments_rounded, 'Cash Summary'),
+          const SizedBox(height: 12),
           if (cash != null) ...[
-            _summaryRow(
-              'Cash received',
-              _money(cash),
-              valueColor: AppTheme.textPrimary,
-            ),
+            _summaryRow('Cash received', _money(cash)),
             if (change != null && change > 0) ...[
               const SizedBox(height: 8),
               _summaryRow(
@@ -538,15 +907,14 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   }
 
   Widget _buildPaymentsCard(List<InvoicePayment> payments) {
-    return _section(
-      title: 'Payments',
-      icon: Icons.account_balance_wallet_outlined,
-      trailing: Text(
-        '${payments.length}',
-        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-      ),
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _cardDecoration(),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _sectionTitle(Icons.account_balance_wallet_outlined, 'Payments'),
+          const SizedBox(height: 12),
           for (var i = 0; i < payments.length; i++) ...[
             if (i > 0) const Divider(height: 20),
             Row(
@@ -557,7 +925,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        payments[i].paymentMode,
+                        paymentModeLabel(payments[i].paymentMode),
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           color: AppTheme.textPrimary,
@@ -594,76 +962,209 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     );
   }
 
-  Widget _buildNotesCard(String notes) {
-    return _section(
-      title: 'Notes',
-      icon: Icons.notes_outlined,
-      child: Text(
-        notes,
-        style: const TextStyle(color: AppTheme.textPrimary, height: 1.4),
+  Widget _buildActionButtons(Invoice inv) {
+    final canPrint = inv.items != null && inv.items!.isNotEmpty;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wrap = constraints.maxWidth < 640;
+        final buttons = [
+          _actionButton(
+            label: 'Print Invoice',
+            icon: Icons.print_outlined,
+            color: const Color(0xFF2563EB),
+            onPressed: canPrint ? () => _handlePrint(inv) : null,
+          ),
+          _actionButton(
+            label: 'Share Invoice',
+            icon: Icons.share_outlined,
+            color: const Color(0xFF16A34A),
+            onPressed: () => _handleWhatsApp(inv),
+          ),
+          _actionButton(
+            label: 'Download PDF',
+            icon: Icons.picture_as_pdf_outlined,
+            color: const Color(0xFFEF4444),
+            onPressed: _downloadingPdf ? null : () => _handleDownloadPdf(inv),
+            loading: _downloadingPdf,
+          ),
+        ];
+
+        if (wrap) {
+          return Column(
+            children: [
+              for (var i = 0; i < buttons.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                SizedBox(width: double.infinity, child: buttons[i]),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            for (var i = 0; i < buttons.length; i++) ...[
+              if (i > 0) const SizedBox(width: 10),
+              Expanded(child: buttons[i]),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _actionButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback? onPressed,
+    bool loading = false,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: loading
+          ? SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: color),
+            )
+          : Icon(icon, size: 18, color: color),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: color,
+        side: BorderSide(color: color.withValues(alpha: 0.45)),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
       ),
     );
   }
 
-  Widget _chip(String label, Color color) {
+  Widget _sectionTitle(IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF2563EB)),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF2563EB),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statusBadge(String label, Color color, {bool compact = false}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 10,
+        vertical: compact ? 3 : 5,
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (label.toLowerCase() == 'paid') ...[
+            Icon(Icons.check_circle, size: compact ? 12 : 14, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: compact ? 11 : 12,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _section({
-    required String title,
-    required IconData icon,
-    required Widget child,
-    Widget? trailing,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: _cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _metaGrid(List<(String, Widget)> rows, {int columns = 2}) {
+    if (columns <= 1) {
+      return Column(
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: AppTheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.textPrimary,
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 130,
+                    child: Text(row.$1, style: _metaLabelStyle),
                   ),
-                ),
+                  Expanded(child: Align(alignment: Alignment.centerLeft, child: row.$2)),
+                ],
               ),
-              if (trailing != null) trailing,
-            ],
-          ),
-          const SizedBox(height: 14),
-          child,
+            ),
         ],
-      ),
+      );
+    }
+
+    final left = <(String, Widget)>[];
+    final right = <(String, Widget)>[];
+    for (var i = 0; i < rows.length; i++) {
+      (i.isEven ? left : right).add(rows[i]);
+    }
+
+    Widget col(List<(String, Widget)> items) {
+      return Column(
+        children: [
+          for (final row in items)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 120,
+                    child: Text(row.$1, style: _metaLabelStyle),
+                  ),
+                  Expanded(child: Align(alignment: Alignment.centerLeft, child: row.$2)),
+                ],
+              ),
+            ),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: col(left)),
+        const SizedBox(width: 16),
+        Expanded(child: col(right)),
+      ],
+    );
+  }
+
+  Widget _iconText(IconData icon, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: AppTheme.textSecondary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 13.5, color: AppTheme.textPrimary, height: 1.35),
+          ),
+        ),
+      ],
     );
   }
 
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       border: Border.all(color: const Color(0xFFE2E8F0)),
       boxShadow: const [
         BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 1)),
@@ -671,42 +1172,11 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     );
   }
 
-  Widget _kv(String label, String value, {bool emphasize = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
-                fontWeight: FontWeight.w500,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                color: AppTheme.textPrimary,
-                fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500,
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _summaryRow(
     String label,
     String value, {
     bool bold = false,
+    bool large = false,
     Color? valueColor,
   }) {
     return Row(
@@ -715,9 +1185,9 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           child: Text(
             label,
             style: TextStyle(
-              color: AppTheme.textSecondary,
+              color: bold ? AppTheme.textPrimary : AppTheme.textSecondary,
               fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-              fontSize: bold ? 15 : 14,
+              fontSize: large ? 15 : 14,
             ),
           ),
         ),
@@ -726,10 +1196,27 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           style: TextStyle(
             color: valueColor ?? AppTheme.textPrimary,
             fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
-            fontSize: bold ? 16 : 14,
+            fontSize: large ? 20 : 14,
           ),
         ),
       ],
     );
   }
+
+  String _qty(double q) {
+    if (q == q.roundToDouble()) return q.toStringAsFixed(0);
+    return q.toStringAsFixed(2);
+  }
+
+  static const _metaLabelStyle = TextStyle(
+    color: AppTheme.textSecondary,
+    fontWeight: FontWeight.w500,
+    fontSize: 13,
+  );
+
+  static const _metaValueStyle = TextStyle(
+    color: AppTheme.textPrimary,
+    fontWeight: FontWeight.w600,
+    fontSize: 13.5,
+  );
 }

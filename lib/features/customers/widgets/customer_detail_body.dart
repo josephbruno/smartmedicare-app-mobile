@@ -11,6 +11,7 @@ import '../../../data/models/invoice.dart';
 import '../../emr/emr_pet_hub.dart';
 import 'pet_form_sheet.dart';
 import 'advance_payment_sheet.dart';
+import 'collect_due_sheet.dart';
 
 /// Reusable customer detail (list pane or full page).
 class CustomerDetailBody extends StatefulWidget {
@@ -120,11 +121,30 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
   int get _totalPointsRedeemed =>
       _invoices.fold(0, (sum, i) => sum + i.loyaltyPointsRedeemed);
 
+  Future<void> _openCollectDue({Invoice? invoice}) async {
+    final c = await _future;
+    final open = _invoices.where((i) => i.dueAmount > 0.009).toList();
+    if (!mounted) return;
+    final ok = await showCollectDueSheet(
+      context,
+      customer: c,
+      openInvoices: open.isNotEmpty ? open : null,
+      initialInvoice: invoice,
+    );
+    if (ok && mounted) {
+      setState(_reload);
+      await _future;
+      await _loadInvoices();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthSession>();
     final canCreate = auth.hasPermission(AppPermissions.customersCreate);
     final canEdit = auth.hasPermission(AppPermissions.customersEdit);
+    final canCollect =
+        auth.hasPermission(AppPermissions.invoicesCreate) || canEdit;
 
     return FutureBuilder<Customer>(
       future: _future,
@@ -140,6 +160,12 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
         }
         final c = snap.data!;
         final pets = c.pets ?? const <Pet>[];
+        final openDues = _invoices.where((i) => i.dueAmount > 0.009).toList();
+        final duesTotal = openDues.fold<double>(0, (s, i) => s + i.dueAmount);
+        final outstanding = (c.outstandingBalance != null &&
+                c.outstandingBalance! > 0.009)
+            ? c.outstandingBalance!
+            : duesTotal;
 
         return RefreshIndicator(
           onRefresh: () async {
@@ -171,13 +197,63 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
                 Text('GSTIN: ${c.gstin}',
                     style: const TextStyle(color: AppTheme.textSecondary)),
               ],
-              if ((c.outstandingBalance ?? 0) > 0) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Outstanding: ₹${c.outstandingBalance!.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
+              if (outstanding > 0.009) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warning.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.warning.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: AppTheme.warning,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Balance due',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: AppTheme.warning,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '₹${outstanding.toStringAsFixed(2)}'
+                              '${openDues.isNotEmpty ? ' · ${openDues.length} open invoice${openDues.length == 1 ? '' : 's'}' : ''}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (canCollect)
+                        FilledButton(
+                          onPressed: () => _openCollectDue(),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.warning,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          child: const Text('Receive'),
+                        ),
+                    ],
                   ),
                 ),
               ],
@@ -204,21 +280,41 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
                     ),
                 ],
               ),
-              if (canEdit) ...[
+              if (canEdit || canCollect) ...[
                 const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final ok = await showAdvancePaymentSheet(context, customer: c);
-                    if (ok && mounted) setState(_reload);
-                  },
-                  icon: const Icon(Icons.account_balance_wallet_outlined),
-                  label: const Text('Treatment Advance'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (canEdit)
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final ok =
+                              await showAdvancePaymentSheet(context, customer: c);
+                          if (ok && mounted) setState(_reload);
+                        },
+                        icon: const Icon(Icons.account_balance_wallet_outlined),
+                        label: const Text('Treatment Advance'),
+                      ),
+                    if (canCollect && (outstanding > 0.009 || openDues.isNotEmpty))
+                      OutlinedButton.icon(
+                        onPressed: () => _openCollectDue(),
+                        icon: const Icon(Icons.payments_outlined),
+                        label: const Text('Receive payment'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.warning,
+                          side: BorderSide(
+                            color: AppTheme.warning.withValues(alpha: 0.5),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
               const SizedBox(height: 20),
               _petsSection(context, pets: pets, canCreate: canCreate, canEdit: canEdit),
               const SizedBox(height: 20),
-              _invoicesSection(context),
+              _invoicesSection(context, canCollect: canCollect),
             ],
           ),
         );
@@ -365,7 +461,7 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
     );
   }
 
-  Widget _invoicesSection(BuildContext context) {
+  Widget _invoicesSection(BuildContext context, {required bool canCollect}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -409,13 +505,14 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
             message: 'No invoices for this customer yet.',
           )
         else
-          ..._invoices.map(_invoiceTile),
+          ..._invoices.map((inv) => _invoiceTile(inv, canCollect: canCollect)),
       ],
     );
   }
 
-  Widget _invoiceTile(Invoice inv) {
+  Widget _invoiceTile(Invoice inv, {required bool canCollect}) {
     final statusColor = _invoiceStatusColor(inv.status);
+    final hasDue = inv.dueAmount > 0.009;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: InkWell(
@@ -494,14 +591,14 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
                             fontSize: 14,
                           ),
                         ),
-                        if (inv.dueAmount > 0) ...[
+                        if (hasDue) ...[
                           const SizedBox(width: 8),
                           Text(
-                            'Due ₹${inv.dueAmount.toStringAsFixed(0)}',
+                            'Due ₹${inv.dueAmount.toStringAsFixed(2)}',
                             style: const TextStyle(
                               fontSize: 12,
-                              color: AppTheme.danger,
-                              fontWeight: FontWeight.w600,
+                              color: AppTheme.warning,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
@@ -533,6 +630,28 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
                         ],
                       ],
                     ),
+                    if (canCollect && hasDue) ...[
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _openCollectDue(invoice: inv),
+                          icon: const Icon(Icons.payments_outlined, size: 16),
+                          label: const Text('Collect due'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.warning,
+                            side: BorderSide(
+                              color: AppTheme.warning.withValues(alpha: 0.45),
+                            ),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

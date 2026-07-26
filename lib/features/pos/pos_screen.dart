@@ -92,7 +92,8 @@ class _PosScreenState extends State<PosScreen> {
   }
 
   void _onSearchFocusChanged() {
-    if (_searchFocus.hasFocus) {
+    // Avoid re-running browse on every focus; initial load + sync cover empty list.
+    if (_searchFocus.hasFocus && _search.text.trim().isNotEmpty) {
       unawaited(_runSearch(_search.text, immediate: true));
     }
   }
@@ -601,9 +602,13 @@ class _PosScreenState extends State<PosScreen> {
             ),
           TextButton.icon(
             onPressed: () async {
+              final auth = context.read<AuthSession>();
               final selected = await showSearch<Customer?>(
                 context: context,
-                delegate: _CustomerSearchDelegate(context.read<AppServices>()),
+                delegate: _CustomerSearchDelegate(
+                  context.read<AppServices>(),
+                  canCreate: auth.hasPermission(AppPermissions.customersCreate),
+                ),
               );
               if (selected != null) cart.setCustomer(selected);
             },
@@ -1317,9 +1322,10 @@ class _PosScreenState extends State<PosScreen> {
 }
 
 class _CustomerSearchDelegate extends SearchDelegate<Customer?> {
-  _CustomerSearchDelegate(this._services);
+  _CustomerSearchDelegate(this._services, {this.canCreate = true});
 
   final AppServices _services;
+  final bool canCreate;
 
   bool get _desktop => AppConfig.isDesktopPlatform;
 
@@ -1329,13 +1335,65 @@ class _CustomerSearchDelegate extends SearchDelegate<Customer?> {
   double _fs(double size) => _desktop ? size + 3 : size;
 
   @override
+  String get searchFieldLabel => 'Search by name or phone…';
+
+  @override
+  ThemeData appBarTheme(BuildContext context) {
+    final base = Theme.of(context);
+    return base.copyWith(
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.white,
+        foregroundColor: AppTheme.textPrimary,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        iconTheme: IconThemeData(color: AppTheme.textPrimary),
+      ),
+      inputDecorationTheme: const InputDecorationTheme(
+        border: InputBorder.none,
+        hintStyle: TextStyle(
+          color: AppTheme.textSecondary,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      textTheme: base.textTheme.copyWith(
+        titleLarge: TextStyle(
+          color: AppTheme.textPrimary,
+          fontSize: _fs(18),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  @override
   List<Widget>? buildActions(BuildContext context) => [
-        IconButton(onPressed: () => query = '', icon: Icon(Icons.clear, size: _ic(22))),
+        if (query.isNotEmpty)
+          IconButton(
+            tooltip: 'Clear',
+            onPressed: () => query = '',
+            icon: Icon(Icons.clear_rounded, size: _ic(22)),
+          ),
+        if (canCreate)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              onPressed: () => _openQuickCreate(context),
+              icon: Icon(Icons.person_add_alt_1_rounded, size: _ic(18)),
+              label: Text(
+                'New',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: _fs(13)),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+              ),
+            ),
+          ),
       ];
 
   @override
   Widget? buildLeading(BuildContext context) => IconButton(
-        icon: Icon(Icons.arrow_back, size: _ic(24)),
+        icon: Icon(Icons.arrow_back_rounded, size: _ic(24)),
         onPressed: () => close(context, null),
       );
 
@@ -1345,52 +1403,626 @@ class _CustomerSearchDelegate extends SearchDelegate<Customer?> {
   @override
   Widget buildSuggestions(BuildContext context) => _build(context);
 
-  Widget _build(BuildContext context) {
-    if (query.trim().length < 2) {
-      return Center(child: Text('Type at least 2 characters to search...', style: TextStyle(fontSize: _fs(14))));
+  Future<void> _openQuickCreate(BuildContext context) async {
+    final created = await showDialog<Customer>(
+      context: context,
+      builder: (ctx) => _QuickCreateCustomerDialog(
+        services: _services,
+        initialQuery: query.trim(),
+        desktop: _desktop,
+      ),
+    );
+    if (created != null && context.mounted) {
+      close(context, created);
     }
+  }
+
+  Widget _build(BuildContext context) {
+    final q = query.trim();
+    if (q.length < 2) {
+      return _IdleSearchState(
+        canCreate: canCreate,
+        fontSize: _fs(14),
+        iconSize: _ic(48),
+        onCreate: () => _openQuickCreate(context),
+      );
+    }
+
     return FutureBuilder<List<Customer>>(
-      future: _services.customers.search(query.trim()),
+      future: _services.customers.search(q),
       builder: (context, snap) {
         if (snap.hasError) {
-          return Center(child: Text('${snap.error}', style: TextStyle(fontSize: _fs(14))));
+          return _MessageState(
+            icon: Icons.error_outline_rounded,
+            title: 'Search failed',
+            subtitle: '${snap.error}',
+            iconColor: AppTheme.danger,
+            fontSize: _fs(14),
+            iconSize: _ic(40),
+          );
         }
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
+
         final list = snap.data!;
         if (list.isEmpty) {
-          return Center(child: Text('No customers found.', style: TextStyle(fontSize: _fs(14))));
+          return _EmptyResultsState(
+            query: q,
+            canCreate: canCreate,
+            fontSize: _fs(14),
+            iconSize: _ic(48),
+            onCreate: () => _openQuickCreate(context),
+          );
         }
-        return ListView.builder(
-          padding: EdgeInsets.all(_desktop ? 16 : 12),
-          itemCount: list.length,
+
+        return ListView.separated(
+          padding: EdgeInsets.fromLTRB(
+            _desktop ? 20 : 14,
+            12,
+            _desktop ? 20 : 14,
+            24,
+          ),
+          itemCount: list.length + (canCreate ? 1 : 0),
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
           itemBuilder: (c, i) {
+            if (canCreate && i == list.length) {
+              return _CreateCustomerBanner(
+                query: q,
+                onTap: () => _openQuickCreate(context),
+                fontSize: _fs(13),
+              );
+            }
             final cu = list[i];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: Container(
-                  padding: EdgeInsets.all(_desktop ? 10 : 8),
-                  decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.08), shape: BoxShape.circle),
-                  child: Icon(Icons.person_rounded, color: AppTheme.primary, size: _ic(22)),
-                ),
-                title: Text(cu.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: _fs(15))),
-                subtitle: Text(
-                  [
-                    cu.phone,
-                    if (cu.loyaltyPoints > 0) '${cu.loyaltyPoints} pts',
-                    if (cu.advanceBalance > 0)
-                      'Adv ₹${cu.advanceBalance.toStringAsFixed(0)}',
-                  ].join(' · '),
-                  style: TextStyle(fontSize: _fs(13)),
-                ),
-                onTap: () => close(context, cu),
-              ),
+            return _CustomerResultTile(
+              customer: cu,
+              iconSize: _ic(22),
+              fontSize: _fs(15),
+              subtitleSize: _fs(13),
+              onTap: () => close(context, cu),
             );
           },
         );
       },
+    );
+  }
+}
+
+class _IdleSearchState extends StatelessWidget {
+  const _IdleSearchState({
+    required this.canCreate,
+    required this.fontSize,
+    required this.iconSize,
+    required this.onCreate,
+  });
+
+  final bool canCreate;
+  final double fontSize;
+  final double iconSize;
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: iconSize + 28,
+                height: iconSize + 28,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(
+                  Icons.person_search_rounded,
+                  size: iconSize,
+                  color: AppTheme.primary,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Find a customer',
+                style: TextStyle(
+                  fontSize: fontSize + 4,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Type at least 2 characters of a name or phone number.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: fontSize,
+                  color: AppTheme.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: const [
+                  _HintChip(icon: Icons.badge_outlined, label: 'Name'),
+                  _HintChip(icon: Icons.phone_outlined, label: 'Phone'),
+                ],
+              ),
+              if (canCreate) ...[
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: onCreate,
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
+                    label: const Text('Create customer'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'New walk-in? Add them here without leaving POS.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: fontSize - 1,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyResultsState extends StatelessWidget {
+  const _EmptyResultsState({
+    required this.query,
+    required this.canCreate,
+    required this.fontSize,
+    required this.iconSize,
+    required this.onCreate,
+  });
+
+  final String query;
+  final bool canCreate;
+  final double fontSize;
+  final double iconSize;
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: iconSize + 28,
+                height: iconSize + 28,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(
+                  Icons.search_off_rounded,
+                  size: iconSize,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'No customers found',
+                style: TextStyle(
+                  fontSize: fontSize + 4,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Nothing matched “$query”.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: fontSize,
+                  color: AppTheme.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+              if (canCreate) ...[
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: onCreate,
+                    icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
+                    label: const Text('Create this customer'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageState extends StatelessWidget {
+  const _MessageState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.iconColor,
+    required this.fontSize,
+    required this.iconSize,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color iconColor;
+  final double fontSize;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: iconSize, color: iconColor),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: fontSize + 2,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: fontSize, color: AppTheme.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HintChip extends StatelessWidget {
+  const _HintChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AppTheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CreateCustomerBanner extends StatelessWidget {
+  const _CreateCustomerBanner({
+    required this.query,
+    required this.onTap,
+    required this.fontSize,
+  });
+
+  final String query;
+  final VoidCallback onTap;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFEFF6FF),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              const Icon(Icons.person_add_alt_1_rounded, color: AppTheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Can’t find them? Create “$query” as a new customer',
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.primary,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppTheme.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomerResultTile extends StatelessWidget {
+  const _CustomerResultTile({
+    required this.customer,
+    required this.iconSize,
+    required this.fontSize,
+    required this.subtitleSize,
+    required this.onTap,
+  });
+
+  final Customer customer;
+  final double iconSize;
+  final double fontSize;
+  final double subtitleSize;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = [
+      if (customer.phone.isNotEmpty) customer.phone,
+      if (customer.loyaltyPoints > 0) '${customer.loyaltyPoints} pts',
+      if (customer.advanceBalance > 0)
+        'Adv ₹${customer.advanceBalance.toStringAsFixed(0)}',
+      if ((customer.outstandingBalance ?? 0) > 0)
+        'Due ₹${customer.outstandingBalance!.toStringAsFixed(0)}',
+    ].join(' · ');
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: iconSize + 18,
+                height: iconSize + 18,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEFF6FF),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.person_rounded, color: AppTheme.primary, size: iconSize),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customer.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: fontSize,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        meta,
+                        style: TextStyle(
+                          fontSize: subtitleSize,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary.withValues(alpha: 0.7)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickCreateCustomerDialog extends StatefulWidget {
+  const _QuickCreateCustomerDialog({
+    required this.services,
+    required this.initialQuery,
+    required this.desktop,
+  });
+
+  final AppServices services;
+  final String initialQuery;
+  final bool desktop;
+
+  @override
+  State<_QuickCreateCustomerDialog> createState() =>
+      _QuickCreateCustomerDialogState();
+}
+
+class _QuickCreateCustomerDialogState extends State<_QuickCreateCustomerDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _name;
+  late final TextEditingController _phone;
+  bool _saving = false;
+  AutovalidateMode _auto = AutovalidateMode.disabled;
+
+  static final _indiaPhonePattern = RegExp(r'^[6-9]\d{9}$');
+  static final _namePattern = RegExp(r'^[A-Za-z]+(?: [A-Za-z]+)*$');
+
+  @override
+  void initState() {
+    super.initState();
+    final q = widget.initialQuery.trim();
+    final digits = q.replaceAll(RegExp(r'\D'), '');
+    final looksLikePhone = digits.length >= 10;
+    _name = TextEditingController(
+      text: looksLikePhone ? '' : q.replaceAll(RegExp(r'\s+'), ' '),
+    );
+    _phone = TextEditingController(
+      text: looksLikePhone
+          ? (digits.length > 10 ? digits.substring(digits.length - 10) : digits)
+          : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _auto = AutovalidateMode.onUserInteraction);
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() => _saving = true);
+    try {
+      final created = await widget.services.customers.create({
+        'name': _name.text.trim().replaceAll(RegExp(r'\s+'), ' '),
+        'phone': _phone.text.trim(),
+        'is_active': true,
+        'whatsapp_opted': true,
+      });
+      if (!mounted) return;
+      Navigator.of(context).pop(created);
+    } catch (e) {
+      if (!mounted) return;
+      AppMessenger.show(
+        context,
+        SnackBar(content: Text('$e'), backgroundColor: AppTheme.danger),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fs = widget.desktop ? 15.0 : 14.0;
+    return AlertDialog(
+      title: const Text('Create customer'),
+      content: SizedBox(
+        width: widget.desktop ? 420 : 320,
+        child: Form(
+          key: _formKey,
+          autovalidateMode: _auto,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _name,
+                autofocus: _name.text.isEmpty,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z ]')),
+                  LengthLimitingTextInputFormatter(150),
+                ],
+                validator: (v) {
+                  final name = (v ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
+                  if (name.isEmpty) return 'Name is required';
+                  if (!_namePattern.hasMatch(name)) {
+                    return 'Letters and spaces only';
+                  }
+                  return null;
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Full name *',
+                  hintText: 'Customer name',
+                ),
+                style: TextStyle(fontSize: fs),
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _phone,
+                autofocus: _name.text.isNotEmpty && _phone.text.isEmpty,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _saving ? null : _save(),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                validator: (v) {
+                  final phone = (v ?? '').trim();
+                  if (phone.isEmpty) return 'Phone is required';
+                  if (!_indiaPhonePattern.hasMatch(phone)) {
+                    return 'Enter a valid 10-digit mobile number';
+                  }
+                  return null;
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Phone *',
+                  hintText: '10-digit mobile',
+                ),
+                style: TextStyle(fontSize: fs),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Icon(Icons.check_rounded, size: 18),
+          label: Text(_saving ? 'Saving…' : 'Create & select'),
+        ),
+      ],
     );
   }
 }

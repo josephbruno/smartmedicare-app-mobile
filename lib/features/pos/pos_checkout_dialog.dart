@@ -172,8 +172,15 @@ Future<bool> showPosCheckoutDialog({
               );
             }
 
+            bool hasOpenBalance() =>
+                activeInvoice != null &&
+                activeInvoice!.id > 0 &&
+                activeInvoice!.dueAmount > 0.009;
+
+            bool lockPaymentInputs() => paymentSaved && !hasOpenBalance();
+
             void syncPaidToDue() {
-              if (paymentSaved || paymentMode != 'cash') return;
+              if (lockPaymentInputs() || paymentMode != 'cash') return;
               paidController.text = billDue().toStringAsFixed(2);
             }
 
@@ -203,7 +210,9 @@ Future<bool> showPosCheckoutDialog({
               if (paymentMode != 'cash') return 0;
               final tendered = tenderedAmount();
               final due = billDue();
-              return tendered > due ? tendered - due : 0;
+              // Change only when cash tendered exceeds the amount still due.
+              if (tendered <= due + 0.009) return 0;
+              return tendered - due;
             }
 
             double balanceDue() {
@@ -211,7 +220,8 @@ Future<bool> showPosCheckoutDialog({
               if (!hasRegisteredCustomer() || paymentMode != 'cash') return 0;
               final tendered = tenderedAmount();
               final due = billDue();
-              return tendered < due ? due - tendered : 0;
+              if (tendered + 0.009 >= due) return 0;
+              return due - tendered;
             }
 
             String? creditLimitWarning() {
@@ -252,7 +262,13 @@ Future<bool> showPosCheckoutDialog({
             }
 
             Future<void> confirmCheckout() async {
-              if (recordingPayment || paymentSaved) return;
+              if (recordingPayment) return;
+              // Fully settled invoices cannot take another payment here.
+              if (paymentSaved &&
+                  activeInvoice != null &&
+                  activeInvoice!.dueAmount <= 0.009) {
+                return;
+              }
 
               // Credit / advance / redeem / balance-due require a registered customer.
               if (!hasRegisteredCustomer()) {
@@ -324,8 +340,17 @@ Future<bool> showPosCheckoutDialog({
               final loyaltyPts = loyaltyPtsRaw > 0
                   ? math.min(loyaltyPtsRaw, maxRedeemablePoints())
                   : 0;
-              // Ensure cash/upi amount matches remaining due after credits.
-              if (paymentMode == 'cash') {
+
+              // Remaining cash due after loyalty/advance preview (create) or
+              // invoice balance (follow-up payment on partial invoice).
+              final dueBeforePay = billDue();
+
+              // Capture cash tendered BEFORE any sync — syncPaidToDue() would
+              // overwrite overpayments (e.g. ₹50 on a ₹17 bill) and drop change.
+              final cashTendered =
+                  paymentMode == 'cash' ? tenderedAmount() : null;
+              if (paymentMode == 'cash' &&
+                  (cashTendered == null || cashTendered <= 0)) {
                 syncPaidToDue();
               }
               final amount = paymentAmount();
@@ -339,8 +364,71 @@ Future<bool> showPosCheckoutDialog({
                 );
                 return;
               }
+
+              // True overpay: customer handed more cash than the due being settled.
+              // Never attach tendered_amount on partial pays — that created fake
+              // "change" when a follow-up confirm reused the previous due.
+              final tenderedToSave = paymentMode == 'cash' &&
+                      cashTendered != null &&
+                      cashTendered > dueBeforePay + 0.009
+                  ? cashTendered
+                  : null;
+
               setState(() => recordingPayment = true);
               try {
+                // Follow-up payment on an already-created invoice (partial / credit).
+                // Never create a second invoice from the same checkout session.
+                if (activeInvoice != null && activeInvoice!.id > 0) {
+                  if (paymentMode == 'credit' || paymentMode == 'advance') {
+                    AppMessenger.show(context,
+                      SnackBar(
+                        content: Text(
+                          paymentMode == 'credit'
+                              ? 'Switch to Cash or UPI to collect the remaining balance.'
+                              : 'Use cash/UPI to collect the remaining balance on this invoice.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  if (amount <= 0.009) {
+                    AppMessenger.show(context,
+                      const SnackBar(content: Text('Enter a valid payment amount')),
+                    );
+                    return;
+                  }
+                  final updated = await services.billing.recordPayment(
+                    activeInvoice!.id,
+                    mode: paymentMode,
+                    amount: amount,
+                    tenderedAmount: tenderedToSave,
+                    reference: (paymentMode == 'upi' || paymentMode == 'card') &&
+                            upiRefController.text.trim().isNotEmpty
+                        ? upiRefController.text.trim()
+                        : null,
+                  );
+                  if (!context.mounted) return;
+                  activeInvoice = updated;
+                  paymentSaved = true;
+                  if (updated.dueAmount > 0.009 && paymentMode == 'cash') {
+                    paidController.text = updated.dueAmount.toStringAsFixed(2);
+                  }
+                  setState(() {});
+                  await maybeAutoPrintReceipt();
+                  if (!context.mounted) return;
+                  AppMessenger.show(context,
+                    SnackBar(
+                      content: Text(
+                        updated.dueAmount > 0.009
+                            ? 'Payment recorded. Balance due ₹${updated.dueAmount.toStringAsFixed(2)}'
+                            : 'Payment recorded. Invoice fully paid',
+                      ),
+                      backgroundColor: AppTheme.accent,
+                    ),
+                  );
+                  return;
+                }
+
                 final payload = Map<String, dynamic>.from(invoicePayload);
                 if (loyaltyPts > 0) {
                   payload['loyalty_points_redeemed'] = loyaltyPts;
@@ -366,7 +454,7 @@ Future<bool> showPosCheckoutDialog({
                     if ((paymentMode == 'upi' || paymentMode == 'card') &&
                         upiRefController.text.trim().isNotEmpty)
                       'reference': upiRefController.text.trim(),
-                    if (paymentMode == 'cash') 'tendered_amount': tenderedAmount(),
+                    if (tenderedToSave != null) 'tendered_amount': tenderedToSave,
                   });
                 }
                 payload['payments'] = payments;
@@ -375,7 +463,12 @@ Future<bool> showPosCheckoutDialog({
                   final created = await services.billing.create(payload);
                   if (!context.mounted) return;
                   activeInvoice = created;
-                  paymentSaved = created.dueAmount <= 0.009 || paymentMode == 'credit';
+                  // Invoice exists (paid or partial) — unlock receipt/share.
+                  // Remaining due is collected via recordPayment, not a new create.
+                  paymentSaved = true;
+                  if (created.dueAmount > 0.009 && paymentMode == 'cash') {
+                    paidController.text = created.dueAmount.toStringAsFixed(2);
+                  }
                 } else {
                   const uuid = Uuid();
                   final offlineId = uuid.v4();
@@ -411,11 +504,14 @@ Future<bool> showPosCheckoutDialog({
                 setState(() {});
                 await maybeAutoPrintReceipt();
                 if (!context.mounted) return;
+                final dueLeft = activeInvoice?.dueAmount ?? 0;
                 AppMessenger.show(context,
                   SnackBar(
                     content: Text(
                       isOnline
-                          ? 'Invoice ${activeInvoice!.invoiceNumber} created & paid'
+                          ? (dueLeft > 0.009
+                              ? 'Invoice ${activeInvoice!.invoiceNumber} created. Balance due ₹${dueLeft.toStringAsFixed(2)}'
+                              : 'Invoice ${activeInvoice!.invoiceNumber} created & paid')
                           : 'Saved offline — will sync when online',
                     ),
                     backgroundColor: AppTheme.accent,
@@ -458,7 +554,7 @@ Future<bool> showPosCheckoutDialog({
                       : Colors.white,
                   borderRadius: BorderRadius.circular(10),
                   child: InkWell(
-                    onTap: paymentSaved
+                    onTap: lockPaymentInputs()
                         ? null
                         : () => setState(() {
                               paymentMode = mode;
@@ -699,8 +795,7 @@ Future<bool> showPosCheckoutDialog({
               final isBalance =
                   paymentMode == 'cash' &&
                   hasRegisteredCustomer() &&
-                  balance > 0 &&
-                  !paymentSaved;
+                  balance > 0;
               final walkInShort =
                   paymentMode == 'cash' &&
                   !hasRegisteredCustomer() &&
@@ -1042,7 +1137,7 @@ Future<bool> showPosCheckoutDialog({
                   if (paymentMode == 'cash') ...[
                     TextField(
                       controller: paidController,
-                      enabled: !paymentSaved,
+                      enabled: !lockPaymentInputs(),
                       onChanged: (_) => setState(() {}),
                       style: TextStyle(
                         fontSize: alertFs(16),
@@ -1057,7 +1152,9 @@ Future<bool> showPosCheckoutDialog({
                         ),
                       ],
                       decoration: InputDecoration(
-                        labelText: 'Amount Paid (₹)',
+                        labelText: hasOpenBalance()
+                            ? 'Pay remaining (₹)'
+                            : 'Amount Paid (₹)',
                         labelStyle: TextStyle(fontSize: alertFs(14)),
                         filled: true,
                         fillColor: Colors.white,
@@ -1128,7 +1225,7 @@ Future<bool> showPosCheckoutDialog({
                     SizedBox(height: largeUi ? 14 : 10),
                     TextField(
                       controller: upiRefController,
-                      enabled: !paymentSaved,
+                      enabled: !lockPaymentInputs(),
                       style: TextStyle(fontSize: alertFs(14)),
                       decoration: InputDecoration(
                         labelText: 'Reference (optional)',
@@ -1145,7 +1242,7 @@ Future<bool> showPosCheckoutDialog({
                     buildPaymentSummary(),
                   ],
                   SizedBox(height: largeUi ? 20 : 14),
-                  if (!paymentSaved)
+                  if (!paymentSaved || hasOpenBalance())
                     SizedBox(
                       width: double.infinity,
                       height: largeUi ? 54 : 46,
@@ -1162,7 +1259,11 @@ Future<bool> showPosCheckoutDialog({
                               )
                             : Icon(Icons.verified_rounded, size: alertIc(22)),
                         label: Text(
-                          recordingPayment ? 'Saving…' : 'Confirm Payment',
+                          recordingPayment
+                              ? 'Saving…'
+                              : hasOpenBalance()
+                                  ? 'Pay Remaining Balance'
+                                  : 'Confirm Payment',
                           style: TextStyle(
                             fontSize: alertFs(16),
                             fontWeight: FontWeight.w700,
@@ -1574,12 +1675,12 @@ Future<bool> showPosCheckoutDialog({
                   const SingleActivator(LogicalKeyboardKey.keyD, control: true):
                       closeAndNewBill,
                   const SingleActivator(LogicalKeyboardKey.enter, control: true): () {
-                    if (!paymentSaved && !recordingPayment) {
+                    if ((!paymentSaved || hasOpenBalance()) && !recordingPayment) {
                       confirmCheckout();
                     }
                   },
                   const SingleActivator(LogicalKeyboardKey.f2): () {
-                    if (!paymentSaved) {
+                    if (!lockPaymentInputs()) {
                       setState(() {
                         paymentMode = 'cash';
                         syncPaidToDue();
@@ -1587,7 +1688,7 @@ Future<bool> showPosCheckoutDialog({
                     }
                   },
                   const SingleActivator(LogicalKeyboardKey.f3): () {
-                    if (!paymentSaved) {
+                    if (!lockPaymentInputs()) {
                       setState(() => paymentMode = 'upi');
                     }
                   },
