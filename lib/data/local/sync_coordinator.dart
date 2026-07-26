@@ -43,7 +43,9 @@ class SyncCoordinator extends ChangeNotifier {
       return;
     }
     _posLoopActive = true;
-    unawaited(_syncPosCatalog(branchId, forceFull: true));
+    // Full pull only on first open for this branch; later opens use delta.
+    final needFull = !_posFullSyncedBranches.contains(branchId);
+    unawaited(_syncPosCatalog(branchId, forceFull: needFull));
     _posTimer?.cancel();
     _posTimer = Timer.periodic(const Duration(minutes: 10), (_) {
       final id = _posBranchId;

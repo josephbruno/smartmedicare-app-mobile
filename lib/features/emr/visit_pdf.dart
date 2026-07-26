@@ -388,7 +388,7 @@ class VisitPdf {
               ),
               pw.SizedBox(width: 4),
               pw.Text(
-                '× ${items[i].quantity} · ₹${items[i].unitPrice.toStringAsFixed(2)}',
+                '× ${items[i].quantity}',
                 style: const pw.TextStyle(fontSize: 7.5, color: _muted),
               ),
             ],

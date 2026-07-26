@@ -16,16 +16,9 @@ class PosProductRepository {
   }) async {
     final q = term.trim();
 
-    // Empty browse: when online, rebuild local catalog from the live POS API
-    // and prune anything the server no longer returns.
+    // Empty browse: local only. Full catalog sync is owned by SyncCoordinator /
+    // ProductSyncService so POS open does not page /products/pos repeatedly.
     if (q.isEmpty) {
-      if (online) {
-        try {
-          await _refreshCatalogFromServer(branchId);
-        } catch (_) {
-          // Fall back to local catalog.
-        }
-      }
       return _dao.listRecent(branchId, limit: 50);
     }
 
@@ -46,23 +39,6 @@ class PosProductRepository {
     }
 
     return _dao.search(branchId, q, limit: 30);
-  }
-
-  /// Pulls every POS page and removes local products missing from the server.
-  Future<void> _refreshCatalogFromServer(int branchId) async {
-    final keepIds = <int>{};
-    var page = 1;
-    while (true) {
-      final result = await _api.posPaginated(page: page, perPage: 50);
-      if (result.items.isNotEmpty) {
-        await _dao.upsertAll(result.items, branchId);
-        keepIds.addAll(result.items.map((p) => p.id));
-      }
-      final lastPage = result.meta?.lastPage ?? 1;
-      if (page >= lastPage) break;
-      page++;
-    }
-    await _dao.pruneBranchExcept(branchId, keepIds);
   }
 
   Future<Product?> findByBarcode(int branchId, String barcode, {required bool online}) async {
