@@ -143,14 +143,47 @@ class EscPosReceiptBuilder {
       ),
     );
 
-    final cashPayments = (invoice.payments ?? const <InvoicePayment>[])
-        .where((p) => p.hasCashTenderDetail)
+    final payments = (invoice.payments ?? const <InvoicePayment>[])
+        .where((p) => p.amount > 0.009)
         .toList();
-    if (cashPayments.isNotEmpty) {
+    if (payments.isNotEmpty) {
       bytes += g.hr(ch: '-');
-      for (final p in cashPayments) {
-        bytes += _moneyRow(g, 'Cash received', p.tenderedAmount!);
-        bytes += _moneyRow(g, 'Change given', p.changeReturn!);
+      for (final p in payments) {
+        final mode = switch (p.paymentMode.toLowerCase()) {
+          'cash' => 'Cash',
+          'upi' => 'UPI',
+          'card' => 'Card',
+          'bank_transfer' => 'Bank',
+          'cheque' => 'Cheque',
+          'loyalty_points' => 'Loyalty',
+          'advance' => 'Advance',
+          _ => p.paymentMode,
+        };
+        bytes += _moneyRow(g, mode, p.amount);
+        if (p.hasCashTenderDetail) {
+          bytes += _moneyRow(g, '  Cash received', p.tenderedAmount!);
+          bytes += _moneyRow(g, '  Change given', p.changeReturn!);
+        }
+        if (p.referenceNumber != null && p.referenceNumber!.trim().isNotEmpty) {
+          bytes += g.text(
+            '  Ref: ${p.referenceNumber}',
+            styles: const PosStyles(align: PosAlign.left),
+          );
+        }
+      }
+      if (invoice.dueAmount > 0.009) {
+        bytes += _moneyRow(g, 'Balance due', invoice.dueAmount);
+      }
+    } else {
+      final cashPayments = (invoice.payments ?? const <InvoicePayment>[])
+          .where((p) => p.hasCashTenderDetail)
+          .toList();
+      if (cashPayments.isNotEmpty) {
+        bytes += g.hr(ch: '-');
+        for (final p in cashPayments) {
+          bytes += _moneyRow(g, 'Cash received', p.tenderedAmount!);
+          bytes += _moneyRow(g, 'Change given', p.changeReturn!);
+        }
       }
     }
 

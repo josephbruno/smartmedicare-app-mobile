@@ -8,6 +8,7 @@ import '../../core/widgets/app_date_range_picker.dart';
 import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
 import '../../data/models/invoice.dart';
+import '../reports/report_formatters.dart';
 
 class InvoiceListScreen extends StatefulWidget {
   const InvoiceListScreen({super.key});
@@ -218,6 +219,30 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
                     '₹${inv.totalAmount.toStringAsFixed(2)}',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
+                ),
+                TableColumnDef(
+                  label: 'Payments',
+                  flex: 1.6,
+                  cellBuilder: (c, inv) {
+                    final breakdown = inv.paymentBreakdownSummary(
+                      modeLabel: paymentModeLabel,
+                    );
+                    if (breakdown.isEmpty) {
+                      return const Text(
+                        '—',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      );
+                    }
+                    return Text(
+                      breakdown,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  },
                 ),
                 TableColumnDef(
                   label: 'Cash recv',

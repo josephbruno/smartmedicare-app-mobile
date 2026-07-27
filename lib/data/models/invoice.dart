@@ -310,6 +310,56 @@ class Invoice {
   /// Separate cash summary: only when change was given and/or balance remains.
   bool get hasCashPaymentSummary => hasChangeReturn || hasBalanceDue;
 
+  bool get hasPayments =>
+      (payments ?? const <InvoicePayment>[]).any((p) => p.amount > 0.009);
+
+  /// Sums applied amounts by `payment_mode` (lowercase keys).
+  Map<String, double> get paymentsByMode {
+    final map = <String, double>{};
+    for (final p in payments ?? const <InvoicePayment>[]) {
+      if (p.amount <= 0.009) continue;
+      final key = p.paymentMode.toLowerCase().trim();
+      if (key.isEmpty) continue;
+      map[key] = (map[key] ?? 0) + p.amount;
+    }
+    return map;
+  }
+
+  /// e.g. "Cash ₹1,000 · UPI ₹2,500" for list/detail/receipts.
+  String paymentBreakdownSummary({
+    String Function(String mode)? modeLabel,
+    bool compact = true,
+  }) {
+    final map = paymentsByMode;
+    if (map.isEmpty) return '';
+    String label(String mode) {
+      if (modeLabel != null) return modeLabel(mode);
+      return switch (mode) {
+        'cash' => 'Cash',
+        'upi' => 'UPI',
+        'card' => 'Card',
+        'bank_transfer' => 'Bank',
+        'cheque' => 'Cheque',
+        'credit' => 'Credit',
+        'loyalty_points' => 'Loyalty',
+        'advance' => 'Advance',
+        'other' => 'Other',
+        _ => mode.replaceAll('_', ' '),
+      };
+    }
+
+    String money(double v) {
+      if (compact && v == v.roundToDouble()) {
+        return v.toStringAsFixed(0);
+      }
+      return v.toStringAsFixed(2);
+    }
+
+    return map.entries
+        .map((e) => '${label(e.key)} ₹${money(e.value)}')
+        .join(' · ');
+  }
+
   factory Invoice.fromJson(Map<String, dynamic> j) {
     Customer? c;
     if (j['customer'] is Map) {

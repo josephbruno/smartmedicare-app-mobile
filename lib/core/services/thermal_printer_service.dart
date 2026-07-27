@@ -285,8 +285,8 @@ class ThermalPrinterService {
   }
 
   static pw.Widget _buildTotals(Invoice invoice) {
-    final cashPayments = (invoice.payments ?? const <InvoicePayment>[])
-        .where((p) => p.hasCashTenderDetail)
+    final payments = (invoice.payments ?? const <InvoicePayment>[])
+        .where((p) => p.amount > 0.009)
         .toList();
 
     return pw.Column(
@@ -301,16 +301,34 @@ class ThermalPrinterService {
           '₹${invoice.totalAmount.toStringAsFixed(2)}',
           style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
         ),
-        if (cashPayments.isNotEmpty) ...[
+        if (payments.isNotEmpty) ...[
           pw.SizedBox(height: 4),
           pw.Divider(borderStyle: pw.BorderStyle.dashed, height: 1),
-          for (final p in cashPayments) ...[
-            _buildTotalRow('Cash received', p.tenderedAmount!),
-            _buildTotalRow('Change given', p.changeReturn!),
+          for (final p in payments) ...[
+            _buildTotalRow(_paymentModeLabel(p.paymentMode), p.amount),
+            if (p.hasCashTenderDetail) ...[
+              _buildTotalRow('Cash received', p.tenderedAmount!),
+              _buildTotalRow('Change given', p.changeReturn!),
+            ],
           ],
+          if (invoice.dueAmount > 0.009)
+            _buildTotalRow('Balance due', invoice.dueAmount),
         ],
       ],
     );
+  }
+
+  static String _paymentModeLabel(String mode) {
+    return switch (mode.toLowerCase()) {
+      'cash' => 'Cash',
+      'upi' => 'UPI',
+      'card' => 'Card',
+      'bank_transfer' => 'Bank transfer',
+      'cheque' => 'Cheque',
+      'loyalty_points' => 'Loyalty',
+      'advance' => 'Advance',
+      _ => mode.replaceAll('_', ' '),
+    };
   }
 
   static pw.Widget _buildTotalRow(String label, double amount) {

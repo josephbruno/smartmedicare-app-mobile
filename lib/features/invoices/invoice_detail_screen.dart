@@ -324,7 +324,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                 const SizedBox(height: 14),
                 _buildCashSummaryCard(inv),
               ],
-              if (inv.payments != null && inv.payments!.length > 1) ...[
+              if (inv.payments != null && inv.payments!.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 _buildPaymentsCard(inv.payments!),
               ],
@@ -407,7 +407,15 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         'Status',
         _statusBadge(statusLabel, statusColor, compact: true),
       ),
-      if (payment != null) ...[
+      if (inv.hasPayments) ...[
+        (
+          'Payments',
+          Text(
+            inv.paymentBreakdownSummary(modeLabel: paymentModeLabel),
+            style: _metaValueStyle,
+          ),
+        ),
+      ] else if (payment != null) ...[
         (
           'Payment Method',
           Text(paymentModeLabel(payment.paymentMode), style: _metaValueStyle),
@@ -914,6 +922,11 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _sectionTitle(Icons.account_balance_wallet_outlined, 'Payments'),
+          const SizedBox(height: 4),
+          Text(
+            'How this bill was collected (split payments listed separately).',
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          ),
           const SizedBox(height: 12),
           for (var i = 0; i < payments.length; i++) ...[
             if (i > 0) const Divider(height: 20),
@@ -952,6 +965,31 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     color: AppTheme.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (payments.length > 1) ...[
+            const Divider(height: 24),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Total paid',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+                Text(
+                  _money(
+                    payments.fold<double>(0, (s, p) => s + p.amount),
+                  ),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.accent,
                   ),
                 ),
               ],
