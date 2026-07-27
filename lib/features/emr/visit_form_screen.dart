@@ -29,12 +29,14 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   final _observation = TextEditingController();
   final _investigation = TextEditingController();
   final _followUpNotes = TextEditingController();
-  final _temp = TextEditingController();
-  final _weight = TextEditingController();
-  final _heartRate = TextEditingController();
-  final _respiratoryRate = TextEditingController();
   final _diagnosisInput = TextEditingController();
   final _serviceCharge = TextEditingController();
+
+  /// Selected vitals (dropdown values; null = not set).
+  double? _temperatureF;
+  double? _weightKg;
+  int? _heartRateBpm;
+  int? _respiratoryRatePerMin;
 
   PetSearchResult? _selectedPet;
   DoctorLite? _selectedDoctor;
@@ -78,6 +80,60 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     'wellness',
     'emergency',
   ];
+
+  static final List<double> _temperatureOptions = [
+    for (var t = 960; t <= 1070; t++) t / 10.0, // 96.0–107.0 °F
+  ];
+
+  static final List<double> _weightOptions = [
+    for (var w = 5; w <= 800; w++) w / 10.0, // 0.5–80.0 kg
+  ];
+
+  static final List<int> _heartRateOptions = [
+    for (var h = 40; h <= 240; h += 5) h,
+  ];
+
+  static final List<int> _respiratoryRateOptions = [
+    for (var r = 8; r <= 80; r++) r,
+  ];
+
+  double _nearestDouble(double value, List<double> options) {
+    var best = options.first;
+    var bestDiff = (best - value).abs();
+    for (final o in options) {
+      final d = (o - value).abs();
+      if (d < bestDiff) {
+        best = o;
+        bestDiff = d;
+      }
+    }
+    return best;
+  }
+
+  int _nearestInt(int value, List<int> options) {
+    var best = options.first;
+    var bestDiff = (best - value).abs();
+    for (final o in options) {
+      final d = (o - value).abs();
+      if (d < bestDiff) {
+        best = o;
+        bestDiff = d;
+      }
+    }
+    return best;
+  }
+
+  List<double> _doubleOptionsWith(double? current, List<double> base) {
+    if (current == null) return base;
+    if (base.contains(current)) return base;
+    return [...base, current]..sort();
+  }
+
+  List<int> _intOptionsWith(int? current, List<int> base) {
+    if (current == null) return base;
+    if (base.contains(current)) return base;
+    return [...base, current]..sort();
+  }
 
   @override
   void initState() {
@@ -149,11 +205,18 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _observation.text = visit.observation ?? '';
     _investigation.text = visit.investigation ?? '';
     _followUpNotes.text = visit.followUpNotes ?? '';
-    if (visit.temperature != null) _temp.text = visit.temperature.toString();
-    if (visit.weight != null) _weight.text = visit.weight.toString();
-    if (visit.heartRate != null) _heartRate.text = visit.heartRate.toString();
+    if (visit.temperature != null) {
+      _temperatureF = _nearestDouble(visit.temperature!, _temperatureOptions);
+    }
+    if (visit.weight != null) {
+      _weightKg = _nearestDouble(visit.weight!, _weightOptions);
+    }
+    if (visit.heartRate != null) {
+      _heartRateBpm = _nearestInt(visit.heartRate!, _heartRateOptions);
+    }
     if (visit.respiratoryRate != null) {
-      _respiratoryRate.text = visit.respiratoryRate.toString();
+      _respiratoryRatePerMin =
+          _nearestInt(visit.respiratoryRate!, _respiratoryRateOptions);
     }
     if (visit.followUpDate != null) {
       _followUpDate = DateTime.tryParse(visit.followUpDate!);
@@ -225,8 +288,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         breed: summary.breed,
       );
       _petSummary = summary;
-      if (summary.weight != null && _weight.text.isEmpty) {
-        _weight.text = summary.weight.toString();
+      if (summary.weight != null && _weightKg == null) {
+        _weightKg = _nearestDouble(summary.weight!, _weightOptions);
       }
     } catch (_) {}
   }
@@ -260,8 +323,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       try {
         final summary = await context.read<AppServices>().emr.getPetSummary(_selectedPet!.id);
         if (mounted) setState(() => _petSummary = summary);
-        if (summary.weight != null && _weight.text.isEmpty) {
-          _weight.text = summary.weight.toString();
+        if (summary.weight != null && _weightKg == null) {
+          _weightKg = _nearestDouble(summary.weight!, _weightOptions);
         }
       } catch (_) {}
     }
@@ -292,8 +355,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       final summary = await context.read<AppServices>().emr.getPetSummary(pet.id);
       if (mounted) {
         setState(() => _petSummary = summary);
-        if (summary.weight != null && _weight.text.isEmpty) {
-          _weight.text = summary.weight.toString();
+        if (summary.weight != null && _weightKg == null) {
+          _weightKg = _nearestDouble(summary.weight!, _weightOptions);
         }
       }
     } catch (_) {}
@@ -720,11 +783,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         'investigation': _investigation.text.trim(),
       if (_followUpNotes.text.trim().isNotEmpty)
         'follow_up_notes': _followUpNotes.text.trim(),
-      if (_temp.text.isNotEmpty) 'temperature': double.tryParse(_temp.text),
-      if (_weight.text.isNotEmpty) 'weight': double.tryParse(_weight.text),
-      if (_heartRate.text.isNotEmpty) 'heart_rate': int.tryParse(_heartRate.text),
-      if (_respiratoryRate.text.isNotEmpty)
-        'respiratory_rate': int.tryParse(_respiratoryRate.text),
+      if (_temperatureF != null) 'temperature': _temperatureF,
+      if (_weightKg != null) 'weight': _weightKg,
+      if (_heartRateBpm != null) 'heart_rate': _heartRateBpm,
+      if (_respiratoryRatePerMin != null)
+        'respiratory_rate': _respiratoryRatePerMin,
       if (_followUpDate != null)
         'follow_up_date': _followUpDate!.toIso8601String().substring(0, 10),
       if (_diagnoses.isNotEmpty)
@@ -804,10 +867,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _observation.dispose();
     _investigation.dispose();
     _followUpNotes.dispose();
-    _temp.dispose();
-    _weight.dispose();
-    _heartRate.dispose();
-    _respiratoryRate.dispose();
     _diagnosisInput.dispose();
     _serviceCharge.dispose();
     for (final t in _treatments) {
@@ -1116,38 +1175,94 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final narrow = constraints.maxWidth < 520;
+              final tempOpts =
+                  _doubleOptionsWith(_temperatureF, _temperatureOptions);
+              final weightOpts = _doubleOptionsWith(_weightKg, _weightOptions);
+              final hrOpts = _intOptionsWith(_heartRateBpm, _heartRateOptions);
+              final rrOpts = _intOptionsWith(
+                _respiratoryRatePerMin,
+                _respiratoryRateOptions,
+              );
               final fields = [
-                TextField(
-                  controller: _temp,
-                  keyboardType: TextInputType.number,
+                AppDropdownButtonFormField<double>(
+                  value: _temperatureF,
+                  isExpanded: true,
+                  isDense: true,
                   decoration: const InputDecoration(
                     labelText: 'Temp °F',
                     isDense: true,
                   ),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('—')),
+                    ...tempOpts.map(
+                      (t) => DropdownMenuItem(
+                        value: t,
+                        child: Text(t.toStringAsFixed(1)),
+                      ),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() => _temperatureF = v),
                 ),
-                TextField(
-                  controller: _weight,
-                  keyboardType: TextInputType.number,
+                AppDropdownButtonFormField<double>(
+                  value: _weightKg,
+                  isExpanded: true,
+                  isDense: true,
                   decoration: const InputDecoration(
                     labelText: 'Weight kg',
                     isDense: true,
                   ),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('—')),
+                    ...weightOpts.map(
+                      (w) => DropdownMenuItem(
+                        value: w,
+                        child: Text(
+                          w == w.roundToDouble()
+                              ? w.toStringAsFixed(0)
+                              : w.toStringAsFixed(1),
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() => _weightKg = v),
                 ),
-                TextField(
-                  controller: _heartRate,
-                  keyboardType: TextInputType.number,
+                AppDropdownButtonFormField<int>(
+                  value: _heartRateBpm,
+                  isExpanded: true,
+                  isDense: true,
                   decoration: const InputDecoration(
                     labelText: 'Heart rate',
                     isDense: true,
                   ),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('—')),
+                    ...hrOpts.map(
+                      (h) => DropdownMenuItem(
+                        value: h,
+                        child: Text('$h bpm'),
+                      ),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() => _heartRateBpm = v),
                 ),
-                TextField(
-                  controller: _respiratoryRate,
-                  keyboardType: TextInputType.number,
+                AppDropdownButtonFormField<int>(
+                  value: _respiratoryRatePerMin,
+                  isExpanded: true,
+                  isDense: true,
                   decoration: const InputDecoration(
                     labelText: 'Resp. rate',
                     isDense: true,
                   ),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('—')),
+                    ...rrOpts.map(
+                      (r) => DropdownMenuItem(
+                        value: r,
+                        child: Text('$r /min'),
+                      ),
+                    ),
+                  ],
+                  onChanged: (v) => setState(() => _respiratoryRatePerMin = v),
                 ),
               ];
               if (narrow) {
