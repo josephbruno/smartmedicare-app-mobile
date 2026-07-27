@@ -216,11 +216,12 @@ Future<bool> showPosCheckoutDialog({
             }
 
             double balanceDue() {
-              // Partial payment / balance due only for registered customers.
-              if (!hasRegisteredCustomer() || paymentMode != 'cash') return 0;
+              // Partial cash payment leaves a balance that can be collected next
+              // (UPI/card) in the same checkout — walk-in and registered alike.
+              if (paymentMode != 'cash') return 0;
               final tendered = tenderedAmount();
               final due = billDue();
-              if (tendered + 0.009 >= due) return 0;
+              if (tendered <= 0 || tendered + 0.009 >= due) return 0;
               return due - tendered;
             }
 
@@ -270,7 +271,8 @@ Future<bool> showPosCheckoutDialog({
                 return;
               }
 
-              // Credit / advance / redeem / balance-due require a registered customer.
+              // Credit / advance / loyalty redeem require a registered customer.
+              // Walk-in may leave a cash balance due and collect the rest via UPI/card.
               if (!hasRegisteredCustomer()) {
                 if (paymentMode == 'credit' || paymentMode == 'advance') {
                   AppMessenger.show(context,
@@ -293,20 +295,6 @@ Future<bool> showPosCheckoutDialog({
                     ),
                   );
                   return;
-                }
-                if (paymentMode == 'cash') {
-                  final due = billDue();
-                  final tendered = tenderedAmount();
-                  if (tendered > 0 && tendered + 0.009 < due) {
-                    AppMessenger.show(context,
-                      const SnackBar(
-                        content: Text(
-                          'Walk-in bills require full payment. Select a registered customer to leave a balance due.',
-                        ),
-                      ),
-                    );
-                    return;
-                  }
                 }
               }
 
@@ -792,16 +780,7 @@ Future<bool> showPosCheckoutDialog({
               final change = changeReturn();
               final balance = balanceDue();
               final isChange = paymentMode == 'cash' && change > 0;
-              final isBalance =
-                  paymentMode == 'cash' &&
-                  hasRegisteredCustomer() &&
-                  balance > 0;
-              final walkInShort =
-                  paymentMode == 'cash' &&
-                  !hasRegisteredCustomer() &&
-                  tendered > 0 &&
-                  tendered + 0.009 < due &&
-                  !paymentSaved;
+              final isBalance = paymentMode == 'cash' && balance > 0;
 
               return Container(
                 padding: EdgeInsets.all(largeUi ? 12 : 10),
@@ -843,37 +822,36 @@ Future<bool> showPosCheckoutDialog({
                     ),
                     if (paymentMode == 'cash') ...[
                       const Divider(height: 14, color: Color(0xFFE2E8F0)),
-                      if (walkInShort)
+                      paymentSummaryRow(
+                        isChange
+                            ? 'Change to Return'
+                            : isBalance
+                                ? 'Balance Due'
+                                : 'Change / Balance',
+                        isChange
+                            ? '₹${change.toStringAsFixed(2)}'
+                            : isBalance
+                                ? '₹${balance.toStringAsFixed(2)}'
+                                : '₹0.00',
+                        valueColor: isChange
+                            ? AppTheme.accent
+                            : isBalance
+                                ? AppTheme.warning
+                                : AppTheme.textSecondary,
+                        valueWeight: FontWeight.w900,
+                        valueSize: alertFs(20),
+                      ),
+                      if (isBalance && !paymentSaved)
                         Padding(
-                          padding: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.only(top: 6),
                           child: Text(
-                            'Walk-in requires full payment. Select a registered customer to leave a balance due.',
+                            'Confirm cash, then switch to UPI/Card to collect the remaining balance.',
                             style: TextStyle(
                               fontSize: alertFs(12),
                               fontWeight: FontWeight.w600,
-                              color: AppTheme.danger,
+                              color: AppTheme.textSecondary,
                             ),
                           ),
-                        )
-                      else
-                        paymentSummaryRow(
-                          isChange
-                              ? 'Change to Return'
-                              : isBalance
-                                  ? 'Balance Due'
-                                  : 'Change / Balance',
-                          isChange
-                              ? '₹${change.toStringAsFixed(2)}'
-                              : isBalance
-                                  ? '₹${balance.toStringAsFixed(2)}'
-                                  : '₹0.00',
-                          valueColor: isChange
-                              ? AppTheme.accent
-                              : isBalance
-                                  ? AppTheme.warning
-                                  : AppTheme.textSecondary,
-                          valueWeight: FontWeight.w900,
-                          valueSize: alertFs(20),
                         ),
                     ],
                   ],
