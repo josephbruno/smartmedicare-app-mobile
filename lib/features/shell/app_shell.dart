@@ -398,30 +398,49 @@ class _DesktopShellState extends State<_DesktopShell> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: _collapsed ? 12 : 20, vertical: 20),
-                  child: Row(
-                    children: [
-                      const AppLogo(size: 36),
-                      if (!_collapsed) ...[
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'Maran Billing',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.textPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                      IconButton(
-                        tooltip: _collapsed ? 'Expand sidebar' : 'Collapse sidebar',
-                        icon: Icon(_collapsed ? Icons.chevron_right_rounded : Icons.chevron_left_rounded),
-                        onPressed: _toggleSidebar,
-                      ),
-                    ],
+                  padding: EdgeInsets.symmetric(
+                    horizontal: _collapsed ? 8 : 20,
+                    vertical: 16,
                   ),
+                  child: _collapsed
+                      ? Column(
+                          children: [
+                            const AppLogo(size: 28),
+                            const SizedBox(height: 4),
+                            IconButton(
+                              tooltip: 'Expand sidebar',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 36,
+                                minHeight: 36,
+                              ),
+                              icon: const Icon(Icons.chevron_right_rounded),
+                              onPressed: _toggleSidebar,
+                            ),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            const AppLogo(size: 36),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                'Maran Billing',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Collapse sidebar',
+                              icon: const Icon(Icons.chevron_left_rounded),
+                              onPressed: _toggleSidebar,
+                            ),
+                          ],
+                        ),
                 ),
                 Expanded(
                   child: ListView.builder(
@@ -452,20 +471,47 @@ class _DesktopShellState extends State<_DesktopShell> {
                       if (m.path == null) return const SizedBox.shrink();
 
                       final isSelected = _isMenuItemSelected(widget.location, m.path, items);
+                      if (_collapsed) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Tooltip(
+                            message: m.label,
+                            child: Center(
+                              child: Material(
+                                color: isSelected
+                                    ? AppTheme.primary.withValues(alpha: 0.08)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () => context.go(m.path!),
+                                  child: SizedBox(
+                                    width: 44,
+                                    height: 44,
+                                    child: Icon(
+                                      m.icon,
+                                      color: isSelected
+                                          ? AppTheme.primary
+                                          : AppTheme.textSecondary,
+                                      size: 22,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 4),
-                        child: Tooltip(
-                          message: _collapsed ? m.label : '',
-                          child: ListTile(
+                        child: ListTile(
                             dense: !desktop,
                             leading: Icon(
                               m.icon,
                               color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
                               size: ic(20),
                             ),
-                            title: _collapsed
-                                ? null
-                                : Text(
+                            title: Text(
                                     m.label,
                                     style: TextStyle(
                                       fontSize: 14,
@@ -474,11 +520,10 @@ class _DesktopShellState extends State<_DesktopShell> {
                                     ),
                                   ),
                             selected: isSelected,
-                            selectedTileColor: AppTheme.primary.withOpacity(0.08),
+                            selectedTileColor: AppTheme.primary.withValues(alpha: 0.08),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             onTap: () => context.go(m.path!),
                           ),
-                        ),
                       );
                     },
                   ),

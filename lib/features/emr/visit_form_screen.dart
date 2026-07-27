@@ -82,7 +82,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   ];
 
   static final List<double> _temperatureOptions = [
-    for (var t = 960; t <= 1070; t++) t / 10.0, // 96.0–107.0 °F
+    for (var t = 300; t <= 450; t++) t / 10.0, // 30.0–45.0 °C (API range)
   ];
 
   static final List<double> _weightOptions = [
@@ -1189,7 +1189,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                   isExpanded: true,
                   isDense: true,
                   decoration: const InputDecoration(
-                    labelText: 'Temp °F',
+                    labelText: 'Temp °C',
                     isDense: true,
                   ),
                   items: [

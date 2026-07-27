@@ -569,7 +569,7 @@ class _ClinicalColumn extends StatelessWidget {
         ? visit.observation!.trim()
         : (visit.clinicalNotes?.trim() ?? '');
     final vitals = <String>[];
-    if (visit.temperature != null) vitals.add('Temp ${visit.temperature} °F');
+    if (visit.temperature != null) vitals.add('Temp ${visit.temperature} °C');
     if (visit.weight != null) vitals.add('Wt ${visit.weight} kg');
     if (visit.heartRate != null) vitals.add('HR ${visit.heartRate} bpm');
     if (visit.respiratoryRate != null) {
