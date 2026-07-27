@@ -689,10 +689,18 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   }
 
   void _addDiagnosisFromSuggestion(VisitDiagnosis d) {
-    if (_diagnoses.any((x) => x.diagnosisName == d.diagnosisName)) return;
+    final name = d.diagnosisName.trim();
+    if (name.isEmpty) return;
+    if (_diagnoses.any(
+      (x) => x.diagnosisName.toLowerCase() == name.toLowerCase(),
+    )) {
+      _diagnosisInput.clear();
+      setState(() => _diagnosisSuggestions = []);
+      return;
+    }
     setState(() {
       _diagnoses.add(VisitDiagnosis(
-        diagnosisName: d.diagnosisName,
+        diagnosisName: name,
         icdCode: d.icdCode,
         severity: d.severity,
         isPrimary: _diagnoses.isEmpty,
@@ -721,15 +729,34 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   }
 
   void _addDiagnosis(String name) {
-    if (name.trim().isEmpty) return;
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    if (_diagnoses.any(
+      (x) => x.diagnosisName.toLowerCase() == trimmed.toLowerCase(),
+    )) {
+      _diagnosisInput.clear();
+      setState(() => _diagnosisSuggestions = []);
+      return;
+    }
     setState(() {
       _diagnoses.add(VisitDiagnosis(
-        diagnosisName: name.trim(),
+        diagnosisName: trimmed,
         severity: 'mild',
         isPrimary: _diagnoses.isEmpty,
       ));
       _diagnosisInput.clear();
+      _diagnosisSuggestions = [];
     });
+  }
+
+  String _apiErrorMessage(Object e) {
+    final text = e.toString();
+    if (text.contains('Duplicate entry') || text.contains('1062')) {
+      return 'This record already exists (duplicate). Try again, or pick an existing item instead of creating a new one.';
+    }
+    final msgMatch = RegExp(r'"message"\s*:\s*"([^"]+)"').firstMatch(text);
+    if (msgMatch != null) return msgMatch.group(1)!;
+    return text;
   }
 
   Future<Map<String, dynamic>?> _buildVisitBody() async {
@@ -806,12 +833,22 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         'respiratory_rate': _respiratoryRatePerMin,
       if (_followUpDate != null)
         'follow_up_date': _followUpDate!.toIso8601String().substring(0, 10),
-      if (_diagnoses.isNotEmpty)
-        'diagnoses': _diagnoses.map((d) => d.toJson()).toList(),
-      if (_treatments.isNotEmpty)
-        'treatments': _treatments.map((t) => t.toJson()).toList(),
-      if (_medicines.isNotEmpty)
-        'medicines': _medicines.map((m) => m.toJson()).toList(),
+      // Always send child collections on edit so removals sync; on create only
+      // when non-empty.
+      if (_isEdit || _diagnoses.isNotEmpty)
+        'diagnoses': [
+          for (final d in _diagnoses) d.toJson(),
+        ],
+      if (_isEdit || _treatments.isNotEmpty)
+        'treatments': [
+          for (final t in _treatments)
+            if (t.nameCtrl.text.trim().isNotEmpty) t.toJson(),
+        ],
+      if (_isEdit || _medicines.isNotEmpty)
+        'medicines': [
+          for (final m in _medicines)
+            if (m.nameCtrl.text.trim().isNotEmpty) m.toJson(),
+        ],
     };
   }
 
@@ -850,7 +887,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       context.go('/emr/visits/${visit.id}');
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context, SnackBar(content: Text('$e')));
+        AppMessenger.show(context, SnackBar(content: Text(_apiErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -869,7 +906,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       }
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context, SnackBar(content: Text('$e')));
+        AppMessenger.show(context, SnackBar(content: Text(_apiErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -1563,11 +1600,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                                 padding: const EdgeInsets.only(right: 6),
                                 child: ActionChip(
                                   label: Text(s.name, style: const TextStyle(fontSize: 12)),
-                                  onPressed: () {
+                                  onPressed: () async {
                                     setState(() {
                                       t.nameCtrl.text = s.name;
-                                      // Always apply template price on pick. New rows
-                                      // start as "0.0", which the old empty/'0' check missed.
                                       if (s.defaultPrice != null) {
                                         t.priceCtrl.text =
                                             _formatAmount(s.defaultPrice!);
@@ -1575,6 +1610,38 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                                       _treatmentSuggestForIndex = null;
                                       _treatmentSuggestions = [];
                                     });
+                                    // Prefer an existing catalog service so we
+                                    // don't create a duplicate product later.
+                                    try {
+                                      final list = await context
+                                          .read<AppServices>()
+                                          .products
+                                          .list(
+                                        query: {
+                                          'type': 'service',
+                                          'search': s.name,
+                                          'per_page': 20,
+                                          'is_active': 1,
+                                        },
+                                      );
+                                      if (!mounted) return;
+                                      final needle = s.name.toLowerCase();
+                                      Product? match;
+                                      for (final p in list) {
+                                        if (p.name.toLowerCase() == needle) {
+                                          match = p;
+                                          break;
+                                        }
+                                      }
+                                      match ??= list.isEmpty ? null : list.first;
+                                      if (match == null) return;
+                                      setState(() {
+                                        t.productId = match!.id;
+                                        t.nameCtrl.text = match.name;
+                                        t.priceCtrl.text =
+                                            _formatAmount(match.sellingPrice);
+                                      });
+                                    } catch (_) {}
                                   },
                                 ),
                               );
@@ -2296,8 +2363,33 @@ class _CreateServiceDialogState extends State<_CreateServiceDialog> {
     }
     setState(() => _creating = true);
     try {
-      final p = await context.read<AppServices>().products.create({
+      final productsApi = context.read<AppServices>().products;
+
+      // Reuse an existing active service with the same name to avoid
+      // duplicate catalog rows / unique-constraint errors.
+      try {
+        final existing = await productsApi.list(
+          query: {
+            'type': 'service',
+            'search': name,
+            'per_page': 20,
+            'is_active': 1,
+          },
+        );
+        final needle = name.toLowerCase();
+        for (final p in existing) {
+          if (p.name.toLowerCase() == needle) {
+            if (mounted) Navigator.pop(context, p);
+            return;
+          }
+        }
+      } catch (_) {}
+
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final p = await productsApi.create({
         'name': name,
+        'sku': 'SVC-$stamp',
+        'barcode': 'SVC-$stamp',
         'purchase_price': 0,
         'selling_price': price,
         'mrp': price,
@@ -2313,7 +2405,11 @@ class _CreateServiceDialogState extends State<_CreateServiceDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _creating = false);
-      AppMessenger.show(context, SnackBar(content: Text('$e')));
+      final text = e.toString();
+      final friendly = (text.contains('Duplicate entry') || text.contains('1062'))
+          ? 'A product with this name or code already exists. Search and select it instead.'
+          : text;
+      AppMessenger.show(context, SnackBar(content: Text(friendly)));
     }
   }
 
