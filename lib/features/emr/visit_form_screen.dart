@@ -30,6 +30,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   final _investigation = TextEditingController();
   final _followUpNotes = TextEditingController();
   final _diagnosisInput = TextEditingController();
+  final _diagnosisFocus = FocusNode();
   final _serviceCharge = TextEditingController();
 
   /// Selected vitals (dropdown values; null = not set).
@@ -146,6 +147,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void initState() {
     super.initState();
     _sourceAppointmentId = widget.appointmentId;
+    _diagnosisFocus.addListener(() {
+      if (mounted) setState(() {});
+    });
     _bootstrap();
   }
 
@@ -880,6 +884,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _investigation.dispose();
     _followUpNotes.dispose();
     _diagnosisInput.dispose();
+    _diagnosisFocus.dispose();
     _serviceCharge.dispose();
     for (final t in _treatments) {
       t.dispose();
@@ -1196,83 +1201,51 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 _respiratoryRateOptions,
               );
               final fields = [
-                AppDropdownButtonFormField<double>(
+                AppSearchableDropdownField<double>(
+                  label: 'Temp °F',
                   value: _temperatureF,
-                  isExpanded: true,
-                  isDense: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Temp °F',
-                    isDense: true,
-                  ),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('—')),
-                    ...tempOpts.map(
-                      (t) => DropdownMenuItem(
+                  searchHint: 'Search temperature…',
+                  options: [
+                    for (final t in tempOpts)
+                      AppSearchableOption(
                         value: t,
-                        child: Text(t.toStringAsFixed(1)),
+                        label: t.toStringAsFixed(1),
                       ),
-                    ),
                   ],
                   onChanged: (v) => setState(() => _temperatureF = v),
                 ),
-                AppDropdownButtonFormField<double>(
+                AppSearchableDropdownField<double>(
+                  label: 'Weight kg',
                   value: _weightKg,
-                  isExpanded: true,
-                  isDense: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Weight kg',
-                    isDense: true,
-                  ),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('—')),
-                    ...weightOpts.map(
-                      (w) => DropdownMenuItem(
+                  searchHint: 'Search weight…',
+                  options: [
+                    for (final w in weightOpts)
+                      AppSearchableOption(
                         value: w,
-                        child: Text(
-                          w == w.roundToDouble()
-                              ? w.toStringAsFixed(0)
-                              : w.toStringAsFixed(1),
-                        ),
+                        label: w == w.roundToDouble()
+                            ? w.toStringAsFixed(0)
+                            : w.toStringAsFixed(1),
                       ),
-                    ),
                   ],
                   onChanged: (v) => setState(() => _weightKg = v),
                 ),
-                AppDropdownButtonFormField<int>(
+                AppSearchableDropdownField<int>(
+                  label: 'Heart rate',
                   value: _heartRateBpm,
-                  isExpanded: true,
-                  isDense: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Heart rate',
-                    isDense: true,
-                  ),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('—')),
-                    ...hrOpts.map(
-                      (h) => DropdownMenuItem(
-                        value: h,
-                        child: Text('$h bpm'),
-                      ),
-                    ),
+                  searchHint: 'Search heart rate…',
+                  options: [
+                    for (final h in hrOpts)
+                      AppSearchableOption(value: h, label: '$h bpm'),
                   ],
                   onChanged: (v) => setState(() => _heartRateBpm = v),
                 ),
-                AppDropdownButtonFormField<int>(
+                AppSearchableDropdownField<int>(
+                  label: 'Resp. rate',
                   value: _respiratoryRatePerMin,
-                  isExpanded: true,
-                  isDense: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Resp. rate',
-                    isDense: true,
-                  ),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('—')),
-                    ...rrOpts.map(
-                      (r) => DropdownMenuItem(
-                        value: r,
-                        child: Text('$r /min'),
-                      ),
-                    ),
+                  searchHint: 'Search resp. rate…',
+                  options: [
+                    for (final r in rrOpts)
+                      AppSearchableOption(value: r, label: '$r /min'),
                   ],
                   onChanged: (v) => setState(() => _respiratoryRatePerMin = v),
                 ),
@@ -1359,75 +1332,70 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           const SizedBox(height: 16),
           Text('Diagnoses', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: InputDecorator(
-                  isEmpty: _diagnoses.isEmpty && _diagnosisInput.text.isEmpty,
-                  decoration: InputDecoration(
-                    hintText: _diagnoses.isEmpty
-                        ? 'Search or add diagnosis'
-                        : null,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                  ),
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      ..._diagnoses.map(
-                        (d) => InputChip(
-                          label: Text(
-                            d.diagnosisName,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                          onDeleted: () =>
-                              setState(() => _diagnoses.remove(d)),
-                        ),
-                      ),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          minWidth: 120,
-                          maxWidth: 280,
-                        ),
-                        child: TextField(
-                          controller: _diagnosisInput,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            filled: false,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 6,
-                            ),
-                            hintText:
-                                _diagnoses.isEmpty ? null : 'Add another…',
-                          ),
-                          onChanged: (v) {
-                            setState(() {});
-                            _searchDiagnoses(v);
-                          },
-                          onSubmitted: _addDiagnosis,
-                        ),
-                      ),
-                    ],
-                  ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _diagnosisFocus.requestFocus(),
+            child: InputDecorator(
+              isFocused: _diagnosisFocus.hasFocus,
+              isEmpty: _diagnoses.isEmpty && _diagnosisInput.text.isEmpty,
+              decoration: InputDecoration(
+                hintText: _diagnoses.isEmpty
+                    ? 'Search or add diagnosis'
+                    : null,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.add_circle_outline),
-                onPressed: () => _addDiagnosis(_diagnosisInput.text),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_diagnoses.isNotEmpty) ...[
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: _diagnoses
+                          .map(
+                            (d) => InputChip(
+                              label: Text(
+                                d.diagnosisName,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              onDeleted: () =>
+                                  setState(() => _diagnoses.remove(d)),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  TextField(
+                    controller: _diagnosisInput,
+                    focusNode: _diagnosisFocus,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      filled: false,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 4,
+                      ),
+                      hintText: _diagnoses.isEmpty ? null : 'Add another…',
+                    ),
+                    onChanged: (v) {
+                      setState(() {});
+                      _searchDiagnoses(v);
+                    },
+                    onSubmitted: _addDiagnosis,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
           if (_diagnosisSuggestions.isNotEmpty)
             Padding(
