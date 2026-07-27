@@ -21,7 +21,7 @@ class CustomerListScreen extends StatefulWidget {
 
 class _CustomerListScreenState extends State<CustomerListScreen> {
   final _search = TextEditingController();
-  final _tableKey = GlobalKey<AppPaginatedTableState<Customer>>();
+  int _reloadToken = 0;
   int? _selectedId;
 
   @override
@@ -32,17 +32,21 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
   bool get _splitPane => useWebLikeShell(context) && MediaQuery.sizeOf(context).width >= 1100;
 
-  Future<void> _refreshTable({int? selectCustomerId}) async {
-    await _tableKey.currentState?.refresh();
-    if (!mounted || selectCustomerId == null) return;
-    setState(() => _selectedId = selectCustomerId);
+  void _refreshTable({int? selectCustomerId}) {
+    if (!mounted) return;
+    setState(() {
+      _reloadToken++;
+      if (selectCustomerId != null) _selectedId = selectCustomerId;
+    });
   }
 
   Future<void> _openCreateCustomer() async {
     final created = await context.push<Customer>('/customers/new');
     if (!mounted || created == null) return;
-    await _refreshTable(selectCustomerId: created.id);
+    _refreshTable(selectCustomerId: created.id);
   }
+
+  void _applySearch() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
@@ -59,12 +63,23 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               Expanded(
                 child: TextField(
                   controller: _search,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Search customers by name or phone…',
-                    prefixIcon: Icon(Icons.search),
+                    prefixIcon: const Icon(Icons.search),
                     isDense: true,
+                    suffixIcon: search.isNotEmpty
+                        ? IconButton(
+                            tooltip: 'Clear',
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _search.clear();
+                              _applySearch();
+                            },
+                          )
+                        : null,
                   ),
-                  onSubmitted: (_) => setState(() {}),
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _applySearch(),
                 ),
               ),
               if (canCreate) ...[
@@ -81,8 +96,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         const SizedBox(height: 8),
         Expanded(
           child: AppPaginatedTable<Customer>(
-            key: _tableKey,
-            emptyMessage: 'No customers found.',
+            // Remount when search or reload token changes so loadPage re-runs.
+            key: ValueKey('$search-$_reloadToken'),
+            emptyMessage: search.length >= 2
+                ? 'No customers match your search.'
+                : 'No customers found.',
             loadPage: ({required page, required perPage}) =>
                 services.customers.listPaginated(
                   page: page,

@@ -81,9 +81,16 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     'emergency',
   ];
 
+  // UI uses °F; API stores °C (30–45). Convert on load/save.
   static final List<double> _temperatureOptions = [
-    for (var t = 300; t <= 450; t++) t / 10.0, // 30.0–45.0 °C (API range)
+    for (var t = 860; t <= 1130; t++) t / 10.0, // 86.0–113.0 °F
   ];
+
+  static double _fahrenheitToCelsius(double f) =>
+      double.parse(((f - 32) * 5 / 9).toStringAsFixed(1));
+
+  static double _celsiusToFahrenheit(double c) =>
+      double.parse((c * 9 / 5 + 32).toStringAsFixed(1));
 
   static final List<double> _weightOptions = [
     for (var w = 5; w <= 800; w++) w / 10.0, // 0.5–80.0 kg
@@ -206,7 +213,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _investigation.text = visit.investigation ?? '';
     _followUpNotes.text = visit.followUpNotes ?? '';
     if (visit.temperature != null) {
-      _temperatureF = _nearestDouble(visit.temperature!, _temperatureOptions);
+      // API stores °C; dropdown is °F.
+      _temperatureF = _nearestDouble(
+        _celsiusToFahrenheit(visit.temperature!),
+        _temperatureOptions,
+      );
     }
     if (visit.weight != null) {
       _weightKg = _nearestDouble(visit.weight!, _weightOptions);
@@ -783,7 +794,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         'investigation': _investigation.text.trim(),
       if (_followUpNotes.text.trim().isNotEmpty)
         'follow_up_notes': _followUpNotes.text.trim(),
-      if (_temperatureF != null) 'temperature': _temperatureF,
+      if (_temperatureF != null)
+        'temperature': _fahrenheitToCelsius(_temperatureF!),
       if (_weightKg != null) 'weight': _weightKg,
       if (_heartRateBpm != null) 'heart_rate': _heartRateBpm,
       if (_respiratoryRatePerMin != null)
@@ -1189,7 +1201,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                   isExpanded: true,
                   isDense: true,
                   decoration: const InputDecoration(
-                    labelText: 'Temp °C',
+                    labelText: 'Temp °F',
                     isDense: true,
                   ),
                   items: [

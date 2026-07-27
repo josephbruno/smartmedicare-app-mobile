@@ -332,7 +332,10 @@ class VisitPdf {
         ? visit.observation!.trim()
         : (visit.clinicalNotes?.trim() ?? '');
     final vitals = <String>[];
-    if (visit.temperature != null) vitals.add('Temp ${visit.temperature} C');
+    if (visit.temperature != null) {
+      final f = (visit.temperature! * 9 / 5) + 32;
+      vitals.add('Temp ${f.toStringAsFixed(1)} F');
+    }
     if (visit.weight != null) vitals.add('Wt ${visit.weight} kg');
     if (visit.heartRate != null) vitals.add('HR ${visit.heartRate} bpm');
     if (visit.respiratoryRate != null) {

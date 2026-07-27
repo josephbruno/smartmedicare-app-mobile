@@ -892,7 +892,13 @@ class _VitalsGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_VitalItem>[
       if (visit.temperature != null)
-        _VitalItem('Temperature', '${visit.temperature} °C', Icons.thermostat_outlined, const Color(0xFFEF4444), const Color(0xFFFEF2F2)),
+        _VitalItem(
+          'Temperature',
+          '${((visit.temperature! * 9 / 5) + 32).toStringAsFixed(1)} °F',
+          Icons.thermostat_outlined,
+          const Color(0xFFEF4444),
+          const Color(0xFFFEF2F2),
+        ),
       if (visit.weight != null)
         _VitalItem('Weight', '${visit.weight} kg', Icons.monitor_weight_outlined, const Color(0xFF3B82F6), const Color(0xFFEFF6FF)),
       if (visit.heartRate != null)
