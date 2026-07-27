@@ -1360,13 +1360,67 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           Text('Diagnoses', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: TextField(
-                  controller: _diagnosisInput,
-                  decoration: const InputDecoration(hintText: 'Search or add diagnosis'),
-                  onChanged: _searchDiagnoses,
-                  onSubmitted: _addDiagnosis,
+                child: InputDecorator(
+                  isEmpty: _diagnoses.isEmpty && _diagnosisInput.text.isEmpty,
+                  decoration: InputDecoration(
+                    hintText: _diagnoses.isEmpty
+                        ? 'Search or add diagnosis'
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                  ),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      ..._diagnoses.map(
+                        (d) => InputChip(
+                          label: Text(
+                            d.diagnosisName,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          onDeleted: () =>
+                              setState(() => _diagnoses.remove(d)),
+                        ),
+                      ),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minWidth: 120,
+                          maxWidth: 280,
+                        ),
+                        child: TextField(
+                          controller: _diagnosisInput,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            filled: false,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 6,
+                            ),
+                            hintText:
+                                _diagnoses.isEmpty ? null : 'Add another…',
+                          ),
+                          onChanged: (v) {
+                            setState(() {});
+                            _searchDiagnoses(v);
+                          },
+                          onSubmitted: _addDiagnosis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               IconButton(
@@ -1376,34 +1430,26 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ],
           ),
           if (_diagnosisSuggestions.isNotEmpty)
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: _diagnosisSuggestions
-                  .map(
-                    (d) => ActionChip(
-                      label: Text(
-                        d.icdCode != null ? '${d.diagnosisName} (${d.icdCode})' : d.diagnosisName,
-                        style: const TextStyle(fontSize: 12),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _diagnosisSuggestions
+                    .map(
+                      (d) => ActionChip(
+                        label: Text(
+                          d.icdCode != null
+                              ? '${d.diagnosisName} (${d.icdCode})'
+                              : d.diagnosisName,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        onPressed: () => _addDiagnosisFromSuggestion(d),
                       ),
-                      onPressed: () => _addDiagnosisFromSuggestion(d),
-                    ),
-                  )
-                  .toList(),
+                    )
+                    .toList(),
+              ),
             ),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: _diagnoses
-                .map(
-                  (d) => Chip(
-                    label: Text(d.diagnosisName),
-                    onDeleted: () =>
-                        setState(() => _diagnoses.remove(d)),
-                  ),
-                )
-                .toList(),
-          ),
           const SizedBox(height: 16),
           Row(
             children: [
