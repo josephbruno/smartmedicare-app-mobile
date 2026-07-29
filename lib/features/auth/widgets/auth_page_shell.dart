@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/app_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_logo.dart';
+import '../../../core/widgets/powered_by_footer.dart';
 
 /// Shared auth page background, top bar, and decorative layers.
 class AuthPageShell extends StatelessWidget {
@@ -40,6 +41,7 @@ class AuthPageShell extends StatelessWidget {
                 Expanded(
                   child: child,
                 ),
+                const PoweredByFooter(),
               ],
             ),
           ),

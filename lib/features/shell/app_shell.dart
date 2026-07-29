@@ -16,6 +16,7 @@ import '../../data/local/sync_coordinator.dart';
 import '../../core/connectivity/connectivity_notifier.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_logo.dart';
+import '../../core/widgets/powered_by_footer.dart';
 import '../../data/local/offline_invoice_queue.dart';
 import '../../data/models/shop.dart';
 import 'widgets/offline_queue_sheet.dart';
@@ -1368,6 +1369,9 @@ class _MobileShellState extends State<_MobileShell> {
                   if (context.mounted) context.go('/');
                 },
               ),
+            ),
+            const PoweredByFooter(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
             ),
           ],
         ),

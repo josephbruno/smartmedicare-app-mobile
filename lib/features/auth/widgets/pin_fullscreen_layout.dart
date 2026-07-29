@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/app_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_logo.dart';
+import '../../../core/widgets/powered_by_footer.dart';
 
 /// Full-screen shell for PIN unlock / set-PIN flows.
 class PinFullscreenLayout extends StatelessWidget {
@@ -152,36 +153,43 @@ class PinFullscreenLayout extends StatelessWidget {
               ),
             ),
             SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: horizontalPadding,
-                    vertical: verticalPadding,
-                  ),
-                  child: isDesktop
-                      ? _buildDesktopTwoColumnLayout(
-                          title: title,
-                          subtitle: subtitle,
-                          secondaryText: secondaryText,
-                          loading: loading,
-                          error: error,
-                          screenWidth: size.width,
-                          pinEntry: pinEntry,
-                          footer: footer,
-                          isWideDesktop: isWideDesktop,
-                        )
-                      : _buildMobileColumnLayout(
-                          title: title,
-                          subtitle: subtitle,
-                          secondaryText: secondaryText,
-                          loading: loading,
-                          error: error,
-                          screenWidth: size.width,
-                          pinEntry: pinEntry,
-                          footer: footer,
-                          spaceBetweenElements: spaceBetweenElements,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: horizontalPadding,
+                          vertical: verticalPadding,
                         ),
-                ),
+                        child: isDesktop
+                            ? _buildDesktopTwoColumnLayout(
+                                title: title,
+                                subtitle: subtitle,
+                                secondaryText: secondaryText,
+                                loading: loading,
+                                error: error,
+                                screenWidth: size.width,
+                                pinEntry: pinEntry,
+                                footer: footer,
+                                isWideDesktop: isWideDesktop,
+                              )
+                            : _buildMobileColumnLayout(
+                                title: title,
+                                subtitle: subtitle,
+                                secondaryText: secondaryText,
+                                loading: loading,
+                                error: error,
+                                screenWidth: size.width,
+                                pinEntry: pinEntry,
+                                footer: footer,
+                                spaceBetweenElements: spaceBetweenElements,
+                              ),
+                      ),
+                    ),
+                  ),
+                  const PoweredByFooter(),
+                ],
               ),
             ),
           ],

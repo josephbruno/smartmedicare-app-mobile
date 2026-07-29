@@ -346,6 +346,11 @@ class ThermalPrinterService {
       children: [
         pw.Divider(borderStyle: pw.BorderStyle.dashed, height: 1),
         pw.Text('Thank you!', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 2),
+        pw.Text(
+          'Powered by bestwaveinnovation.com',
+          style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+        ),
       ],
     );
   }

@@ -1098,92 +1098,285 @@ class _PosScreenState extends State<PosScreen> {
                       ],
                     ),
                   )
-                : ListView.builder(
-                    itemCount: _hits.length,
-                    itemBuilder: (c, i) {
-                      final p = _hits[i];
-                      final isLowStock = (p.currentStock ?? 0) <= p.reorderLevel;
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Material(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          child: InkWell(
-                            onTap: () {
-                              final msg = cart.addProduct(p);
-                              if (context.mounted && msg != 'added' && msg != 'incremented') {
-                                AppMessenger.show(context,
-                                  SnackBar(
-                                    content: Text(msg == 'out_of_stock' ? 'Out of stock!' : 'Maximum stock capacity reached.'),
-                                    backgroundColor: AppTheme.danger,
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              }
-                            },
-                            borderRadius: BorderRadius.circular(10),
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: _desktop ? 10 : 8,
-                                vertical: _desktop ? 8 : 6,
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    p.isService ? Icons.cut_rounded : Icons.pets_rounded,
-                                    color: AppTheme.primary,
-                                    size: _ic(20),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          p.name,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: _fs(13),
-                                            color: AppTheme.textPrimary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          '₹${p.sellingPrice.toStringAsFixed(2)} · Tax ${p.gstRate}%',
-                                          style: TextStyle(
-                                            color: AppTheme.textSecondary,
-                                            fontSize: _fs(12),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Text(
-                                    p.trackInventory
-                                        ? 'Stock: ${p.currentStock?.toInt() ?? 0}'
-                                        : 'Service',
-                                    style: TextStyle(
-                                      color: p.trackInventory && isLowStock
-                                          ? AppTheme.warning
-                                          : AppTheme.accent,
-                                      fontSize: _fs(11),
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Icon(Icons.add_circle_outline_rounded, color: AppTheme.primary, size: _ic(18)),
-                                ],
-                              ),
-                            ),
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'All Products (${_hits.length} items)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: _fs(14),
+                            color: AppTheme.textPrimary,
                           ),
                         ),
-                      );
-                    },
+                      ),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
+                            children: [
+                              Container(
+                                color: const Color(0xFFF1F5F9),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: _desktop ? 14 : 10,
+                                  vertical: _desktop ? 12 : 10,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 4,
+                                      child: Text(
+                                        'Item Name',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: _fs(12),
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        'MRP (₹)',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: _fs(12),
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        'Price (₹)',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: _fs(12),
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        'Stock',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: _fs(12),
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        'Type',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: _fs(12),
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: _desktop ? 104 : 92,
+                                      child: Text(
+                                        'Action',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: _fs(12),
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+                              Expanded(
+                                child: ListView.separated(
+                                  itemCount: _hits.length,
+                                  separatorBuilder: (_, __) => const Divider(
+                                    height: 1,
+                                    thickness: 1,
+                                    color: Color(0xFFE2E8F0),
+                                  ),
+                                  itemBuilder: (c, i) {
+                                    final p = _hits[i];
+                                    final isLowStock = (p.currentStock ?? 0) <= p.reorderLevel;
+                                    final isService = p.isService || !p.trackInventory;
+
+                                    void addToCart() {
+                                      final msg = cart.addProduct(p);
+                                      if (context.mounted && msg != 'added' && msg != 'incremented') {
+                                        AppMessenger.show(
+                                          context,
+                                          SnackBar(
+                                            content: Text(
+                                              msg == 'out_of_stock'
+                                                  ? 'Out of stock!'
+                                                  : 'Maximum stock capacity reached.',
+                                            ),
+                                            backgroundColor: AppTheme.danger,
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      }
+                                    }
+
+                                    return Material(
+                                      color: Colors.white,
+                                      child: InkWell(
+                                        onTap: addToCart,
+                                        child: Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: _desktop ? 14 : 10,
+                                            vertical: _desktop ? 12 : 10,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                flex: 4,
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      isService
+                                                          ? Icons.cut_rounded
+                                                          : Icons.pets_rounded,
+                                                      color: AppTheme.primary,
+                                                      size: _ic(18),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Text(
+                                                        p.name,
+                                                        style: TextStyle(
+                                                          fontWeight: FontWeight.w400,
+                                                          fontSize: _fs(11),
+                                                          color: AppTheme.textPrimary,
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  p.mrp.toStringAsFixed(2),
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: _fs(12),
+                                                    color: AppTheme.primary,
+                                                    decoration: p.mrp > p.sellingPrice
+                                                        ? TextDecoration.lineThrough
+                                                        : null,
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  p.sellingPrice.toStringAsFixed(2),
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: _fs(12),
+                                                    color: AppTheme.danger,
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  isService
+                                                      ? ''
+                                                      : '${p.currentStock?.toInt() ?? 0}',
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: _fs(12),
+                                                    color: isLowStock
+                                                        ? AppTheme.warning
+                                                        : AppTheme.accent,
+                                                  ),
+                                                ),
+                                              ),
+                                              Expanded(
+                                                flex: 2,
+                                                child: Text(
+                                                  isService ? 'Service' : 'Stock',
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: _fs(12),
+                                                    color: isService
+                                                        ? AppTheme.primary
+                                                        : AppTheme.accent,
+                                                  ),
+                                                ),
+                                              ),
+                                              SizedBox(
+                                                width: _desktop ? 104 : 92,
+                                                child: Align(
+                                                  alignment: Alignment.center,
+                                                  child: OutlinedButton(
+                                                    onPressed: addToCart,
+                                                    style: OutlinedButton.styleFrom(
+                                                      foregroundColor: AppTheme.primary,
+                                                      side: const BorderSide(
+                                                        color: Color(0xFF93C5FD),
+                                                      ),
+                                                      padding: EdgeInsets.symmetric(
+                                                        horizontal: _desktop ? 18 : 14,
+                                                        vertical: _desktop ? 12 : 10,
+                                                      ),
+                                                      minimumSize: Size.zero,
+                                                      tapTargetSize:
+                                                          MaterialTapTargetSize.shrinkWrap,
+                                                      visualDensity: VisualDensity.standard,
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      '+ Add',
+                                                      style: TextStyle(
+                                                        fontSize: _fs(12),
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
           ),
         ],

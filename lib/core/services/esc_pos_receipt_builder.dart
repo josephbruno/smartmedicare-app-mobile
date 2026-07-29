@@ -196,6 +196,10 @@ class EscPosReceiptBuilder {
       'Visit again soon',
       styles: const PosStyles(align: PosAlign.center),
     );
+    bytes += g.text(
+      'Powered by bestwaveinnovation.com',
+      styles: const PosStyles(align: PosAlign.center),
+    );
     bytes += g.feed(2);
     bytes += g.cut();
 
@@ -242,6 +246,10 @@ class EscPosReceiptBuilder {
     );
     bytes += g.text(
       'USB thermal test OK',
+      styles: const PosStyles(align: PosAlign.center),
+    );
+    bytes += g.text(
+      'Powered by bestwaveinnovation.com',
       styles: const PosStyles(align: PosAlign.center),
     );
     bytes += g.feed(2);
