@@ -86,16 +86,16 @@ class ReportKpiCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: mildCardFill(color),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: mildCardBorder(color)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
+              color: color.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 22),
@@ -105,7 +105,14 @@ class ReportKpiCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: color.withValues(alpha: 0.85),
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   value,
@@ -147,11 +154,15 @@ class ReportBarChart extends StatelessWidget {
     required this.labels,
     required this.series,
     this.height = 240,
+    /// When set (and length matches [labels]), each bar uses its own color
+    /// instead of the series color — useful for category breakdowns.
+    this.barColors,
   });
 
   final List<String> labels;
   final List<({String name, Color color, List<double> values})> series;
   final double height;
+  final List<Color>? barColors;
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +174,9 @@ class ReportBarChart extends StatelessWidget {
         .expand((s) => s.values)
         .fold<double>(0, (m, v) => math.max(m, v));
     final top = maxY <= 0 ? 1.0 : maxY * 1.15;
+    final usePerBar = barColors != null &&
+        barColors!.length >= labels.length &&
+        series.length == 1;
 
     return SizedBox(
       height: height,
@@ -214,10 +228,10 @@ class ReportBarChart extends StatelessWidget {
                 x: i,
                 barsSpace: 4,
                 barRods: [
-                  for (final s in series)
+                  for (var s = 0; s < series.length; s++)
                     BarChartRodData(
-                      toY: i < s.values.length ? s.values[i] : 0,
-                      color: s.color,
+                      toY: i < series[s].values.length ? series[s].values[i] : 0,
+                      color: usePerBar ? barColors![i] : series[s].color,
                       width: series.length > 1 ? 10 : 18,
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
                     ),
@@ -379,7 +393,7 @@ class ReportDonutChart extends StatelessWidget {
               children: [
                 PieChart(
                   PieChartData(
-                    sectionsSpace: 2,
+                    sectionsSpace: 3,
                     centerSpaceRadius: 48,
                     startDegreeOffset: -90,
                     pieTouchData: PieTouchData(enabled: false),
@@ -388,8 +402,12 @@ class ReportDonutChart extends StatelessWidget {
                         PieChartSectionData(
                           value: data[i].value <= 0 ? 0.0001 : data[i].value,
                           color: data[i].color,
-                          radius: 22,
+                          radius: 24,
                           showTitle: false,
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            width: 1.5,
+                          ),
                         ),
                     ],
                   ),

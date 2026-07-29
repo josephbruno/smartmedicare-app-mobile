@@ -422,6 +422,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         values: productTypeEntries.map((e) => e.value).toList(),
                       ),
                     ],
+                    barColors: [
+                      for (var i = 0; i < productTypeEntries.length; i++) chartColorAt(i),
+                    ],
                   )
                 : const ReportEmptyChart(message: 'No line-item sales in this period.'),
           ),
@@ -485,6 +488,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                       values: statusEntries.map((e) => e.value).toList(),
                     ),
                   ],
+                  barColors: [
+                    for (var i = 0; i < statusEntries.length; i++) chartColorAt(i),
+                  ],
                 ),
               ),
               ReportSectionCard(
@@ -495,6 +501,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   series: [
                     (name: 'Amount', color: AppTheme.accent, values: [totalPaid, totalDue]),
                   ],
+                  barColors: const [AppTheme.accent, AppTheme.danger],
                 ),
               ),
             ],

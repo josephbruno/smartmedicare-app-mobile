@@ -17,6 +17,14 @@ const List<Color> kChartPalette = [
   Color(0xFFEF4444), // red
 ];
 
+/// Soft pastel fill derived from an accent color (mild card highlight).
+Color mildCardFill(Color color, {double strength = 0.10}) =>
+    Color.alphaBlend(color.withValues(alpha: strength), Colors.white);
+
+/// Soft border tint matching [mildCardFill].
+Color mildCardBorder(Color color, {double strength = 0.28}) =>
+    color.withValues(alpha: strength);
+
 /// Generates a deterministic, plausible-looking trend series for a sparkline.
 ///
 /// NOTE: this is placeholder data. The `/reports/dashboard` API returns only
@@ -120,11 +128,15 @@ class DashboardStatCard extends StatelessWidget {
     final card = Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: mildCardFill(color),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-        boxShadow: const [
-          BoxShadow(color: Color(0x08000000), blurRadius: 14, offset: Offset(0, 6)),
+        border: Border.all(color: mildCardBorder(color), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.08),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
         ],
       ),
       child: Column(
@@ -139,8 +151,8 @@ class DashboardStatCard extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
+                  style: TextStyle(
+                    color: color.withValues(alpha: 0.85),
                     fontWeight: FontWeight.w800,
                     fontSize: 12,
                     letterSpacing: 0.6,
@@ -150,7 +162,7 @@ class DashboardStatCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
+                  color: color.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: color, size: 18),
@@ -237,12 +249,14 @@ class SalesSummaryCard extends StatelessWidget {
     final total = data.fold<double>(0, (s, d) => s + d.value);
     final hasData = total > 0 && data.isNotEmpty;
 
+    final accent = hasData ? data.first.color : AppTheme.primary;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: mildCardFill(accent, strength: 0.06),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        border: Border.all(color: mildCardBorder(accent, strength: 0.22), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,10 +266,10 @@ class SalesSummaryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withValues(alpha: 0.12),
+                  color: accent.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: const Icon(Icons.donut_large_rounded, color: AppTheme.primary, size: 18),
+                child: Icon(Icons.donut_large_rounded, color: accent, size: 18),
               ),
               const SizedBox(width: 10),
               const Text(
@@ -284,7 +298,7 @@ class SalesSummaryCard extends StatelessWidget {
                     children: [
                       PieChart(
                         PieChartData(
-                          sectionsSpace: 2,
+                          sectionsSpace: 3,
                           centerSpaceRadius: 44,
                           startDegreeOffset: -90,
                           pieTouchData: PieTouchData(enabled: false),
@@ -293,8 +307,12 @@ class SalesSummaryCard extends StatelessWidget {
                               PieChartSectionData(
                                 value: d.value <= 0 ? 0.0001 : d.value,
                                 color: d.color,
-                                radius: 20,
+                                radius: 22,
                                 showTitle: false,
+                                borderSide: BorderSide(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  width: 1.5,
+                                ),
                               ),
                           ],
                         ),
@@ -333,7 +351,16 @@ class SalesSummaryCard extends StatelessWidget {
                               Container(
                                 width: 10,
                                 height: 10,
-                                decoration: BoxDecoration(color: d.color, shape: BoxShape.circle),
+                                decoration: BoxDecoration(
+                                  color: d.color,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: d.color.withValues(alpha: 0.35),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
@@ -351,10 +378,10 @@ class SalesSummaryCard extends StatelessWidget {
                               const SizedBox(width: 8),
                               Text(
                                 '${(d.value / total * 100).toStringAsFixed(0)}%',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
-                                  color: AppTheme.textSecondary,
+                                  color: d.color,
                                 ),
                               ),
                             ],
@@ -373,7 +400,11 @@ class SalesSummaryCard extends StatelessWidget {
                 onPressed: onViewReport,
                 icon: const Icon(Icons.description_outlined, size: 18),
                 label: const Text('Detailed Sales Report'),
-                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44),
+                  foregroundColor: accent,
+                  side: BorderSide(color: accent.withValues(alpha: 0.4)),
+                ),
               ),
             ),
           ],
@@ -403,7 +434,7 @@ class QuickActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: mildCardFill(color),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -412,14 +443,14 @@ class QuickActionCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+            border: Border.all(color: mildCardBorder(color), width: 1.5),
           ),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
+                  color: color.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color, size: 22),
@@ -434,10 +465,10 @@ class QuickActionCard extends StatelessWidget {
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
-                        color: AppTheme.textPrimary,
+                        color: color,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -476,9 +507,9 @@ class BranchPerformanceCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: mildCardFill(color),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+        border: Border.all(color: mildCardBorder(color), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,7 +574,7 @@ class BranchPerformanceCard extends StatelessWidget {
           Row(
             children: [
               Expanded(child: _metric('TODAY', '₹${branch.todaySales.toStringAsFixed(2)}', AppTheme.textPrimary)),
-              Container(width: 1.5, height: 30, color: const Color(0xFFE2E8F0)),
+              Container(width: 1.5, height: 30, color: mildCardBorder(color, strength: 0.2)),
               const SizedBox(width: 14),
               Expanded(child: _metric('MONTHLY', '₹${branch.monthlySales.toStringAsFixed(2)}', color)),
             ],
