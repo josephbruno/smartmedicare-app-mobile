@@ -340,7 +340,14 @@ GoRouter createAppRouter({
           GoRoute(
             path: '/stock-alerts',
             name: 'StockAlerts',
-            builder: (c, s) => const StockAlertsScreen(),
+            builder: (c, s) {
+              final tab = s.uri.queryParameters['tab'];
+              final initialTab = tab == 'expiry' ? 1 : 0;
+              return StockAlertsScreen(
+                key: ValueKey('stock-alerts-$initialTab'),
+                initialTab: initialTab,
+              );
+            },
           ),
           GoRoute(
             path: '/stock-ageing',

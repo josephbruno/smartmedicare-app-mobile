@@ -42,73 +42,96 @@ class CashierShiftPanel extends StatelessWidget {
     final canDayClose = auth.hasPermission(AppPermissions.cashierDayClose);
     final open = session?.isOpen == true;
 
-    return Material(
-      color: open
-          ? AppTheme.accent.withValues(alpha: 0.08)
-          : (dayClosed
-              ? AppTheme.textSecondary.withValues(alpha: 0.08)
-              : AppTheme.warning.withValues(alpha: 0.1)),
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: compact ? 10 : 12,
-          vertical: compact ? 8 : 10,
+    final bg = open
+        ? AppTheme.accent.withValues(alpha: 0.08)
+        : (dayClosed
+            ? AppTheme.textSecondary.withValues(alpha: 0.08)
+            : const Color(0xFFFFF7ED));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: open
+              ? AppTheme.accent.withValues(alpha: 0.25)
+              : (dayClosed ? const Color(0xFFE2E8F0) : const Color(0xFFFED7AA)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  open
-                      ? Icons.account_balance_wallet_rounded
-                      : (dayClosed ? Icons.lock_clock_rounded : Icons.play_circle_outline_rounded),
-                  size: compact ? 18 : 20,
-                  color: open
-                      ? AppTheme.accent
-                      : (dayClosed ? AppTheme.textSecondary : AppTheme.warning),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        open
-                            ? 'Shift open · Amount in hand'
-                            : (dayClosed ? 'Day closed' : 'Shift not started'),
-                        style: TextStyle(
-                          fontSize: compact ? 11 : 12,
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.textSecondary,
-                          letterSpacing: 0.2,
+      ),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 12 : 14,
+        compact ? 10 : 12,
+        compact ? 10 : 12,
+        compact ? 10 : 12,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          open
+                              ? Icons.account_balance_wallet_rounded
+                              : (dayClosed
+                                  ? Icons.lock_clock_rounded
+                                  : Icons.play_circle_filled_rounded),
+                          size: compact ? 18 : 20,
+                          color: open
+                              ? AppTheme.accent
+                              : (dayClosed ? AppTheme.textSecondary : AppTheme.warning),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        open
-                            ? '₹${session!.amountInHand.toStringAsFixed(2)}'
-                            : (dayClosed
-                                ? 'No new shifts today'
-                                : (suggestedOpening?.hasSuggestion == true
-                                    ? 'Available ₹${suggestedOpening!.amount!.toStringAsFixed(2)}'
-                                    : 'Enter opening cash to begin')),
-                        style: TextStyle(
-                          fontSize: compact ? 15 : 16,
-                          fontWeight: FontWeight.w900,
-                          color: AppTheme.textPrimary,
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            open
+                                ? 'Shift open · Amount in hand'
+                                : (dayClosed ? 'Day closed' : 'Shift not started'),
+                            style: TextStyle(
+                              fontSize: compact ? 11 : 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      open
+                          ? '₹${session!.amountInHand.toStringAsFixed(2)}'
+                          : (dayClosed
+                              ? 'No new shifts today'
+                              : (suggestedOpening?.hasSuggestion == true
+                                  ? 'Available ₹${suggestedOpening!.amount!.toStringAsFixed(2)}'
+                                  : 'Enter opening cash to begin')),
+                      style: TextStyle(
+                        fontSize: compact ? 17 : 18,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textPrimary,
                       ),
-                      if (!open && !dayClosed && suggestedOpening?.label != null)
-                        Text(
+                    ),
+                    if (!open && !dayClosed && suggestedOpening?.label != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
                           suggestedOpening!.label!,
                           style: TextStyle(
                             fontSize: compact ? 11 : 12,
                             color: AppTheme.textSecondary,
                           ),
                         ),
-                      if (open)
-                        Text(
+                      ),
+                    if (open)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
                           'Opening ₹${session!.openingAmount.toStringAsFixed(0)}'
                           ' · Cash in ₹${session!.cashCollected.toStringAsFixed(0)}'
                           '${session!.cashOutTotal > 0 ? ' · Taken ₹${session!.cashOutTotal.toStringAsFixed(0)}' : ''}',
@@ -117,66 +140,90 @@ class CashierShiftPanel extends StatelessWidget {
                             color: AppTheme.textSecondary,
                           ),
                         ),
-                    ],
+                      ),
+                  ],
+                ),
+              ),
+              Column(
+                children: [
+                  if (loading)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    IconButton(
+                      tooltip: 'Refresh cash',
+                      onPressed: () => onRefresh(),
+                      icon: Icon(
+                        Icons.refresh_rounded,
+                        size: 18,
+                        color: AppTheme.primary.withValues(alpha: 0.85),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    ),
+                  if (!open && !dayClosed) ...[
+                    const SizedBox(height: 4),
+                    const _ShiftPanelIllustration(),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              if (!open && !dayClosed && canStart)
+                FilledButton.icon(
+                  onPressed: loading ? null : () => _startShift(context),
+                  icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                  label: const Text('Start Shift'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 14 : 16,
+                      vertical: compact ? 10 : 12,
+                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
-                if (loading)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  IconButton(
-                    tooltip: 'Refresh cash',
-                    onPressed: () => onRefresh(),
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    visualDensity: VisualDensity.compact,
+              if (open && canMove)
+                OutlinedButton.icon(
+                  onPressed: loading ? null : () => _takeFromDrawer(context),
+                  icon: const Icon(Icons.money_off_csred_rounded, size: 18),
+                  label: const Text('Take from drawer'),
+                  style: OutlinedButton.styleFrom(foregroundColor: AppTheme.danger),
+                ),
+              if (open && canEnd)
+                FilledButton.tonalIcon(
+                  onPressed: loading ? null : () => _endShift(context),
+                  icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                  label: const Text('End shift'),
+                ),
+              if (canDayClose)
+                OutlinedButton.icon(
+                  onPressed: loading ? null : () => _showDayClose(context),
+                  icon: const Icon(Icons.calendar_today_outlined, size: 16),
+                  label: Text(dayClosed ? 'Day Status' : 'Day Close'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.primary,
+                    side: const BorderSide(color: AppTheme.primary, width: 1.4),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 14 : 16,
+                      vertical: compact ? 10 : 12,
+                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                if (!open && !dayClosed && canStart)
-                  FilledButton.tonalIcon(
-                    onPressed: loading
-                        ? null
-                        : () => _startShift(context),
-                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                    label: const Text('Start shift'),
-                  ),
-                if (open && canMove)
-                  OutlinedButton.icon(
-                    onPressed: loading
-                        ? null
-                        : () => _takeFromDrawer(context),
-                    icon: const Icon(Icons.money_off_csred_rounded, size: 18),
-                    label: const Text('Take from drawer'),
-                    style: OutlinedButton.styleFrom(foregroundColor: AppTheme.danger),
-                  ),
-                if (open && canEnd)
-                  FilledButton.tonalIcon(
-                    onPressed: loading
-                        ? null
-                        : () => _endShift(context),
-                    icon: const Icon(Icons.stop_circle_outlined, size: 18),
-                    label: const Text('End shift'),
-                  ),
-                if (canDayClose)
-                  OutlinedButton.icon(
-                    onPressed: loading
-                        ? null
-                        : () => _showDayClose(context),
-                    icon: const Icon(Icons.event_available_rounded, size: 18),
-                    label: Text(dayClosed ? 'Day status' : 'Day close'),
-                  ),
-              ],
-            ),
-          ],
-        ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -675,5 +722,119 @@ class CashierShiftPanel extends StatelessWidget {
       },
     );
     notesCtrl.dispose();
+  }
+}
+
+/// Compact decorative graphic for the idle shift card (receipt + coins).
+class _ShiftPanelIllustration extends StatelessWidget {
+  const _ShiftPanelIllustration();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 72,
+      height: 56,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            right: 4,
+            top: 2,
+            child: Icon(Icons.auto_awesome, size: 12, color: AppTheme.warning.withValues(alpha: 0.7)),
+          ),
+          Positioned(
+            left: 8,
+            top: 0,
+            child: Container(
+              width: 40,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 6),
+                  Container(
+                    width: 22,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        children: List.generate(
+                          3,
+                          (i) => Container(
+                            margin: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+                            height: 2,
+                            color: const Color(0xFFCBD5E1),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            right: 2,
+            bottom: 2,
+            child: Row(
+              children: [
+                _coin(16),
+                Transform.translate(
+                  offset: const Offset(-6, -4),
+                  child: _coin(14),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _coin(double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFDE68A), Color(0xFFF59E0B)],
+        ),
+        border: Border.all(color: const Color(0xFFD97706), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.warning.withValues(alpha: 0.25),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+    );
   }
 }

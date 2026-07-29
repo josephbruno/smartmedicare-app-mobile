@@ -9,7 +9,10 @@ import '../../data/models/inventory.dart';
 
 /// Low stock + expiry alerts (7 / 15 / 30 days) — desktop & mobile.
 class StockAlertsScreen extends StatefulWidget {
-  const StockAlertsScreen({super.key});
+  const StockAlertsScreen({super.key, this.initialTab = 0});
+
+  /// 0 = Low Stock, 1 = Expiry
+  final int initialTab;
 
   @override
   State<StockAlertsScreen> createState() => _StockAlertsScreenState();
@@ -27,7 +30,8 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    final tab = widget.initialTab.clamp(0, 1);
+    _tabs = TabController(length: 2, vsync: this, initialIndex: tab);
     _load();
   }
 
@@ -55,7 +59,13 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
       if (mounted) {
         setState(() {
           _lowStock = low.items;
-          _expiry = expiry;
+          // Expired first, then soonest expiry.
+          _expiry = [...expiry]..sort((a, b) {
+              if (a.isExpired != b.isExpired) return a.isExpired ? -1 : 1;
+              final ad = a.daysToExpiry ?? 9999;
+              final bd = b.daysToExpiry ?? 9999;
+              return ad.compareTo(bd);
+            });
         });
       }
     } catch (e) {
@@ -175,7 +185,17 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
         ),
         Expanded(
           child: _expiry.isEmpty
-              ? const Center(child: Text('No items near expiry'))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      'No expired or near-expiry stock in the next $_expiryDays days.\n'
+                      'Add an expiry date on purchases to track batch expiry.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppTheme.textSecondary),
+                    ),
+                  ),
+                )
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.separated(
@@ -190,6 +210,11 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
                           : ((days ?? 99) <= 7
                               ? AppTheme.danger
                               : AppTheme.warning);
+                      final statusLabel = item.isExpired
+                          ? 'EXPIRED'
+                          : (days == 0
+                              ? 'Expires today'
+                              : (days != null ? '$days days left' : ''));
                       return ListTile(
                         leading: CircleAvatar(
                           backgroundColor: color.withValues(alpha: 0.15),
@@ -197,15 +222,19 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
                         ),
                         title: Text(item.name),
                         subtitle: Text([
-                          if (item.batchNumber != null)
+                          if (item.batchNumber != null &&
+                              item.batchNumber!.isNotEmpty)
                             'Batch ${item.batchNumber}',
                           if (item.expiryDate != null)
                             'Exp ${item.expiryDate}',
-                          if (days != null) '$days days left',
-                          if (item.isExpired) 'EXPIRED',
+                          if (statusLabel.isNotEmpty) statusLabel,
                         ].where((e) => e.isNotEmpty).join(' · ')),
                         trailing: Text(
                           'Qty ${item.currentStock.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: color,
+                          ),
                         ),
                       );
                     },

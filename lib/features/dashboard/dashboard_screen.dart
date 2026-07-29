@@ -116,6 +116,21 @@ Widget _wrapGrid(double maxWidth, int columns, double spacing, List<Widget> chil
   );
 }
 
+/// Always places the business-overview KPI cards in a single equal-width row.
+Widget _statCardsRow(List<Widget> cards, {required double spacing}) {
+  // Align tops without IntrinsicHeight — that combo with Flex children can
+  // leave parentData dirty through flushSemantics in debug builds.
+  return Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      for (var i = 0; i < cards.length; i++) ...[
+        if (i > 0) SizedBox(width: spacing),
+        Expanded(child: cards[i]),
+      ],
+    ],
+  );
+}
+
 class _DashboardBody extends StatelessWidget {
   const _DashboardBody({required this.d});
 
@@ -144,18 +159,18 @@ class _ManagerDashboardContent extends StatelessWidget {
         builder: (context, constraints) {
           final w = constraints.maxWidth;
           const spacing = 16.0;
-          final statCols = w >= 700 ? 3 : (w >= 420 ? 2 : 1);
           final qaCols = w >= 900 ? 4 : (w >= 520 ? 2 : 1);
           final wide = w >= 980;
 
           final quickActions = _quickActions(context, auth);
+          final stats = _statCards(context);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _header(),
               const SizedBox(height: 22),
-              _wrapGrid(w, statCols, spacing, _statCards(context)),
+              _statCardsRow(stats, spacing: spacing),
               const SizedBox(height: 30),
               if (d.branches != null && d.branches!.isNotEmpty)
                 _branchAndSummary(context, wide: wide, width: w, spacing: spacing)
@@ -205,7 +220,7 @@ class _ManagerDashboardContent extends StatelessWidget {
         value: '₹${d.todaySalesTotal.toStringAsFixed(2)}',
         subtitle: '${d.todaySalesCount} transactions today',
         icon: Icons.point_of_sale_rounded,
-        color: AppTheme.primary,
+        color: AppTheme.primary, // blue
         trend: syntheticTrend(d.todaySalesTotal),
       ),
       DashboardStatCard(
@@ -213,7 +228,7 @@ class _ManagerDashboardContent extends StatelessWidget {
         value: '₹${d.monthlySalesTotal.toStringAsFixed(2)}',
         subtitle: 'Accumulated this month',
         icon: Icons.trending_up_rounded,
-        color: const Color(0xFF8B5CF6),
+        color: const Color(0xFF8B5CF6), // violet
         trend: syntheticTrend(d.monthlySalesTotal),
       ),
       DashboardStatCard(
@@ -221,7 +236,7 @@ class _ManagerDashboardContent extends StatelessWidget {
         value: '${d.lowStockCount}',
         subtitle: d.lowStockCount > 0 ? 'Requires reordering' : 'All stocks healthy',
         icon: Icons.warning_amber_rounded,
-        color: d.lowStockCount > 0 ? AppTheme.warning : AppTheme.accent,
+        color: AppTheme.warning, // amber
         trend: syntheticTrend(d.lowStockCount),
         onTap: () => context.go('/stock-alerts'),
       ),
@@ -230,16 +245,8 @@ class _ManagerDashboardContent extends StatelessWidget {
         value: '₹${d.outstandingDues.toStringAsFixed(2)}',
         subtitle: 'Unpaid invoice balance',
         icon: Icons.account_balance_wallet_outlined,
-        color: d.outstandingDues > 0 ? AppTheme.danger : AppTheme.accent,
+        color: const Color(0xFF0EA5E9), // sky / teal
         trend: syntheticTrend(d.outstandingDues),
-      ),
-      DashboardStatCard(
-        title: 'UPCOMING VACCINES',
-        value: '${d.upcomingVaccines}',
-        subtitle: 'Due within 7 days',
-        icon: Icons.vaccines_outlined,
-        color: AppTheme.accent,
-        trend: syntheticTrend(d.upcomingVaccines),
       ),
     ];
   }
@@ -267,26 +274,27 @@ class _ManagerDashboardContent extends StatelessWidget {
     );
 
     if (wide) {
+      final branchCards = _branchCards(context, fillHeight: true);
+      // Fixed height + stretch avoids IntrinsicHeight + Flex parentData churn that
+      // trips `!semantics.parentDataDirty` during flushSemantics in debug.
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           header,
           const SizedBox(height: 18),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 2,
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                    final cols = c.maxWidth >= 620 ? 2 : 1;
-                    return _wrapGrid(c.maxWidth, cols, spacing, _branchCards(context));
-                  },
-                ),
-              ),
-              SizedBox(width: spacing),
-              Expanded(flex: 1, child: _salesSummary(context)),
-            ],
+          SizedBox(
+            height: 360,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < branchCards.length; i++) ...[
+                  if (i > 0) SizedBox(width: spacing),
+                  Expanded(child: branchCards[i]),
+                ],
+                SizedBox(width: spacing),
+                Expanded(child: _salesSummary(context, fillHeight: true)),
+              ],
+            ),
           ),
         ],
       );
@@ -329,7 +337,7 @@ class _ManagerDashboardContent extends StatelessWidget {
     );
   }
 
-  List<Widget> _branchCards(BuildContext context) {
+  List<Widget> _branchCards(BuildContext context, {bool fillHeight = false}) {
     final auth = context.read<AuthSession>();
     final canViewReports =
         auth.hasPermission(AppPermissions.reportsView) && auth.isSuperAdmin;
@@ -340,19 +348,18 @@ class _ManagerDashboardContent extends StatelessWidget {
           branch: branches[i],
           color: kChartPalette[i % kChartPalette.length],
           onView: canViewReports ? () => context.go('/reports/sales') : null,
+          fillHeight: fillHeight,
         ),
     ];
   }
 
-  Widget _salesSummary(BuildContext context) {
-    final auth = context.read<AuthSession>();
-    final canViewReports = auth.hasPermission(AppPermissions.reportsView) && auth.isSuperAdmin;
+  Widget _salesSummary(BuildContext context, {bool fillHeight = false}) {
     final data = _donutData();
     final total = data.fold<double>(0, (s, e) => s + e.value);
     return SalesSummaryCard(
       data: data,
       centerValue: '₹${total.toStringAsFixed(0)}',
-      onViewReport: canViewReports ? () => context.go('/reports/sales') : null,
+      fillHeight: fillHeight,
     );
   }
 

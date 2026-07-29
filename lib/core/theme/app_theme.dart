@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Brand colors
@@ -12,12 +13,32 @@ class AppTheme {
   static const Color textPrimary = Color(0xFF0F172A); // Slate 900
   static const Color textSecondary = Color(0xFF64748B); // Slate 500
 
+  /// Inter — primary typeface for POS, dashboards, and admin UI.
+  static String get fontFamily => GoogleFonts.inter().fontFamily!;
+
+  static TextStyle _inter({
+    double? fontSize,
+    FontWeight? fontWeight,
+    Color? color,
+    double? height,
+    double? letterSpacing,
+  }) {
+    return GoogleFonts.inter(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
+  }
+
   /// Builds the light theme. When [desktop] is true (web & native desktop),
   /// default icon sizes and dialog widths are enlarged. Font sizes are left
   /// unchanged here; text scaling is applied globally via `MediaQuery.textScaler`.
   static ThemeData light({bool desktop = false}) {
     final base = ThemeData(
       useMaterial3: true,
+      fontFamily: fontFamily,
       colorScheme: ColorScheme.fromSeed(
         seedColor: primary,
         brightness: Brightness.light,
@@ -59,11 +80,11 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         scrolledUnderElevation: 0,
         iconTheme: IconThemeData(color: textPrimary, size: appBarIconSize),
-        titleTextStyle: const TextStyle(
-          fontFamily: 'Roboto',
+        // Headings: SemiBold (600–700)
+        titleTextStyle: _inter(
           color: textPrimary,
           fontSize: 20,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w700,
         ),
       ),
       cardTheme: CardThemeData(
@@ -82,9 +103,10 @@ class AppTheme {
         floatingLabelBehavior: FloatingLabelBehavior.always,
         alignLabelWithHint: true,
         contentPadding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-        hintStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 14),
-        labelStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
-        floatingLabelStyle: const TextStyle(fontFamily: 'Roboto', color: textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
+        // Body: Regular (400) / Medium (500)
+        hintStyle: _inter(color: textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
+        labelStyle: _inter(color: textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+        floatingLabelStyle: _inter(color: textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1),
@@ -129,8 +151,7 @@ class AppTheme {
           foregroundColor: primary,
           minimumSize: const Size(48, 40),
           padding: const EdgeInsets.all(8),
-          textStyle: const TextStyle(
-            fontFamily: 'Roboto',
+          textStyle: _inter(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -140,51 +161,69 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
         elevation: 8,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        contentTextStyle: const TextStyle(
-          fontFamily: 'Roboto',
+        contentTextStyle: _inter(
           fontWeight: FontWeight.w600,
           fontSize: 14,
         ),
       ),
-      textTheme: base.textTheme.copyWith(
-        titleLarge: const TextStyle(
-          fontFamily: 'Roboto',
+      // Inter text scale:
+      // Headings → SemiBold/Bold (600–700)
+      // Body → Regular/Medium (400–500)
+      textTheme: GoogleFonts.interTextTheme(base.textTheme).copyWith(
+        displayLarge: _inter(color: textPrimary, fontSize: 57, fontWeight: FontWeight.w700),
+        displayMedium: _inter(color: textPrimary, fontSize: 45, fontWeight: FontWeight.w700),
+        displaySmall: _inter(color: textPrimary, fontSize: 36, fontWeight: FontWeight.w700),
+        headlineLarge: _inter(color: textPrimary, fontSize: 32, fontWeight: FontWeight.w700),
+        headlineMedium: _inter(color: textPrimary, fontSize: 28, fontWeight: FontWeight.w600),
+        headlineSmall: _inter(color: textPrimary, fontSize: 24, fontWeight: FontWeight.w600),
+        titleLarge: _inter(
           color: textPrimary,
           fontSize: 22,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w700,
           letterSpacing: -0.5,
         ),
-        titleMedium: const TextStyle(
-          fontFamily: 'Roboto',
+        titleMedium: _inter(
           color: textPrimary,
           fontSize: 18,
           fontWeight: FontWeight.w600,
           letterSpacing: -0.2,
         ),
-        titleSmall: const TextStyle(
-          fontFamily: 'Roboto',
+        titleSmall: _inter(
           color: textPrimary,
           fontSize: 15,
           fontWeight: FontWeight.w600,
         ),
-        bodyLarge: const TextStyle(
-          fontFamily: 'Roboto',
+        bodyLarge: _inter(
           color: textPrimary,
           fontSize: 15,
-          fontWeight: FontWeight.normal,
+          fontWeight: FontWeight.w400,
         ),
-        bodyMedium: const TextStyle(
-          fontFamily: 'Roboto',
+        bodyMedium: _inter(
           color: textSecondary,
           fontSize: 13.5,
+          fontWeight: FontWeight.w400,
           height: 1.4,
         ),
-        labelMedium: const TextStyle(
-          fontFamily: 'Roboto',
+        bodySmall: _inter(
           color: textSecondary,
           fontSize: 12,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w400,
+        ),
+        labelLarge: _inter(
+          color: textPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        labelMedium: _inter(
+          color: textSecondary,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
           letterSpacing: 0.5,
+        ),
+        labelSmall: _inter(
+          color: textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -208,9 +247,8 @@ class AppTheme {
       shape: WidgetStatePropertyAll(
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      textStyle: const WidgetStatePropertyAll(
-        TextStyle(
-          fontFamily: 'Roboto',
+      textStyle: WidgetStatePropertyAll(
+        _inter(
           fontSize: 16,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.2,

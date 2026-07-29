@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
@@ -507,25 +508,66 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
+  Widget _buildCartWorkspaceHeader(PosCartNotifier cart) {
+    return Row(
+      children: [
+        Container(
+          width: _desktop ? 40 : 36,
+          height: _desktop ? 40 : 36,
+          decoration: BoxDecoration(
+            color: AppTheme.primary,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(Icons.shopping_cart_rounded, color: Colors.white, size: _ic(20)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Cart Workspace',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: _fs(18),
+              color: AppTheme.textPrimary,
+              height: 1.2,
+            ),
+          ),
+        ),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: _desktop ? 10 : 8, vertical: _desktop ? 4 : 3),
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            '${cart.items.length} items',
+            style: TextStyle(
+              color: AppTheme.primary,
+              fontSize: _fs(11),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCartCustomerSection(PosCartNotifier cart) {
     final customer = cart.customer;
     return Container(
       padding: EdgeInsets.symmetric(horizontal: _desktop ? 14 : 12, vertical: _desktop ? 12 : 10),
       decoration: BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: _desktop ? 20 : 18,
-            backgroundColor: customer == null
-                ? const Color(0xFFE2E8F0)
-                : AppTheme.primary.withOpacity(0.12),
+            backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
             child: Icon(
               customer == null ? Icons.person_outline_rounded : Icons.person_pin_rounded,
-              color: customer == null ? AppTheme.textSecondary : AppTheme.primary,
+              color: AppTheme.primary,
               size: _ic(20),
             ),
           ),
@@ -603,23 +645,32 @@ class _PosScreenState extends State<PosScreen> {
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               onPressed: () => cart.setCustomer(null),
             ),
-          TextButton.icon(
+          TextButton(
             onPressed: () async {
               final auth = context.read<AuthSession>();
-              final selected = await showSearch<Customer?>(
+              final selected = await showSelectCustomerDialog(
                 context: context,
-                delegate: _CustomerSearchDelegate(
-                  context.read<AppServices>(),
-                  canCreate: auth.hasPermission(AppPermissions.customersCreate),
-                ),
+                services: context.read<AppServices>(),
+                canCreate: auth.hasPermission(AppPermissions.customersCreate),
               );
-              if (selected != null) cart.setCustomer(selected);
+              if (selected != null && mounted) cart.setCustomer(selected);
             },
-            icon: Icon(Icons.search_rounded, size: _ic(16)),
-            label: Text(customer == null ? 'Select' : 'Change', style: TextStyle(fontSize: _fs(13))),
             style: TextButton.styleFrom(
-              padding: EdgeInsets.symmetric(horizontal: _desktop ? 10 : 8, vertical: 4),
+              foregroundColor: AppTheme.primary,
+              padding: EdgeInsets.symmetric(horizontal: _desktop ? 8 : 4, vertical: 4),
               visualDensity: VisualDensity.compact,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.search_rounded, size: _ic(16)),
+                const SizedBox(width: 4),
+                Text(
+                  customer == null ? 'Select' : 'Change',
+                  style: TextStyle(fontSize: _fs(13), fontWeight: FontWeight.w700),
+                ),
+                Icon(Icons.chevron_right_rounded, size: _ic(18)),
+              ],
             ),
           ),
         ],
@@ -665,38 +716,16 @@ class _PosScreenState extends State<PosScreen> {
 
     final cartPanel = Container(
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.background,
         border: Border(left: BorderSide(color: Color(0xFFE2E8F0))),
       ),
       child: Padding(
-        padding: EdgeInsets.fromLTRB(_desktop ? 12 : 10, _desktop ? 10 : 8, _desktop ? 12 : 10, _desktop ? 10 : 8),
+        padding: EdgeInsets.fromLTRB(_desktop ? 14 : 12, _desktop ? 12 : 10, _desktop ? 14 : 12, _desktop ? 12 : 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Cart Workspace',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: _fs(16),
-                      ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: _desktop ? 10 : 8, vertical: _desktop ? 4 : 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${cart.items.length} items',
-                    style: TextStyle(color: AppTheme.primary, fontSize: _fs(12), fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
+            _buildCartWorkspaceHeader(cart),
+            const SizedBox(height: 10),
             CashierShiftPanel(
               session: _cashSession,
               dayStatus: _dayStatus,
@@ -712,25 +741,57 @@ class _PosScreenState extends State<PosScreen> {
             const SizedBox(height: 8),
             Expanded(
               child: cart.items.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.shopping_cart_outlined, size: _ic(40), color: AppTheme.textSecondary.withOpacity(0.4)),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Cart is empty',
-                            style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.bold, fontSize: _fs(14)),
+                  ? Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: _desktop ? 88 : 72,
+                                height: _desktop ? 88 : 72,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF1F5F9),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.shopping_cart_outlined,
+                                  size: _ic(36),
+                                  color: AppTheme.primary.withValues(alpha: 0.35),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                'Your cart is empty',
+                                style: TextStyle(
+                                  color: AppTheme.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: _fs(15),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Select products on the left to add to cart',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: _fs(12),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Select products on the left',
-                            style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(12)),
-                          ),
-                        ],
+                        ),
                       ),
                     )
                   : ListView.builder(
+                      padding: EdgeInsets.zero,
+                      clipBehavior: Clip.hardEdge,
                       itemCount: cart.items.length,
                       itemBuilder: (c, i) {
                         final it = cart.items[i];
@@ -738,219 +799,113 @@ class _PosScreenState extends State<PosScreen> {
                         final canEditPrice = billingVisit && it.isServiceCharge;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 6),
-                          child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: _desktop ? 10 : 8, vertical: _desktop ? 8 : 6),
-                            decoration: BoxDecoration(
-                              color: AppTheme.background,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        it.productName,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: _fs(13),
-                                          color: AppTheme.textPrimary,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      InkWell(
-                                        onTap: canEditPrice
-                                            ? () => _editCartLinePrice(cart, i)
-                                            : null,
-                                        borderRadius: BorderRadius.circular(6),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(vertical: 2),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                '₹${it.unitPrice.toStringAsFixed(2)} × ${it.quantity}',
-                                                style: TextStyle(
-                                                  fontSize: _fs(12),
-                                                  color: canEditPrice
-                                                      ? AppTheme.primary
-                                                      : AppTheme.textSecondary,
-                                                  decoration: canEditPrice
-                                                      ? TextDecoration.underline
-                                                      : null,
-                                                ),
-                                              ),
-                                              if (canEditPrice) ...[
-                                                const SizedBox(width: 4),
-                                                Icon(
-                                                  Icons.edit_outlined,
-                                                  size: _ic(14),
-                                                  color: AppTheme.primary,
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                // Quantity counter (service charge stays qty 1)
-                                if (!it.isServiceCharge)
-                                Row(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () {
-                                        if (it.quantity > 1) {
-                                          cart.updateQuantity(i, it.quantity - 1);
-                                        } else {
-                                          cart.removeItem(i);
-                                        }
-                                      },
-                                      child: Container(
-                                        width: _desktop ? 42 : 32,
-                                        height: _desktop ? 42 : 32,
-                                        alignment: Alignment.center,
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(_desktop ? 10 : 6),
-                                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                                        ),
-                                        child: Icon(
-                                          Icons.remove,
-                                          size: _ic(_desktop ? 22 : 16),
-                                          color: AppTheme.textPrimary,
-                                        ),
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: _desktop ? 12 : 8),
-                                      child: Text(
-                                        '${it.quantity}',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: _fs(_desktop ? 16 : 13),
-                                        ),
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      onTap: () {
-                                        cart.updateQuantity(i, it.quantity + 1);
-                                      },
-                                      child: Container(
-                                        width: _desktop ? 42 : 32,
-                                        height: _desktop ? 42 : 32,
-                                        alignment: Alignment.center,
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(_desktop ? 10 : 6),
-                                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                                        ),
-                                        child: Icon(
-                                          Icons.add,
-                                          size: _ic(_desktop ? 22 : 16),
-                                          color: AppTheme.textPrimary,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                                else
-                                  Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: _desktop ? 12 : 8),
-                                    child: Text(
-                                      'Qty 1',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: _fs(_desktop ? 14 : 12),
-                                        color: AppTheme.textSecondary,
-                                      ),
-                                    ),
-                                  ),
-                                SizedBox(width: _desktop ? 14 : 12),
-                                // Total
-                                Text(
-                                  '₹${it.totalAmount.toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: _fs(_desktop ? 16 : 13),
-                                    color: AppTheme.textPrimary,
-                                  ),
-                                ),
-                                SizedBox(width: _desktop ? 4 : 6),
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.delete_outline_rounded,
-                                    color: AppTheme.danger,
-                                    size: _ic(_desktop ? 26 : 20),
-                                  ),
-                                  iconSize: _ic(_desktop ? 26 : 20),
-                                  padding: EdgeInsets.all(_desktop ? 8 : 4),
-                                  constraints: BoxConstraints(
-                                    minWidth: _desktop ? 48 : 36,
-                                    minHeight: _desktop ? 48 : 36,
-                                  ),
-                                  onPressed: () => cart.removeItem(i),
-                                ),
-                              ],
-                            ),
+                          child: _CartLineTile(
+                            name: it.productName,
+                            unitPrice: it.unitPrice,
+                            quantity: it.quantity,
+                            lineTotal: it.totalAmount,
+                            canEditPrice: canEditPrice,
+                            showQtyControls: !it.isServiceCharge,
+                            desktop: _desktop,
+                            onEditPrice: () => _editCartLinePrice(cart, i),
+                            onDec: () {
+                              if (it.quantity > 1) {
+                                cart.updateQuantity(i, it.quantity - 1);
+                              } else {
+                                cart.removeItem(i);
+                              }
+                            },
+                            onInc: () => cart.updateQuantity(i, it.quantity + 1),
+                            onRemove: () => cart.removeItem(i),
                           ),
                         );
                       },
                     ),
             ),
-            const Divider(color: Color(0xFFE2E8F0), height: 16),
-            // Billing totals summary
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Subtotal', style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(13))),
-                  Text(
-                    '₹${cart.subtotal.toStringAsFixed(2)}',
-                    style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: _fs(13)),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('GST (CGST + SGST)', style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(13))),
-                  Text(
-                    '₹${cart.totalGst.toStringAsFixed(2)}',
-                    style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, fontSize: _fs(13)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: _desktop ? 12 : 10,
-                vertical: _desktop ? 10 : 8,
-              ),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(10),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
                 children: [
-                  Text('GRAND TOTAL', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w800, fontSize: _fs(14))),
-                  Text(
-                    '₹${cart.grandTotal.toStringAsFixed(2)}',
-                    style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w900, fontSize: _fs(18)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Subtotal', style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(12))),
+                      Text(
+                        '₹${cart.subtotal.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: _fs(12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'GST (CGST + SGST)',
+                        style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(12)),
+                      ),
+                      Text(
+                        '₹${cart.totalGst.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: _fs(12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: CustomPaint(
+                      painter: _DashedLinePainter(color: const Color(0xFFCBD5E1)),
+                      child: const SizedBox(width: double.infinity, height: 1),
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: _desktop ? 10 : 8,
+                      vertical: _desktop ? 10 : 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'GRAND TOTAL',
+                          style: TextStyle(
+                            color: AppTheme.primary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: _fs(12),
+                          ),
+                        ),
+                        Text(
+                          '₹${cart.grandTotal.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            color: AppTheme.primary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: _fs(16),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             // Actions Row
             Row(
               children: [
@@ -958,14 +913,16 @@ class _PosScreenState extends State<PosScreen> {
                   child: OutlinedButton.icon(
                     onPressed: cart.items.isEmpty ? null : () => cart.holdBill(),
                     icon: Icon(Icons.pause_circle_outline_rounded, size: _ic(18)),
-                    label: Text('Hold Bill', style: TextStyle(fontSize: _fs(14))),
+                    label: Text('Hold Bill', style: TextStyle(fontSize: _fs(13), fontWeight: FontWeight.w700)),
                     style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: _desktop ? 10 : 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      foregroundColor: AppTheme.primary,
+                      side: const BorderSide(color: AppTheme.primary, width: 1.4),
+                      padding: EdgeInsets.symmetric(vertical: _desktop ? 12 : 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: cart.items.isEmpty
@@ -987,12 +944,14 @@ class _PosScreenState extends State<PosScreen> {
                             }
                             _checkout();
                           },
-                    icon: Icon(Icons.shopping_cart_checkout_rounded, size: _ic(18)),
-                    label: Text('Checkout', style: TextStyle(fontSize: _fs(14))),
+                    icon: Icon(Icons.add_shopping_cart_rounded, size: _ic(18)),
+                    label: Text('Checkout', style: TextStyle(fontSize: _fs(13), fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primary,
-                      padding: EdgeInsets.symmetric(vertical: _desktop ? 10 : 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: EdgeInsets.symmetric(vertical: _desktop ? 12 : 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -1527,115 +1486,258 @@ class _PosScreenState extends State<PosScreen> {
   }
 }
 
-class _CustomerSearchDelegate extends SearchDelegate<Customer?> {
-  _CustomerSearchDelegate(this._services, {this.canCreate = true});
+Future<Customer?> showSelectCustomerDialog({
+  required BuildContext context,
+  required AppServices services,
+  bool canCreate = true,
+}) {
+  final desktop = AppConfig.isDesktopPlatform;
+  return showDialog<Customer>(
+    context: context,
+    barrierDismissible: true,
+    builder: (ctx) => _SelectCustomerDialog(
+      services: services,
+      canCreate: canCreate,
+      desktop: desktop,
+    ),
+  );
+}
 
-  final AppServices _services;
+class _SelectCustomerDialog extends StatefulWidget {
+  const _SelectCustomerDialog({
+    required this.services,
+    required this.canCreate,
+    required this.desktop,
+  });
+
+  final AppServices services;
   final bool canCreate;
-
-  bool get _desktop => AppConfig.isDesktopPlatform;
-
-  double _ic(double size) =>
-      _desktop ? size * AppConfig.desktopIconScale : size;
-
-  double _fs(double size) => _desktop ? size + 3 : size;
+  final bool desktop;
 
   @override
-  String get searchFieldLabel => 'Search by name or phone…';
+  State<_SelectCustomerDialog> createState() => _SelectCustomerDialogState();
+}
+
+class _SelectCustomerDialogState extends State<_SelectCustomerDialog> {
+  final _search = TextEditingController();
+  final _focus = FocusNode();
+  Timer? _debounce;
+  String _query = '';
+  Future<List<Customer>>? _searchFuture;
+
+  bool get _desktop => widget.desktop;
+
+  // Keep dialog typography compact even on desktop POS shells.
+  double _ic(double size) => _desktop ? size * 1.15 : size;
+
+  double _fs(double size) => _desktop ? size + 1 : size;
 
   @override
-  ThemeData appBarTheme(BuildContext context) {
-    final base = Theme.of(context);
-    return base.copyWith(
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.textPrimary,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        iconTheme: IconThemeData(color: AppTheme.textPrimary),
-      ),
-      inputDecorationTheme: const InputDecorationTheme(
-        border: InputBorder.none,
-        hintStyle: TextStyle(
-          color: AppTheme.textSecondary,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      textTheme: base.textTheme.copyWith(
-        titleLarge: TextStyle(
-          color: AppTheme.textPrimary,
-          fontSize: _fs(18),
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focus.requestFocus();
+    });
   }
 
   @override
-  List<Widget>? buildActions(BuildContext context) => [
-        if (query.isNotEmpty)
-          IconButton(
-            tooltip: 'Clear',
-            onPressed: () => query = '',
-            icon: Icon(Icons.clear_rounded, size: _ic(22)),
-          ),
-        if (canCreate)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextButton.icon(
-              onPressed: () => _openQuickCreate(context),
-              icon: Icon(Icons.person_add_alt_1_rounded, size: _ic(18)),
-              label: Text(
-                'New',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: _fs(13)),
-              ),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-              ),
-            ),
-          ),
-      ];
+  void dispose() {
+    _debounce?.cancel();
+    _search.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
 
-  @override
-  Widget? buildLeading(BuildContext context) => IconButton(
-        icon: Icon(Icons.arrow_back_rounded, size: _ic(24)),
-        onPressed: () => close(context, null),
-      );
+  void _onQueryChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      final q = value.trim();
+      setState(() {
+        _query = q;
+        _searchFuture = q.length < 2 ? null : widget.services.customers.search(q);
+      });
+    });
+  }
 
-  @override
-  Widget buildResults(BuildContext context) => _build(context);
-
-  @override
-  Widget buildSuggestions(BuildContext context) => _build(context);
-
-  Future<void> _openQuickCreate(BuildContext context) async {
+  Future<void> _openQuickCreate() async {
     final created = await showDialog<Customer>(
       context: context,
       builder: (ctx) => _QuickCreateCustomerDialog(
-        services: _services,
-        initialQuery: query.trim(),
+        services: widget.services,
+        initialQuery: _query,
         desktop: _desktop,
       ),
     );
-    if (created != null && context.mounted) {
-      close(context, created);
+    if (created != null && mounted) {
+      Navigator.of(context).pop(created);
     }
   }
 
-  Widget _build(BuildContext context) {
-    final q = query.trim();
-    if (q.length < 2) {
+  void _select(Customer customer) {
+    Navigator.of(context).pop(customer);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final dialogWidth = _desktop
+        ? (size.width * 0.4).clamp(420.0, 520.0)
+        : (size.width - 32).clamp(280.0, 420.0);
+    final maxHeight = (size.height * 0.78).clamp(360.0, 620.0);
+    final bodyMaxHeight = (maxHeight - 150).clamp(180.0, 480.0);
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      clipBehavior: Clip.antiAlias,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: _desktop ? 40 : 16,
+        vertical: _desktop ? 28 : 20,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: SizedBox(
+        width: dialogWidth,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  _desktop ? 20 : 16,
+                  _desktop ? 16 : 14,
+                  _desktop ? 12 : 8,
+                  8,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.person_search_rounded,
+                        color: AppTheme.primary,
+                        size: _ic(22),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Select Customer',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: _fs(17),
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            'Search by name or phone',
+                            style: TextStyle(
+                              fontSize: _fs(12),
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (widget.canCreate)
+                      TextButton.icon(
+                        onPressed: _openQuickCreate,
+                        icon: Icon(Icons.person_add_alt_1_rounded, size: _ic(18)),
+                        label: Text(
+                          'New',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: _fs(13)),
+                        ),
+                        style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
+                      ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(Icons.close_rounded, size: _ic(22)),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(_desktop ? 20 : 16, 0, _desktop ? 20 : 16, 12),
+                child: ListenableBuilder(
+                  listenable: _search,
+                  builder: (context, _) {
+                    return TextField(
+                      controller: _search,
+                      focusNode: _focus,
+                      autofocus: true,
+                      onChanged: _onQueryChanged,
+                      style: TextStyle(fontSize: _fs(14)),
+                      decoration: InputDecoration(
+                        hintText: 'Search by name or phone…',
+                        prefixIcon: Icon(Icons.search_rounded, size: _ic(20)),
+                        suffixIcon: _search.text.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear',
+                                onPressed: () {
+                                  _search.clear();
+                                  _onQueryChanged('');
+                                },
+                                icon: Icon(Icons.clear_rounded, size: _ic(18)),
+                              ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const Divider(height: 1, color: Color(0xFFE2E8F0)),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: bodyMaxHeight),
+                child: _buildBody(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_query.length < 2) {
       return _IdleSearchState(
-        canCreate: canCreate,
-        fontSize: _fs(14),
-        iconSize: _ic(48),
-        onCreate: () => _openQuickCreate(context),
+        canCreate: widget.canCreate,
+        fontSize: _fs(13),
+        iconSize: _ic(40),
+        onCreate: _openQuickCreate,
       );
     }
 
     return FutureBuilder<List<Customer>>(
-      future: _services.customers.search(q),
+      future: _searchFuture,
       builder: (context, snap) {
         if (snap.hasError) {
           return _MessageState(
@@ -1643,49 +1745,53 @@ class _CustomerSearchDelegate extends SearchDelegate<Customer?> {
             title: 'Search failed',
             subtitle: '${snap.error}',
             iconColor: AppTheme.danger,
-            fontSize: _fs(14),
-            iconSize: _ic(40),
+            fontSize: _fs(13),
+            iconSize: _ic(36),
           );
         }
         if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return const Padding(
+            padding: EdgeInsets.all(32),
+            child: Center(child: CircularProgressIndicator()),
+          );
         }
 
         final list = snap.data!;
         if (list.isEmpty) {
           return _EmptyResultsState(
-            query: q,
-            canCreate: canCreate,
-            fontSize: _fs(14),
-            iconSize: _ic(48),
-            onCreate: () => _openQuickCreate(context),
+            query: _query,
+            canCreate: widget.canCreate,
+            fontSize: _fs(13),
+            iconSize: _ic(40),
+            onCreate: _openQuickCreate,
           );
         }
 
         return ListView.separated(
+          shrinkWrap: true,
           padding: EdgeInsets.fromLTRB(
             _desktop ? 20 : 14,
             12,
             _desktop ? 20 : 14,
-            24,
+            20,
           ),
-          itemCount: list.length + (canCreate ? 1 : 0),
+          itemCount: list.length + (widget.canCreate ? 1 : 0),
           separatorBuilder: (_, __) => const SizedBox(height: 8),
           itemBuilder: (c, i) {
-            if (canCreate && i == list.length) {
+            if (widget.canCreate && i == list.length) {
               return _CreateCustomerBanner(
-                query: q,
-                onTap: () => _openQuickCreate(context),
+                query: _query,
+                onTap: _openQuickCreate,
                 fontSize: _fs(13),
               );
             }
             final cu = list[i];
             return _CustomerResultTile(
               customer: cu,
-              iconSize: _ic(22),
-              fontSize: _fs(15),
-              subtitleSize: _fs(13),
-              onTap: () => close(context, cu),
+              iconSize: _ic(20),
+              fontSize: _fs(14),
+              subtitleSize: _fs(12),
+              onTap: () => _select(cu),
             );
           },
         );
@@ -1710,19 +1816,19 @@ class _IdleSearchState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: iconSize + 28,
-                height: iconSize + 28,
+                width: iconSize + 20,
+                height: iconSize + 20,
                 decoration: BoxDecoration(
                   color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(18),
                 ),
                 child: Icon(
                   Icons.person_search_rounded,
@@ -1730,26 +1836,26 @@ class _IdleSearchState extends StatelessWidget {
                   color: AppTheme.primary,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               Text(
                 'Find a customer',
                 style: TextStyle(
-                  fontSize: fontSize + 4,
+                  fontSize: fontSize + 3,
                   fontWeight: FontWeight.w800,
                   color: AppTheme.textPrimary,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 'Type at least 2 characters of a name or phone number.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: fontSize,
                   color: AppTheme.textSecondary,
-                  height: 1.4,
+                  height: 1.35,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -1760,7 +1866,7 @@ class _IdleSearchState extends StatelessWidget {
                 ],
               ),
               if (canCreate) ...[
-                const SizedBox(height: 24),
+                const SizedBox(height: 18),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
@@ -1769,7 +1875,7 @@ class _IdleSearchState extends StatelessWidget {
                     label: const Text('Create customer'),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   'New walk-in? Add them here without leaving POS.',
                   textAlign: TextAlign.center,
@@ -1805,10 +1911,10 @@ class _EmptyResultsState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -2233,6 +2339,219 @@ class _QuickCreateCustomerDialogState extends State<_QuickCreateCustomerDialog> 
   }
 }
 
+class _CartLineTile extends StatelessWidget {
+  const _CartLineTile({
+    required this.name,
+    required this.unitPrice,
+    required this.quantity,
+    required this.lineTotal,
+    required this.canEditPrice,
+    required this.showQtyControls,
+    required this.desktop,
+    required this.onEditPrice,
+    required this.onDec,
+    required this.onInc,
+    required this.onRemove,
+  });
+
+  final String name;
+  final double unitPrice;
+  final int quantity;
+  final double lineTotal;
+  final bool canEditPrice;
+  final bool showQtyControls;
+  final bool desktop;
+  final VoidCallback onEditPrice;
+  final VoidCallback onDec;
+  final VoidCallback onInc;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final nameSize = desktop ? 13.0 : 12.5;
+    final metaSize = desktop ? 11.5 : 11.0;
+    final totalSize = desktop ? 13.0 : 12.5;
+    final btn = desktop ? 28.0 : 26.0;
+    final icon = desktop ? 15.0 : 14.0;
+
+    final qtyControl = showQtyControls
+        ? Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _QtyButton(
+                  icon: Icons.remove_rounded,
+                  size: btn,
+                  iconSize: icon,
+                  onTap: onDec,
+                ),
+                SizedBox(
+                  width: 26,
+                  child: Text(
+                    '$quantity',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: desktop ? 13 : 12,
+                    ),
+                  ),
+                ),
+                _QtyButton(
+                  icon: Icons.add_rounded,
+                  size: btn,
+                  iconSize: icon,
+                  onTap: onInc,
+                ),
+              ],
+            ),
+          )
+        : Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Text(
+              'Qty 1',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: metaSize,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: nameSize,
+                    color: AppTheme.textPrimary,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                InkWell(
+                  onTap: canEditPrice ? onEditPrice : null,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '₹${unitPrice.toStringAsFixed(2)} × $quantity',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: metaSize,
+                            color: canEditPrice
+                                ? AppTheme.primary
+                                : AppTheme.textSecondary,
+                            decoration:
+                                canEditPrice ? TextDecoration.underline : null,
+                          ),
+                        ),
+                      ),
+                      if (canEditPrice) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.edit_outlined,
+                          size: 13,
+                          color: AppTheme.primary,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          qtyControl,
+          const SizedBox(width: 8),
+          SizedBox(
+            width: desktop ? 72 : 64,
+            child: Text(
+              '₹${lineTotal.toStringAsFixed(2)}',
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: totalSize,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Remove',
+            onPressed: onRemove,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+            icon: Icon(
+              Icons.delete_outline_rounded,
+              color: AppTheme.danger,
+              size: desktop ? 18 : 17,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QtyButton extends StatelessWidget {
+  const _QtyButton({
+    required this.icon,
+    required this.size,
+    required this.iconSize,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final double size;
+  final double iconSize;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Icon(icon, size: iconSize, color: AppTheme.textPrimary),
+        ),
+      ),
+    );
+  }
+}
+
 class _PosBalanceChip extends StatelessWidget {
   const _PosBalanceChip({
     required this.label,
@@ -2265,4 +2584,29 @@ class _PosBalanceChip extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DashedLinePainter extends CustomPainter {
+  _DashedLinePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    const dashWidth = 5.0;
+    const dashSpace = 4.0;
+    var x = 0.0;
+    final y = size.height / 2;
+    while (x < size.width) {
+      canvas.drawLine(Offset(x, y), Offset(math.min(x + dashWidth, size.width), y), paint);
+      x += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedLinePainter oldDelegate) => oldDelegate.color != color;
 }

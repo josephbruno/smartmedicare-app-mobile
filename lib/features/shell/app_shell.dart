@@ -126,7 +126,8 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthSession>();
-    final loc = GoRouterState.of(context).uri.path;
+    final uri = GoRouterState.of(context).uri;
+    final loc = uri.hasQuery ? '${uri.path}?${uri.query}' : uri.path;
     final webLike = useWebLikeShell(context);
     final connectivity = context.watch<ConnectivityNotifier>();
     final syncCoordinator = context.read<SyncCoordinator>();
@@ -357,10 +358,7 @@ class _DesktopShellState extends State<_DesktopShell> {
 
   bool _isMenuItemSelected(String location, String? menuPath, List<_MenuItem> allItems) {
     if (menuPath == null) return false;
-
-    // Since all menus are separate (no parent-child relationships),
-    // only highlight on exact path match
-    return location == menuPath;
+    return _menuPathSelected(location, menuPath);
   }
 
   @override
@@ -378,7 +376,7 @@ class _DesktopShellState extends State<_DesktopShell> {
         ? "Welcome back! Here's what's happening today."
         : '';
     final showSubtitle = subtitle.isNotEmpty && width >= 900;
-    final showSearch = width >= 1000;
+    const showSearch = false;
 
     return KeyboardShortcutHandler(
       shortcuts: {
@@ -900,6 +898,7 @@ List<_MenuItem> _menuItems(AuthSession auth) {
     if (can('inventory.view')) ...[
       _MenuItem(label: 'Inventory', icon: Icons.warehouse_outlined, path: '/inventory'),
       _MenuItem(label: 'Stock Alerts', icon: Icons.notification_important_outlined, path: '/stock-alerts'),
+      _MenuItem(label: 'Stock Expiry', icon: Icons.event_busy_outlined, path: '/stock-alerts?tab=expiry'),
       _MenuItem(label: 'Stock Ageing', icon: Icons.hourglass_bottom_outlined, path: '/stock-ageing'),
     ],
     if (can('inventory.transfer'))
@@ -958,7 +957,9 @@ String _titleForPath(String path) {
   if (path.startsWith('/invoices')) return 'Invoices';
   if (path.startsWith('/products')) return 'Products';
   if (path.startsWith('/inventory')) return 'Inventory';
-  if (path.startsWith('/stock-alerts')) return 'Stock Alerts';
+  if (path.startsWith('/stock-alerts')) {
+    return path.contains('tab=expiry') ? 'Stock Expiry' : 'Stock Alerts';
+  }
   if (path.startsWith('/stock-ageing')) return 'Stock Ageing';
   if (path.startsWith('/stock-transfers')) return 'Stock Transfers';
   if (path.startsWith('/purchases')) return 'Purchases';
@@ -986,6 +987,23 @@ String _titleForPath(String path) {
   if (path.startsWith('/settings/branches')) return 'Branches';
   if (path.startsWith('/settings')) return 'Settings';
   return 'Dashboard';
+}
+
+/// Matches sidebar items that may include query params (e.g. Stock Expiry).
+bool _menuPathSelected(String location, String menuPath) {
+  final loc = Uri.tryParse(location.startsWith('/') ? 'app://local$location' : location);
+  final menu = Uri.tryParse(menuPath.startsWith('/') ? 'app://local$menuPath' : menuPath);
+  if (loc == null || menu == null) return location == menuPath;
+  if (loc.path != menu.path) {
+    return location == menuPath || location.startsWith('$menuPath/');
+  }
+  final menuTab = menu.queryParameters['tab'];
+  final locTab = loc.queryParameters['tab'];
+  if (menuTab != null && menuTab.isNotEmpty) {
+    return locTab == menuTab;
+  }
+  // Plain menu path: selected only when location has no tab query.
+  return locTab == null || locTab.isEmpty;
 }
 
 class _MobileShell extends StatefulWidget {
@@ -1283,7 +1301,7 @@ class _MobileShellState extends State<_MobileShell> {
                   }
                   if (m.path == null) return const SizedBox.shrink();
 
-                  final isSelected = widget.location == m.path || widget.location.startsWith('${m.path}/');
+                  final isSelected = _menuPathSelected(widget.location, m.path!);
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 2),
                     child: ListTile(

@@ -11,18 +11,29 @@ class DashboardViewModel extends ChangeNotifier {
   DashboardData? data;
   String? error;
   bool loading = true;
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 
   Future<void> load() async {
     loading = true;
     error = null;
-    notifyListeners();
+    _notify();
     try {
       data = await _services.reports.dashboard();
     } catch (e) {
       error = e.toString();
     } finally {
       loading = false;
-      notifyListeners();
+      _notify();
     }
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
   }
 }

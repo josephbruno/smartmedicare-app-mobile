@@ -265,7 +265,10 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
   add('Inventory', '/inventory', Icons.warehouse_outlined, visible: () => can(AppPermissions.inventoryView));
   add('Stock Alerts', '/stock-alerts', Icons.notification_important_outlined,
       visible: () => can(AppPermissions.inventoryView),
-      keywords: ['low stock', 'expiry', 'reorder', 'near expiry']);
+      keywords: ['low stock', 'reorder']);
+  add('Stock Expiry', '/stock-alerts?tab=expiry', Icons.event_busy_outlined,
+      visible: () => can(AppPermissions.inventoryView),
+      keywords: ['expiry', 'near expiry', 'expired', 'batch']);
   add('Stock Ageing', '/stock-ageing', Icons.hourglass_bottom_outlined,
       visible: () => can(AppPermissions.inventoryView),
       keywords: ['dead stock', 'slow moving']);

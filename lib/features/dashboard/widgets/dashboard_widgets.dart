@@ -230,6 +230,10 @@ class DonutDatum {
 }
 
 /// A donut chart with a centered total and a legend, used for "Sales Summary".
+///
+/// Prefer [fillHeight] from the parent instead of measuring constraints — toggling
+/// [Expanded] via [LayoutBuilder] under [IntrinsicHeight] can trip
+/// `!semantics.parentDataDirty` in debug.
 class SalesSummaryCard extends StatelessWidget {
   const SalesSummaryCard({
     super.key,
@@ -237,21 +241,136 @@ class SalesSummaryCard extends StatelessWidget {
     required this.centerValue,
     this.centerCaption = 'Total (Monthly)',
     this.onViewReport,
+    this.fillHeight = false,
   });
 
   final List<DonutDatum> data;
   final String centerValue;
   final String centerCaption;
   final VoidCallback? onViewReport;
+  final bool fillHeight;
 
   @override
   Widget build(BuildContext context) {
+    final chartData = data.where((d) => d.value > 0).toList();
     final total = data.fold<double>(0, (s, d) => s + d.value);
-    final hasData = total > 0 && data.isNotEmpty;
+    final hasData = total > 0 && chartData.isNotEmpty;
+    final accent = hasData ? chartData.first.color : AppTheme.primary;
 
-    final accent = hasData ? data.first.color : AppTheme.primary;
+    // fl_chart: section.radius = ring thickness; outer = centerSpaceRadius + radius.
+    const chartSize = 188.0;
+    const holeRadius = 54.0;
+    const ringThickness = 28.0;
+
+    Widget chartBlock() {
+      return SizedBox(
+        width: chartSize,
+        height: chartSize,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            PieChart(
+              PieChartData(
+                sectionsSpace: chartData.length > 1 ? 2 : 0,
+                centerSpaceRadius: holeRadius,
+                startDegreeOffset: -90,
+                pieTouchData: PieTouchData(enabled: false),
+                sections: [
+                  for (final d in chartData)
+                    PieChartSectionData(
+                      value: d.value,
+                      color: d.color,
+                      radius: ringThickness,
+                      showTitle: false,
+                    ),
+                ],
+              ),
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  centerValue,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  centerCaption,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    final legend = <Widget>[
+      for (final d in data)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: d.color,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: d.color.withValues(alpha: 0.35),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  d.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+              Text(
+                '₹${d.value.toStringAsFixed(0)}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                total > 0
+                    ? '${(d.value / total * 100).toStringAsFixed(0)}%'
+                    : '0%',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: d.color,
+                ),
+              ),
+            ],
+          ),
+        ),
+    ];
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: mildCardFill(accent, strength: 0.06),
@@ -260,6 +379,7 @@ class SalesSummaryCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: fillHeight ? MainAxisSize.max : MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -280,118 +400,26 @@ class SalesSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           if (!hasData)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 28),
-              child: Center(
-                child: Text('No sales yet', style: TextStyle(color: AppTheme.textSecondary)),
-              ),
-            )
-          else
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 132,
-                  height: 132,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      PieChart(
-                        PieChartData(
-                          sectionsSpace: 3,
-                          centerSpaceRadius: 44,
-                          startDegreeOffset: -90,
-                          pieTouchData: PieTouchData(enabled: false),
-                          sections: [
-                            for (final d in data)
-                              PieChartSectionData(
-                                value: d.value <= 0 ? 0.0001 : d.value,
-                                color: d.color,
-                                radius: 22,
-                                showTitle: false,
-                                borderSide: BorderSide(
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                  width: 1.5,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            centerValue,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                              color: AppTheme.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            centerCaption,
-                            style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final d in data)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 5),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: d.color,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: d.color.withValues(alpha: 0.35),
-                                      blurRadius: 4,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  d.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppTheme.textPrimary,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '${(d.value / total * 100).toStringAsFixed(0)}%',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: d.color,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            fillHeight
+                ? const Expanded(
+                    child: Center(
+                      child: Text('No sales yet', style: TextStyle(color: AppTheme.textSecondary)),
+                    ),
+                  )
+                : const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 28),
+                    child: Center(
+                      child: Text('No sales yet', style: TextStyle(color: AppTheme.textSecondary)),
+                    ),
+                  )
+          else ...[
+            if (fillHeight)
+              Expanded(child: Center(child: chartBlock()))
+            else
+              Center(child: chartBlock()),
+            const SizedBox(height: 12),
+            ...legend,
+          ],
           if (onViewReport != null) ...[
             const SizedBox(height: 16),
             SizedBox(
@@ -490,21 +518,28 @@ class QuickActionCard extends StatelessWidget {
 }
 
 /// An illustrated branch performance card for "Performance by Branch".
+///
+/// Prefer [fillHeight] from the parent instead of measuring constraints — toggling
+/// [Spacer] via [LayoutBuilder] under [IntrinsicHeight] can trip
+/// `!semantics.parentDataDirty` in debug.
 class BranchPerformanceCard extends StatelessWidget {
   const BranchPerformanceCard({
     super.key,
     required this.branch,
     required this.color,
     this.onView,
+    this.fillHeight = false,
   });
 
   final BranchDashboardStat branch;
   final Color color;
   final VoidCallback? onView;
+  final bool fillHeight;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: mildCardFill(color),
@@ -513,7 +548,7 @@ class BranchPerformanceCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: fillHeight ? MainAxisSize.max : MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -579,6 +614,7 @@ class BranchPerformanceCard extends StatelessWidget {
               Expanded(child: _metric('MONTHLY', '₹${branch.monthlySales.toStringAsFixed(2)}', color)),
             ],
           ),
+          if (fillHeight) const Spacer(),
           if (onView != null) ...[
             const SizedBox(height: 14),
             SizedBox(

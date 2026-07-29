@@ -56,6 +56,62 @@ class PurchaseService {
       ApiClient.throwFromDio(e);
     }
   }
+
+  Future<Purchase> update(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/purchases/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Purchase.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  /// Records a payment against a purchase.
+  ///
+  /// Prefers `POST /purchases/{id}/payment` (creates supplier payment + ledger).
+  /// Falls back to `PUT /purchases/{id}` with cumulative [currentPaidAmount] + [amount]
+  /// when that route is not yet available on the server (404).
+  Future<Purchase> recordPayment(
+    int id, {
+    required double amount,
+    required String paymentMode,
+    required double currentPaidAmount,
+    String? paymentDate,
+    String? referenceNumber,
+    String? notes,
+  }) async {
+    try {
+      final res = await _client.post('/purchases/$id/payment', data: {
+        'amount': amount,
+        'payment_mode': paymentMode,
+        if (paymentDate != null && paymentDate.isNotEmpty) 'payment_date': paymentDate,
+        if (referenceNumber != null && referenceNumber.isNotEmpty)
+          'reference_number': referenceNumber,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      });
+      return parseEnvelopeData(
+        res,
+        (data) => Purchase.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 404) {
+        // Deployed API may not have POST /payment yet — update paid total via PUT.
+        final newPaid = double.parse(
+          (currentPaidAmount + amount).toStringAsFixed(2),
+        );
+        await update(id, {
+          'paid_amount': newPaid,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        });
+        return get(id);
+      }
+      ApiClient.throwFromDio(e);
+    }
+  }
 }
 
 class SupplierService {

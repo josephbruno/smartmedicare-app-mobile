@@ -44,4 +44,48 @@ class ExpenseService {
       ApiClient.throwFromDio(e);
     }
   }
+
+  Future<ExpenseCategory> createCategory(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/expense-categories', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => ExpenseCategory.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<ExpenseCategory> updateCategory(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/expense-categories/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => ExpenseCategory.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deleteCategory(int id) async {
+    try {
+      await _client.delete('/expense-categories/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Expense> create(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/expenses', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Expense.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
 }
