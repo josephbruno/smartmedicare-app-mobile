@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/responsive/desktop_layout_helper.dart';
+import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/inventory.dart';
 
@@ -26,6 +27,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
   List<InventoryItem> _lowStock = [];
   List<StockAgeingItem> _expiry = [];
   int _expiryDays = 30;
+  int? _boundBranchId;
 
   @override
   void initState() {
@@ -39,6 +41,16 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
   void dispose() {
     _tabs.dispose();
     super.dispose();
+  }
+
+  void _syncBranchScope(int? branchId) {
+    if (_boundBranchId == branchId) return;
+    final previous = _boundBranchId;
+    _boundBranchId = branchId;
+    if (previous == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
   }
 
   Future<void> _load() async {
@@ -77,6 +89,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
 
   @override
   Widget build(BuildContext context) {
+    _syncBranchScope(context.select<AuthSession, int?>((s) => s.currentBranchId));
     return ResponsiveBuilder(
       mobileBuilder: (_) => _buildScaffold(compact: true),
       tabletBuilder: (_) => _buildScaffold(compact: false),

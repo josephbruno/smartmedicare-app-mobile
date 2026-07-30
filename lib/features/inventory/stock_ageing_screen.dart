@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/responsive/desktop_layout_helper.dart';
+import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/inventory.dart';
 import '../../core/widgets/app_dropdown.dart';
@@ -39,6 +40,7 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
   String _monthLabel = '';
   bool _loading = false;
   String? _error;
+  int? _boundBranchId;
 
   final _hHeader = ScrollController();
   final _hBody = ScrollController();
@@ -58,6 +60,16 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
     _vLeft.addListener(_onVLeft);
     _vRight.addListener(_onVRight);
     _load();
+  }
+
+  void _syncBranchScope(int? branchId) {
+    if (_boundBranchId == branchId) return;
+    final previous = _boundBranchId;
+    _boundBranchId = branchId;
+    if (previous == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
   }
 
   @override
@@ -180,6 +192,7 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _syncBranchScope(context.select<AuthSession, int?>((s) => s.currentBranchId));
     return ResponsiveBuilder(
       mobileBuilder: (_) => _buildScaffold(compact: true),
       tabletBuilder: (_) => _buildScaffold(compact: false),

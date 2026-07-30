@@ -111,11 +111,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     final services = context.read<AppServices>();
-    final canAdjust = context.watch<AuthSession>().hasPermission(AppPermissions.inventoryAdjust);
+    final auth = context.watch<AuthSession>();
+    final canAdjust = auth.hasPermission(AppPermissions.inventoryAdjust);
+    final branchId = auth.currentBranchId;
 
     return Scaffold(
       body: AppPaginatedTable<InventoryItem>(
-        key: ValueKey(_reloadToken),
+        key: ValueKey('inventory-$branchId-$_reloadToken'),
         loadPage: ({required page, required perPage}) =>
             services.inventory.listPaginated(page: page, perPage: perPage),
         onRowTap: canAdjust ? _openAdjust : null,

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
@@ -20,7 +22,7 @@ import '../../core/widgets/powered_by_footer.dart';
 import '../../data/local/offline_invoice_queue.dart';
 import '../../data/models/shop.dart';
 import 'widgets/offline_queue_sheet.dart';
-import '../../core/widgets/app_dropdown.dart';
+
 /// Web-like shell (sidebar + header) on tablet/desktop; mobile uses drawer + optional bottom nav.
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.child});
@@ -343,17 +345,144 @@ class _DesktopShellState extends State<_DesktopShell> {
     try {
       await widget.auth.switchBranch(branchId);
       if (mounted) {
-        AppMessenger.show(context,
-          const SnackBar(content: Text('Branch switched'), backgroundColor: AppTheme.accent),
-        );
+        AppMessenger.success(context, 'Branch switched successfully');
       }
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context,
-          SnackBar(content: Text('Failed: $e'), backgroundColor: AppTheme.danger),
-        );
+        AppMessenger.error(context, 'Failed to switch branch: $e');
       }
     }
+  }
+
+  Widget _buildHeaderBranchSwitcher({required bool desktop}) {
+    final currentId = widget.auth.currentBranchId;
+    final selected = _branches.where((b) => b.id == currentId).firstOrNull;
+    final name =
+        selected?.name ?? widget.auth.currentBranch?.name ?? 'Select branch';
+    final height = desktop ? 48.0 : 40.0;
+    final width = desktop ? 260.0 : 200.0;
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Material(
+        color: AppTheme.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: _loadingBranches
+            ? const Center(
+                child: SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : PopupMenuButton<int>(
+                tooltip: 'Switch branch',
+                offset: Offset(0, height + 6),
+                position: PopupMenuPosition.under,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                constraints: BoxConstraints(
+                  minWidth: width,
+                  maxWidth: math.max(width, 320),
+                ),
+                onSelected: _switchBranch,
+                itemBuilder: (context) => [
+                  for (final b in _branches)
+                    PopupMenuItem<int>(
+                      value: b.id,
+                      height: desktop ? 48 : 44,
+                      child: Row(
+                        children: [
+                          Icon(
+                            b.id == currentId
+                                ? Icons.check_circle_rounded
+                                : Icons.storefront_outlined,
+                            size: 18,
+                            color: b.id == currentId
+                                ? AppTheme.primary
+                                : AppTheme.textSecondary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              b.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: b.id == currentId
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                          ),
+                          if (b.isMain) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'Main',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.storefront_outlined,
+                        size: desktop ? 20 : 18,
+                        color: AppTheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: desktop ? 14 : 13,
+                            fontWeight: FontWeight.w600,
+                            height: 1.2,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: desktop ? 22 : 20,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+      ),
+    );
   }
 
   bool _isMenuItemSelected(String location, String? menuPath, List<_MenuItem> allItems) {
@@ -631,31 +760,7 @@ class _DesktopShellState extends State<_DesktopShell> {
                         const Spacer(),
                       const SizedBox(width: 12),
                       if (widget.auth.isSuperAdmin && _branches.length > 1) ...[
-                        Container(
-                          height: 40,
-                          width: 190,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: AppTheme.background,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: _loadingBranches
-                              ? const Center(
-                                  child: SizedBox(
-                                      height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)))
-                              : DropdownButtonHideUnderline(
-                                  child: AppDropdownButton<int>(
-                                    isExpanded: true,
-                                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                                    value: widget.auth.currentBranchId,
-                                    items: _branches
-                                        .map((b) => DropdownMenuItem(value: b.id, child: Text(b.name)))
-                                        .toList(),
-                                    onChanged: _switchBranch,
-                                  ),
-                                ),
-                        ),
+                        _buildHeaderBranchSwitcher(desktop: desktop),
                         const SizedBox(width: 12),
                       ],
                       _OnlineChip(connectivity: widget.connectivity),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../responsive/desktop_layout_helper.dart';
+import '../session/auth_session.dart';
 import '../theme/app_theme.dart';
 import '../../data/models/api_response.dart';
 import 'table_column_def.dart';
@@ -189,6 +191,7 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
   String? _error;
   int _page = 1;
   late int _perPage;
+  int? _boundBranchId;
 
   @override
   void initState() {
@@ -228,8 +231,24 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
     _fetch(page: 1);
   }
 
+  void _syncBranchScope(int? branchId) {
+    if (_boundBranchId == branchId) return;
+    final previous = _boundBranchId;
+    _boundBranchId = branchId;
+    // Skip the first bind (initial load already ran in initState).
+    if (previous == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fetch(page: 1);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Inventory and other branch-scoped lists must refetch when the header
+    // branch switcher changes X-Branch-Id.
+    final branchId = context.select<AuthSession, int?>((s) => s.currentBranchId);
+    _syncBranchScope(branchId);
+
     if (_loading && _items.isEmpty) {
       return const Center(
         child: Column(
