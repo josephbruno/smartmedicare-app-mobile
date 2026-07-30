@@ -919,7 +919,6 @@ List<_MenuItem> _menuItems(AuthSession auth) {
   addSection('REPORTS', [
     if (auth.isSuperAdmin && can('reports.view')) ...[
       _MenuItem(label: 'Sales Report', icon: Icons.bar_chart_outlined, path: '/reports/sales'),
-      _MenuItem(label: 'GST Report', icon: Icons.description_outlined, path: '/reports/gst'),
       _MenuItem(label: 'Stock Transfer Report', icon: Icons.swap_horiz_outlined, path: '/reports/stock-transfers'),
     ],
     if (can('cashier.day_close'))

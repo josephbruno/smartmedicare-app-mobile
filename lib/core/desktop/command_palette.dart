@@ -276,8 +276,6 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
   add('Expenses', '/expenses', Icons.payments_outlined, visible: () => can(AppPermissions.expensesView));
   add('Sales report', '/reports/sales', Icons.bar_chart_outlined,
       visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView));
-  add('GST report', '/reports/gst', Icons.description_outlined,
-      visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView));
   add('Stock transfer report', '/reports/stock-transfers', Icons.swap_horiz_outlined,
       visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView),
       keywords: ['inventory', 'transfer']);
