@@ -327,6 +327,30 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     );
   }
 
+  /// Compact decoration for item-table cells (labels live in the header row).
+  InputDecoration _cellDec({String? hint}) {
+    return InputDecoration(
+      hintText: hint,
+      isDense: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      filled: true,
+      fillColor: Colors.white,
+    );
+  }
+
+  static const _colGap = 10.0;
+  static const _colNum = 36.0;
+  static const _colAction = 44.0;
+
   @override
   Widget build(BuildContext context) {
     final subtitle = _branchSubtitle;
@@ -578,12 +602,18 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   }
 
   Widget _buildItems() {
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (wide) ...[
+          _itemsHeader(),
+          const SizedBox(height: 4),
+        ],
         for (var i = 0; i < _items.length; i++) ...[
-          if (i > 0) const SizedBox(height: 12),
-          _buildItemRow(i),
+          if (i > 0) SizedBox(height: wide ? 8 : 12),
+          _buildItemRow(i, wide: wide),
         ],
         const SizedBox(height: 12),
         OutlinedButton.icon(
@@ -592,7 +622,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
           label: const Text('Add Item'),
           style: OutlinedButton.styleFrom(
             foregroundColor: AppTheme.primary,
-            side: const BorderSide(color: Color(0xFF93C5FD), style: BorderStyle.solid),
+            side: const BorderSide(color: Color(0xFF93C5FD)),
             backgroundColor: const Color(0xFFF8FAFC),
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -602,16 +632,67 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     );
   }
 
-  Widget _buildItemRow(int idx) {
+  Widget _itemsHeader() {
+    const labelStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      color: AppTheme.textSecondary,
+      letterSpacing: 0.2,
+    );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: _colNum,
+            child: Text('#', textAlign: TextAlign.center, style: labelStyle),
+          ),
+          const SizedBox(width: _colGap),
+          const Expanded(flex: 4, child: Text('Item', style: labelStyle)),
+          const SizedBox(width: _colGap),
+          const Expanded(flex: 2, child: Text('Batch #', style: labelStyle)),
+          const SizedBox(width: _colGap),
+          const Expanded(flex: 2, child: Text('Expiry', style: labelStyle)),
+          const SizedBox(width: _colGap),
+          const Expanded(
+            flex: 1,
+            child: Text('Qty', textAlign: TextAlign.right, style: labelStyle),
+          ),
+          const SizedBox(width: _colGap),
+          const Expanded(
+            flex: 2,
+            child: Text('Rate (₹)', textAlign: TextAlign.right, style: labelStyle),
+          ),
+          const SizedBox(width: _colGap),
+          const Expanded(
+            flex: 2,
+            child: Text('Amount (₹)', textAlign: TextAlign.right, style: labelStyle),
+          ),
+          const SizedBox(width: _colGap),
+          const SizedBox(width: _colAction),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemRow(int idx, {required bool wide}) {
     final item = _items[idx];
     final options = _productsForRow(idx);
-    final wide = MediaQuery.sizeOf(context).width >= 900;
 
     final productField = AppDropdownButtonFormField<int>(
       key: ValueKey('product-$idx-${item.productId}'),
       value: item.productId,
       isExpanded: true,
-      decoration: _fieldDec('Item *'),
+      isDense: true,
+      decoration: wide
+          ? _cellDec(hint: 'Select product')
+          : _fieldDec('Item *'),
+      hint: const Text('Select product', overflow: TextOverflow.ellipsis),
       items: [
         for (final p in options)
           DropdownMenuItem(
@@ -624,20 +705,21 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
     final batchField = TextField(
       controller: item.batch,
-      decoration: _fieldDec('Batch #'),
+      decoration: wide ? _cellDec(hint: 'Batch #') : _fieldDec('Batch #'),
     );
 
     final expiryField = InkWell(
       onTap: () => _pickExpiry(idx),
       borderRadius: BorderRadius.circular(8),
       child: InputDecorator(
-        decoration: _fieldDec('Expiry'),
+        decoration: wide ? _cellDec(hint: 'Expiry') : _fieldDec('Expiry'),
         child: Row(
           children: [
             Expanded(
               child: Text(
-                item.expiry != null ? _ymd(item.expiry!) : 'Select',
+                item.expiry != null ? _ymd(item.expiry!) : (wide ? 'Select date' : 'Select'),
                 style: TextStyle(
+                  fontSize: 14,
                   color: item.expiry != null
                       ? AppTheme.textPrimary
                       : AppTheme.textSecondary,
@@ -653,7 +735,11 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
                 onPressed: () => setState(() => item.expiry = null),
               )
             else
-              const Icon(Icons.calendar_today_outlined, size: 16, color: AppTheme.textSecondary),
+              const Icon(
+                Icons.calendar_today_outlined,
+                size: 16,
+                color: AppTheme.textSecondary,
+              ),
           ],
         ),
       ),
@@ -661,25 +747,30 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
     final qtyField = TextField(
       controller: item.qty,
+      textAlign: wide ? TextAlign.right : TextAlign.start,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-      decoration: _fieldDec('Qty'),
+      decoration: wide ? _cellDec(hint: '1') : _fieldDec('Qty'),
       onChanged: (_) => setState(() {}),
     );
 
     final rateField = TextField(
       controller: item.rate,
+      textAlign: wide ? TextAlign.right : TextAlign.start,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-      decoration: _fieldDec('Rate (₹)'),
+      decoration: wide ? _cellDec(hint: '0.00') : _fieldDec('Rate (₹)'),
       onChanged: (_) => setState(() {}),
     );
 
-    final amountChip = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+    final amountCell = Container(
+      height: 44,
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
       ),
       child: Text(
         '₹${_formatMoney(item.amount)}',
@@ -687,60 +778,56 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
         style: const TextStyle(
           color: Color(0xFF2563EB),
           fontWeight: FontWeight.w700,
+          fontSize: 14,
         ),
       ),
     );
 
-    final removeBtn = IconButton(
-      onPressed: _items.length <= 1 ? null : () => _removeItem(idx),
-      icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
-      tooltip: 'Remove',
+    final removeBtn = SizedBox(
+      width: _colAction,
+      child: IconButton(
+        onPressed: _items.length <= 1 ? null : () => _removeItem(idx),
+        icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 20),
+        tooltip: 'Remove',
+        visualDensity: VisualDensity.compact,
+      ),
     );
 
     if (wide) {
       return Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFF1F5F9)),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
           borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFFFAFBFC),
+          color: Colors.white,
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 14),
-              child: SizedBox(
-                width: 28,
-                child: Text(
-                  '${idx + 1}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppTheme.textSecondary),
+            SizedBox(
+              width: _colNum,
+              child: Text(
+                '${idx + 1}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: _colGap),
             Expanded(flex: 4, child: productField),
-            const SizedBox(width: 10),
+            const SizedBox(width: _colGap),
             Expanded(flex: 2, child: batchField),
-            const SizedBox(width: 10),
+            const SizedBox(width: _colGap),
             Expanded(flex: 2, child: expiryField),
-            const SizedBox(width: 10),
+            const SizedBox(width: _colGap),
             Expanded(flex: 1, child: qtyField),
-            const SizedBox(width: 10),
+            const SizedBox(width: _colGap),
             Expanded(flex: 2, child: rateField),
-            const SizedBox(width: 10),
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text('Amount (₹)', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                  const SizedBox(height: 4),
-                  amountChip,
-                ],
-              ),
-            ),
+            const SizedBox(width: _colGap),
+            Expanded(flex: 2, child: amountCell),
+            const SizedBox(width: _colGap),
             removeBtn,
           ],
         ),
@@ -752,6 +839,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       decoration: BoxDecoration(
         border: Border.all(color: const Color(0xFFE2E8F0)),
         borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -766,6 +854,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
               removeBtn,
             ],
           ),
+          const SizedBox(height: 8),
           productField,
           const SizedBox(height: 12),
           Row(
@@ -784,7 +873,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          amountChip,
+          amountCell,
         ],
       ),
     );
