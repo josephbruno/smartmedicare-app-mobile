@@ -35,6 +35,7 @@ class ProductService {
     int perPage = 20,
     String? search,
     String? type,
+    int? categoryId,
     bool? isActive,
   }) async {
     try {
@@ -43,6 +44,7 @@ class ProductService {
         'per_page': perPage,
         if (search != null && search.isNotEmpty) 'search': search,
         if (type != null && type.isNotEmpty) 'type': type,
+        if (categoryId != null) 'category_id': categoryId,
         if (isActive != null) 'is_active': isActive,
       });
       return parseEnvelopeList(res, Product.fromJson);

@@ -61,12 +61,18 @@ class EmrService {
     int page = 1,
     int perPage = 20,
     String? search,
+    String? species,
+    String? gender,
+    bool? isActive,
   }) async {
     try {
       final res = await _client.get('/pets', queryParameters: {
         'page': page,
         'per_page': perPage,
         if (search != null && search.isNotEmpty) 'search': search,
+        if (species != null && species.isNotEmpty) 'species': species,
+        if (gender != null && gender.isNotEmpty) 'gender': gender,
+        if (isActive != null) 'is_active': isActive,
       });
       return parseEnvelopeList(res, PetSearchResult.fromJson);
     } on DioException catch (e) {

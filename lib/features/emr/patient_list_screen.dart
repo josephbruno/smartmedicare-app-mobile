@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/services/permission_service.dart';
+import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
+import '../../data/models/customer.dart';
 import '../../data/models/emr.dart';
+import '../customers/widgets/pet_form_sheet.dart';
 
 class PatientListScreen extends StatefulWidget {
   const PatientListScreen({super.key});
@@ -17,6 +23,10 @@ class PatientListScreen extends StatefulWidget {
 
 class _PatientListScreenState extends State<PatientListScreen> {
   final _search = TextEditingController();
+  String? _speciesFilter;
+  String? _genderFilter;
+  String _statusFilter = 'all';
+  int _reloadToken = 0;
 
   @override
   void dispose() {
@@ -24,36 +34,153 @@ class _PatientListScreenState extends State<PatientListScreen> {
     super.dispose();
   }
 
+  bool? get _isActiveFilter {
+    return switch (_statusFilter) {
+      'active' => true,
+      'inactive' => false,
+      _ => null,
+    };
+  }
+
+  InputDecoration get _filterDec => const InputDecoration(
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      );
+
+  Future<void> _addPatient() async {
+    final customer = await showDialog<Customer>(
+      context: context,
+      builder: (ctx) => const _PickCustomerDialog(),
+    );
+    if (!mounted || customer == null) return;
+
+    final saved = await showPetFormSheet(context, customerId: customer.id);
+    if (!mounted || !saved) return;
+    AppMessenger.success(context, 'Patient added');
+    setState(() => _reloadToken++);
+  }
+
   @override
   Widget build(BuildContext context) {
     final services = context.read<AppServices>();
+    final canCreate =
+        context.watch<AuthSession>().hasPermission(AppPermissions.customersCreate);
     final search = _search.text.trim();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: TextField(
-              controller: _search,
-              decoration: const InputDecoration(
-                hintText: 'Search patients by name or owner...',
-                prefixIcon: Icon(Icons.search),
-                isDense: true,
-              ),
-              onSubmitted: (_) => setState(() {}),
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: _search,
+                    decoration: const InputDecoration(
+                      hintText: 'Search patients by name or owner…',
+                      prefixIcon: Icon(Icons.search, size: 20),
+                      isDense: true,
+                    ),
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => setState(() {}),
+                    onChanged: (_) {
+                      if (_search.text.trim().isEmpty) setState(() {});
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 140,
+                  child: AppDropdownButtonFormField<String?>(
+                    value: _speciesFilter,
+                    isDense: true,
+                    decoration: _filterDec.copyWith(labelText: 'Species'),
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('All species')),
+                      DropdownMenuItem(value: 'dog', child: Text('Dog')),
+                      DropdownMenuItem(value: 'cat', child: Text('Cat')),
+                      DropdownMenuItem(value: 'bird', child: Text('Bird')),
+                      DropdownMenuItem(value: 'fish', child: Text('Fish')),
+                      DropdownMenuItem(value: 'rabbit', child: Text('Rabbit')),
+                      DropdownMenuItem(value: 'other', child: Text('Other')),
+                    ],
+                    onChanged: (v) => setState(() => _speciesFilter = v),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 130,
+                  child: AppDropdownButtonFormField<String?>(
+                    value: _genderFilter,
+                    isDense: true,
+                    decoration: _filterDec.copyWith(labelText: 'Gender'),
+                    items: const [
+                      DropdownMenuItem(value: null, child: Text('All genders')),
+                      DropdownMenuItem(value: 'male', child: Text('Male')),
+                      DropdownMenuItem(value: 'female', child: Text('Female')),
+                      DropdownMenuItem(value: 'unknown', child: Text('Unknown')),
+                    ],
+                    onChanged: (v) => setState(() => _genderFilter = v),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 130,
+                  child: AppDropdownButtonFormField<String>(
+                    value: _statusFilter,
+                    isDense: true,
+                    decoration: _filterDec.copyWith(labelText: 'Status'),
+                    items: const [
+                      DropdownMenuItem(value: 'all', child: Text('All')),
+                      DropdownMenuItem(value: 'active', child: Text('Active')),
+                      DropdownMenuItem(value: 'inactive', child: Text('Inactive')),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _statusFilter = v);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FilledButton(
+                  onPressed: () => setState(() {}),
+                  child: const Text('Search'),
+                ),
+                if (canCreate) ...[
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    onPressed: _addPatient,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('New Patient'),
+                  ),
+                ],
+              ],
             ),
           ),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
           Expanded(
             child: AppPaginatedTable<PetSearchResult>(
-              key: ValueKey(search),
-              emptyMessage: 'No patients found.',
+              key: ValueKey(
+                '$search-$_speciesFilter-$_genderFilter-$_statusFilter-$_reloadToken',
+              ),
+              emptyMessage: search.length >= 2 ||
+                      _speciesFilter != null ||
+                      _genderFilter != null ||
+                      _statusFilter != 'all'
+                  ? 'No patients match your filters.'
+                  : 'No patients found.',
               loadPage: ({required page, required perPage}) =>
                   services.emr.listPetsPaginated(
                     page: page,
                     perPage: perPage,
                     search: search.length >= 2 ? search : null,
+                    species: _speciesFilter,
+                    gender: _genderFilter,
+                    isActive: _isActiveFilter,
                   ),
               onRowTap: (pet) => context.push('/emr/pets/${pet.id}/timeline'),
               columns: const [
@@ -86,4 +213,109 @@ class _PatientListScreenState extends State<PatientListScreen> {
 
   static Widget _phoneCell(BuildContext context, PetSearchResult p) =>
       Text(p.customerPhone ?? '—', style: const TextStyle(color: AppTheme.textSecondary));
+}
+
+class _PickCustomerDialog extends StatefulWidget {
+  const _PickCustomerDialog();
+
+  @override
+  State<_PickCustomerDialog> createState() => _PickCustomerDialogState();
+}
+
+class _PickCustomerDialogState extends State<_PickCustomerDialog> {
+  final _search = TextEditingController();
+  List<Customer> _results = [];
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load(''));
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load(String q) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final services = context.read<AppServices>();
+      final list = q.trim().length >= 2
+          ? await services.customers.search(q.trim())
+          : (await services.customers.listPaginated(page: 1, perPage: 20)).items;
+      if (!mounted) return;
+      setState(() {
+        _results = list;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Select owner'),
+      content: SizedBox(
+        width: 420,
+        height: 420,
+        child: Column(
+          children: [
+            TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                hintText: 'Search owner by name or phone…',
+                prefixIcon: Icon(Icons.search, size: 20),
+                isDense: true,
+              ),
+              textInputAction: TextInputAction.search,
+              onChanged: (v) {
+                if (v.trim().isEmpty || v.trim().length >= 2) _load(v);
+              },
+              onSubmitted: _load,
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!, style: const TextStyle(color: AppTheme.danger)))
+                      : _results.isEmpty
+                          ? const Center(child: Text('No customers found.'))
+                          : ListView.separated(
+                              itemCount: _results.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (context, i) {
+                                final c = _results[i];
+                                return ListTile(
+                                  title: Text(c.name),
+                                  subtitle: Text(c.phone.isEmpty ? '—' : c.phone),
+                                  onTap: () => Navigator.of(context).pop(c),
+                                );
+                              },
+                            ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
 }

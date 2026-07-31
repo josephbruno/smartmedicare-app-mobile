@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
@@ -26,10 +27,12 @@ class VisitFormScreen extends StatefulWidget {
 class _VisitFormScreenState extends State<VisitFormScreen> {
   final _complaint = TextEditingController();
   final _clinicalNotes = TextEditingController();
-  final _observation = TextEditingController();
-  final _investigation = TextEditingController();
+  final _observationInput = TextEditingController();
+  final _investigationInput = TextEditingController();
   final _followUpNotes = TextEditingController();
   final _diagnosisInput = TextEditingController();
+  final _observationFocus = FocusNode();
+  final _investigationFocus = FocusNode();
   final _diagnosisFocus = FocusNode();
   final _serviceCharge = TextEditingController();
 
@@ -44,12 +47,19 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   List<DoctorLite> _doctors = [];
   List<PetSearchResult> _petResults = [];
   List<VisitDiagnosis> _diagnoses = [];
+  List<String> _observations = [];
+  List<String> _investigations = [];
   final List<_TreatmentRow> _treatments = [];
   final List<_MedicineRow> _medicines = [];
   List<String> _complaintSuggestions = [];
   List<String> _observationSuggestions = [];
   List<String> _investigationSuggestions = [];
   List<VisitDiagnosis> _diagnosisSuggestions = [];
+  List<String> _defaultObservationSuggestions = [];
+  List<String> _defaultInvestigationSuggestions = [];
+  List<VisitDiagnosis> _defaultDiagnosisSuggestions = [];
+  /// Which chip-field suggestion panel is open (`observation` / `investigation` / `diagnosis`).
+  String? _openSuggestField;
   List<TreatmentSuggestion> _defaultTreatmentSuggestions = [];
   List<TreatmentSuggestion> _treatmentSuggestions = [];
   int? _treatmentSuggestForIndex;
@@ -147,10 +157,155 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void initState() {
     super.initState();
     _sourceAppointmentId = widget.appointmentId;
-    _diagnosisFocus.addListener(() {
-      if (mounted) setState(() {});
-    });
+    _diagnosisFocus.addListener(() => _onChipFieldFocus(
+          field: 'diagnosis',
+          focus: _diagnosisFocus,
+          loadSuggestions: () => _searchDiagnoses(_diagnosisInput.text),
+        ));
+    _observationFocus.addListener(() => _onChipFieldFocus(
+          field: 'observation',
+          focus: _observationFocus,
+          loadSuggestions: () => _searchObservations(_observationInput.text),
+        ));
+    _investigationFocus.addListener(() => _onChipFieldFocus(
+          field: 'investigation',
+          focus: _investigationFocus,
+          loadSuggestions: () => _searchInvestigations(_investigationInput.text),
+        ));
     _bootstrap();
+  }
+
+  void _onChipFieldFocus({
+    required String field,
+    required FocusNode focus,
+    required VoidCallback loadSuggestions,
+  }) {
+    if (!mounted) return;
+    if (focus.hasFocus) {
+      setState(() => _openSuggestField = field);
+      loadSuggestions();
+      return;
+    }
+    // Delay so suggestion taps can clear/add first; then commit any leftover free text.
+    Future<void>.delayed(const Duration(milliseconds: 250), () {
+      if (!mounted || focus.hasFocus) return;
+      _commitPendingChipInput(field);
+      if (_openSuggestField == field) {
+        setState(() => _openSuggestField = null);
+      }
+    });
+  }
+
+  void _commitPendingChipInput(String field) {
+    switch (field) {
+      case 'observation':
+        final t = _observationInput.text.trim();
+        if (t.isNotEmpty) _addObservation(t, keepFocus: false);
+      case 'investigation':
+        final t = _investigationInput.text.trim();
+        if (t.isNotEmpty) _addInvestigation(t, keepFocus: false);
+      case 'diagnosis':
+        final t = _diagnosisInput.text.trim();
+        if (t.isNotEmpty) _addDiagnosis(t, keepFocus: false);
+    }
+  }
+
+  void _selectObservationSuggestion(String phrase) {
+    _openSuggestField = 'observation';
+    _addObservation(phrase);
+  }
+
+  void _selectInvestigationSuggestion(String phrase) {
+    _openSuggestField = 'investigation';
+    _addInvestigation(phrase);
+  }
+
+  void _selectDiagnosisSuggestion(VisitDiagnosis d) {
+    _openSuggestField = 'diagnosis';
+    _addDiagnosisFromSuggestion(d);
+  }
+
+  bool _isKnownObservation(String value) {
+    final key = value.toLowerCase();
+    return _defaultObservationSuggestions.any((s) => s.toLowerCase() == key) ||
+        _observationSuggestions.any((s) => s.toLowerCase() == key);
+  }
+
+  bool _isKnownInvestigation(String value) {
+    final key = value.toLowerCase();
+    return _defaultInvestigationSuggestions.any((s) => s.toLowerCase() == key) ||
+        _investigationSuggestions.any((s) => s.toLowerCase() == key);
+  }
+
+  bool _isKnownDiagnosis(String value) {
+    final key = value.toLowerCase();
+    return _defaultDiagnosisSuggestions
+            .any((s) => s.diagnosisName.toLowerCase() == key) ||
+        _diagnosisSuggestions.any((s) => s.diagnosisName.toLowerCase() == key);
+  }
+
+  void _rememberObservation(String value) {
+    if (_isKnownObservation(value)) return;
+    _defaultObservationSuggestions = [value, ..._defaultObservationSuggestions];
+    _observationSuggestions = List.of(_defaultObservationSuggestions);
+  }
+
+  void _rememberInvestigation(String value) {
+    if (_isKnownInvestigation(value)) return;
+    _defaultInvestigationSuggestions = [
+      value,
+      ..._defaultInvestigationSuggestions,
+    ];
+    _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
+  }
+
+  void _rememberDiagnosis(String value) {
+    if (_isKnownDiagnosis(value)) return;
+    final item = VisitDiagnosis(
+      diagnosisName: value,
+      severity: 'mild',
+      isPrimary: false,
+    );
+    _defaultDiagnosisSuggestions = [item, ..._defaultDiagnosisSuggestions];
+    _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions);
+  }
+
+  Future<void> _persistNewObservation(String name) async {
+    if (!mounted) return;
+    final auth = context.read<AuthSession>();
+    if (!auth.hasPermission(AppPermissions.emrMasterDataManage)) return;
+    try {
+      await context
+          .read<AppServices>()
+          .emrMasterData
+          .createObservation({'name': name, 'is_active': true});
+    } catch (_) {
+      // Duplicate / permission — local chip + visit save still keep the value.
+    }
+  }
+
+  Future<void> _persistNewInvestigation(String name) async {
+    if (!mounted) return;
+    final auth = context.read<AuthSession>();
+    if (!auth.hasPermission(AppPermissions.emrMasterDataManage)) return;
+    try {
+      await context
+          .read<AppServices>()
+          .emrMasterData
+          .createInvestigation({'name': name, 'is_active': true});
+    } catch (_) {}
+  }
+
+  Future<void> _persistNewDiagnosis(String name) async {
+    if (!mounted) return;
+    final auth = context.read<AuthSession>();
+    if (!auth.hasPermission(AppPermissions.emrMasterDataManage)) return;
+    try {
+      await context
+          .read<AppServices>()
+          .emrMasterData
+          .createDiagnosis({'name': name, 'is_active': true});
+    } catch (_) {}
   }
 
   Future<void> _bootstrap() async {
@@ -161,8 +316,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     try {
       _doctors = await emr.listDoctors();
       _complaintSuggestions = await emr.getComplaints();
-      _observationSuggestions = await emr.getObservations();
-      _investigationSuggestions = await emr.getInvestigations();
+      _defaultObservationSuggestions = await emr.getObservations();
+      _defaultInvestigationSuggestions = await emr.getInvestigations();
+      _defaultDiagnosisSuggestions = await emr.getDiagnosisSuggestions();
+      _observationSuggestions = List.of(_defaultObservationSuggestions);
+      _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
+      _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions);
       _defaultTreatmentSuggestions = await emr.getTreatmentSuggestions();
       _defaultMedicineSuggestions = await emr.getMedicineSuggestions();
       _frequencySuggestions = await emr.getFrequencySuggestions();
@@ -213,8 +372,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     }
     _complaint.text = visit.chiefComplaint ?? '';
     _clinicalNotes.text = visit.clinicalNotes ?? '';
-    _observation.text = visit.observation ?? '';
-    _investigation.text = visit.investigation ?? '';
+    _observations = _splitPhrases(visit.observation);
+    _investigations = _splitPhrases(visit.investigation);
     _followUpNotes.text = visit.followUpNotes ?? '';
     if (visit.temperature != null) {
       // API stores °C; dropdown is °F.
@@ -527,15 +686,25 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   }
 
   Future<void> _searchDiagnoses(String q) async {
-    if (q.length < 2) {
-      setState(() => _diagnosisSuggestions = []);
-      return;
-    }
+    final query = q.trim();
     try {
-      final results =
-          await context.read<AppServices>().emr.getDiagnosisSuggestions(q: q);
-      if (mounted) setState(() => _diagnosisSuggestions = results);
-    } catch (_) {}
+      final results = await context.read<AppServices>().emr.getDiagnosisSuggestions(
+            q: query.isEmpty ? null : query,
+          );
+      if (mounted) {
+        setState(() {
+          _diagnosisSuggestions = results;
+          if (query.isEmpty) {
+            _defaultDiagnosisSuggestions = List.of(results);
+          }
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      if (query.isEmpty && _defaultDiagnosisSuggestions.isNotEmpty) {
+        setState(() => _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions));
+      }
+    }
   }
 
   /// Search uses the last comma-separated segment so multi-select typing works.
@@ -611,81 +780,106 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _searchComplaints('');
   }
 
-  String _phraseSearchTerm(String text) {
-    final parts = text.split(',');
-    return parts.isEmpty ? '' : parts.last.trim();
+  List<String> _splitPhrases(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return [];
+    return raw
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
   }
 
-  void _setPhraseField(TextEditingController controller, String value) {
-    controller.text = value;
-    controller.selection =
-        TextSelection.collapsed(offset: controller.text.length);
+  String? _joinPhrases(List<String> items) {
+    final joined = items.map((e) => e.trim()).where((e) => e.isNotEmpty).join(', ');
+    return joined.isEmpty ? null : joined;
   }
 
   Future<void> _searchObservations(String text) async {
-    final q = _phraseSearchTerm(text);
+    final q = text.trim();
     try {
       final results = await context
           .read<AppServices>()
           .emr
           .getObservations(q: q.isEmpty ? null : q);
-      if (mounted) setState(() => _observationSuggestions = results);
-    } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _observationSuggestions = results;
+          if (q.isEmpty) {
+            _defaultObservationSuggestions = List.of(results);
+          }
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      if (q.isEmpty && _defaultObservationSuggestions.isNotEmpty) {
+        setState(() =>
+            _observationSuggestions = List.of(_defaultObservationSuggestions));
+      }
+    }
   }
 
-  void _applyObservationSuggestion(String phrase) {
-    final text = _observation.text;
-    final q = _phraseSearchTerm(text);
-    final String next;
-    if (q.isEmpty) {
-      final trimmed = text.trimRight();
-      next = trimmed.isEmpty
-          ? phrase
-          : trimmed.endsWith(',')
-              ? '$trimmed $phrase'
-              : '$trimmed, $phrase';
-    } else {
-      final lastComma = text.lastIndexOf(',');
-      next = lastComma < 0
-          ? phrase
-          : '${text.substring(0, lastComma + 1).trimRight()} $phrase';
+  void _addObservation(String phrase, {bool keepFocus = true}) {
+    final trimmed = phrase.trim();
+    if (trimmed.isEmpty) return;
+    if (_observations.any((x) => x.toLowerCase() == trimmed.toLowerCase())) {
+      _observationInput.clear();
+      setState(() =>
+          _observationSuggestions = List.of(_defaultObservationSuggestions));
+      return;
     }
-    _setPhraseField(_observation, '${next.trimRight()}, ');
-    setState(() {});
-    _searchObservations('');
+    final isNew = !_isKnownObservation(trimmed);
+    setState(() {
+      _observations.add(trimmed);
+      _observationInput.clear();
+      if (isNew) _rememberObservation(trimmed);
+      _observationSuggestions = List.of(_defaultObservationSuggestions);
+    });
+    if (isNew) _persistNewObservation(trimmed);
+    if (keepFocus) _observationFocus.requestFocus();
   }
 
   Future<void> _searchInvestigations(String text) async {
-    final q = _phraseSearchTerm(text);
+    final q = text.trim();
     try {
       final results = await context
           .read<AppServices>()
           .emr
           .getInvestigations(q: q.isEmpty ? null : q);
-      if (mounted) setState(() => _investigationSuggestions = results);
-    } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _investigationSuggestions = results;
+          if (q.isEmpty) {
+            _defaultInvestigationSuggestions = List.of(results);
+          }
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      if (q.isEmpty && _defaultInvestigationSuggestions.isNotEmpty) {
+        setState(() => _investigationSuggestions =
+            List.of(_defaultInvestigationSuggestions));
+      }
+    }
   }
 
-  void _applyInvestigationSuggestion(String phrase) {
-    final text = _investigation.text;
-    final q = _phraseSearchTerm(text);
-    final String next;
-    if (q.isEmpty) {
-      final trimmed = text.trimRight();
-      next = trimmed.isEmpty
-          ? phrase
-          : trimmed.endsWith(',')
-              ? '$trimmed $phrase'
-              : '$trimmed, $phrase';
-    } else {
-      final lastComma = text.lastIndexOf(',');
-      next = lastComma < 0
-          ? phrase
-          : '${text.substring(0, lastComma + 1).trimRight()} $phrase';
+  void _addInvestigation(String phrase, {bool keepFocus = true}) {
+    final trimmed = phrase.trim();
+    if (trimmed.isEmpty) return;
+    if (_investigations.any((x) => x.toLowerCase() == trimmed.toLowerCase())) {
+      _investigationInput.clear();
+      setState(() => _investigationSuggestions =
+          List.of(_defaultInvestigationSuggestions));
+      return;
     }
-    _setPhraseField(_investigation, '${next.trimRight()}, ');
-    setState(() {});
-    _searchInvestigations('');
+    final isNew = !_isKnownInvestigation(trimmed);
+    setState(() {
+      _investigations.add(trimmed);
+      _investigationInput.clear();
+      if (isNew) _rememberInvestigation(trimmed);
+      _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
+    });
+    if (isNew) _persistNewInvestigation(trimmed);
+    if (keepFocus) _investigationFocus.requestFocus();
   }
 
   void _addDiagnosisFromSuggestion(VisitDiagnosis d) {
@@ -695,7 +889,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       (x) => x.diagnosisName.toLowerCase() == name.toLowerCase(),
     )) {
       _diagnosisInput.clear();
-      setState(() => _diagnosisSuggestions = []);
+      setState(() =>
+          _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions));
       return;
     }
     setState(() {
@@ -706,8 +901,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         isPrimary: _diagnoses.isEmpty,
       ));
       _diagnosisInput.clear();
-      _diagnosisSuggestions = [];
+      _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions);
     });
+    _diagnosisFocus.requestFocus();
   }
 
   Future<Product?> _pickProduct({
@@ -728,16 +924,18 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     );
   }
 
-  void _addDiagnosis(String name) {
+  void _addDiagnosis(String name, {bool keepFocus = true}) {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return;
     if (_diagnoses.any(
       (x) => x.diagnosisName.toLowerCase() == trimmed.toLowerCase(),
     )) {
       _diagnosisInput.clear();
-      setState(() => _diagnosisSuggestions = []);
+      setState(() =>
+          _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions));
       return;
     }
+    final isNew = !_isKnownDiagnosis(trimmed);
     setState(() {
       _diagnoses.add(VisitDiagnosis(
         diagnosisName: trimmed,
@@ -745,8 +943,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         isPrimary: _diagnoses.isEmpty,
       ));
       _diagnosisInput.clear();
-      _diagnosisSuggestions = [];
+      if (isNew) _rememberDiagnosis(trimmed);
+      _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions);
     });
+    if (isNew) _persistNewDiagnosis(trimmed);
+    if (keepFocus) _diagnosisFocus.requestFocus();
   }
 
   String _apiErrorMessage(Object e) {
@@ -819,10 +1020,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (_complaintForApi.isNotEmpty) 'chief_complaint': _complaintForApi,
       if (_clinicalNotes.text.trim().isNotEmpty)
         'clinical_notes': _clinicalNotes.text.trim(),
-      if (_observation.text.trim().isNotEmpty)
-        'observation': _observation.text.trim(),
-      if (_investigation.text.trim().isNotEmpty)
-        'investigation': _investigation.text.trim(),
+      if (_joinPhrases(_observations) case final observation?)
+        'observation': observation,
+      if (_joinPhrases(_investigations) case final investigation?)
+        'investigation': investigation,
       if (_followUpNotes.text.trim().isNotEmpty)
         'follow_up_notes': _followUpNotes.text.trim(),
       if (_temperatureF != null)
@@ -917,10 +1118,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void dispose() {
     _complaint.dispose();
     _clinicalNotes.dispose();
-    _observation.dispose();
-    _investigation.dispose();
+    _observationInput.dispose();
+    _investigationInput.dispose();
     _followUpNotes.dispose();
     _diagnosisInput.dispose();
+    _observationFocus.dispose();
+    _investigationFocus.dispose();
     _diagnosisFocus.dispose();
     _serviceCharge.dispose();
     for (final t in _treatments) {
@@ -1319,142 +1522,296 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             },
           ),
           const SizedBox(height: 16),
-          Text('Observation', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _observation,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Type to search or add observations...',
-            ),
-            onChanged: _searchObservations,
-          ),
-          if (_observationSuggestions.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: _observationSuggestions.take(12).map((c) {
-                return ActionChip(
-                  label: Text(c, style: const TextStyle(fontSize: 12)),
-                  onPressed: () => _applyObservationSuggestion(c),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 900;
+
+              Widget chipField({
+                required String title,
+                required String emptyHint,
+                required String suggestField,
+                required List<String> selected,
+                required TextEditingController input,
+                required FocusNode focus,
+                required List<String> suggestions,
+                required ValueChanged<String> onChanged,
+                required ValueChanged<String> onSubmitted,
+                required ValueChanged<String> onSuggestionTap,
+                required ValueChanged<String> onDelete,
+              }) {
+                final showSuggestions = _openSuggestField == suggestField;
+                final visibleSuggestions = showSuggestions
+                    ? suggestions
+                        .where(
+                          (s) => !selected.any(
+                            (sel) => sel.toLowerCase() == s.toLowerCase(),
+                          ),
+                        )
+                        .take(12)
+                        .toList()
+                    : const <String>[];
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(title, style: Theme.of(context).textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => focus.requestFocus(),
+                      child: InputDecorator(
+                        isFocused: focus.hasFocus,
+                        isEmpty: selected.isEmpty && input.text.isEmpty,
+                        decoration: InputDecoration(
+                          hintText: selected.isEmpty ? emptyHint : null,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (selected.isNotEmpty) ...[
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: selected
+                                    .map(
+                                      (item) => InputChip(
+                                        label: Text(
+                                          item,
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                        visualDensity: VisualDensity.compact,
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                        onDeleted: () => onDelete(item),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                              const SizedBox(height: 4),
+                            ],
+                            TextField(
+                              controller: input,
+                              focusNode: focus,
+                              decoration: InputDecoration(
+                                isDense: true,
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                filled: false,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                  vertical: 4,
+                                ),
+                                hintText: selected.isEmpty ? null : 'Add another…',
+                              ),
+                              onChanged: (v) {
+                                setState(() {});
+                                onChanged(v);
+                              },
+                              onSubmitted: onSubmitted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (visibleSuggestions.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: visibleSuggestions.map((c) {
+                            // onTapDown runs before TextField blur cancels the gesture.
+                            return GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTapDown: (_) => onSuggestionTap(c),
+                              child: Chip(
+                                label: Text(
+                                  c,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                  ],
                 );
-              }).toList(),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Text('Investigation', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _investigation,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Type to search or add investigations...',
-            ),
-            onChanged: _searchInvestigations,
-          ),
-          if (_investigationSuggestions.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: _investigationSuggestions.take(12).map((c) {
-                return ActionChip(
-                  label: Text(c, style: const TextStyle(fontSize: 12)),
-                  onPressed: () => _applyInvestigationSuggestion(c),
-                );
-              }).toList(),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Text('Diagnoses', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => _diagnosisFocus.requestFocus(),
-            child: InputDecorator(
-              isFocused: _diagnosisFocus.hasFocus,
-              isEmpty: _diagnoses.isEmpty && _diagnosisInput.text.isEmpty,
-              decoration: InputDecoration(
-                hintText: _diagnoses.isEmpty
-                    ? 'Search or add diagnosis'
-                    : null,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-              ),
-              child: Column(
+              }
+
+              final observationField = chipField(
+                title: 'Observation',
+                emptyHint: 'Search, pick, or type & press Enter',
+                suggestField: 'observation',
+                selected: _observations,
+                input: _observationInput,
+                focus: _observationFocus,
+                suggestions: _observationSuggestions,
+                onChanged: _searchObservations,
+                onSubmitted: _addObservation,
+                onSuggestionTap: _selectObservationSuggestion,
+                onDelete: (item) => setState(() => _observations.remove(item)),
+              );
+
+              final investigationField = chipField(
+                title: 'Investigation',
+                emptyHint: 'Search, pick, or type & press Enter',
+                suggestField: 'investigation',
+                selected: _investigations,
+                input: _investigationInput,
+                focus: _investigationFocus,
+                suggestions: _investigationSuggestions,
+                onChanged: _searchInvestigations,
+                onSubmitted: _addInvestigation,
+                onSuggestionTap: _selectInvestigationSuggestion,
+                onDelete: (item) => setState(() => _investigations.remove(item)),
+              );
+
+              final diagnosisVisibleSuggestions = _openSuggestField == 'diagnosis'
+                  ? _diagnosisSuggestions
+                      .where(
+                        (d) => !_diagnoses.any(
+                          (sel) =>
+                              sel.diagnosisName.toLowerCase() ==
+                              d.diagnosisName.toLowerCase(),
+                        ),
+                      )
+                      .take(12)
+                      .toList()
+                  : const <VisitDiagnosis>[];
+
+              final diagnosisField = Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (_diagnoses.isNotEmpty) ...[
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: _diagnoses
-                          .map(
-                            (d) => InputChip(
-                              label: Text(
-                                d.diagnosisName,
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                              onDeleted: () =>
-                                  setState(() => _diagnoses.remove(d)),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                    const SizedBox(height: 4),
-                  ],
-                  TextField(
-                    controller: _diagnosisInput,
-                    focusNode: _diagnosisFocus,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      filled: false,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 2,
-                        vertical: 4,
-                      ),
-                      hintText: _diagnoses.isEmpty ? null : 'Add another…',
-                    ),
-                    onChanged: (v) {
-                      setState(() {});
-                      _searchDiagnoses(v);
-                    },
-                    onSubmitted: _addDiagnosis,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_diagnosisSuggestions.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: _diagnosisSuggestions
-                    .map(
-                      (d) => ActionChip(
-                        label: Text(
-                          d.icdCode != null
-                              ? '${d.diagnosisName} (${d.icdCode})'
-                              : d.diagnosisName,
-                          style: const TextStyle(fontSize: 12),
+                  Text('Diagnoses', style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _diagnosisFocus.requestFocus(),
+                    child: InputDecorator(
+                      isFocused: _diagnosisFocus.hasFocus,
+                      isEmpty: _diagnoses.isEmpty && _diagnosisInput.text.isEmpty,
+                      decoration: InputDecoration(
+                        hintText: _diagnoses.isEmpty
+                            ? 'Search, pick, or type & press Enter'
+                            : null,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
                         ),
-                        onPressed: () => _addDiagnosisFromSuggestion(d),
                       ),
-                    )
-                    .toList(),
-              ),
-            ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_diagnoses.isNotEmpty) ...[
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: _diagnoses
+                                  .map(
+                                    (d) => InputChip(
+                                      label: Text(
+                                        d.diagnosisName,
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      onDeleted: () =>
+                                          setState(() => _diagnoses.remove(d)),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                          TextField(
+                            controller: _diagnosisInput,
+                            focusNode: _diagnosisFocus,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              filled: false,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 2,
+                                vertical: 4,
+                              ),
+                              hintText: _diagnoses.isEmpty ? null : 'Add another…',
+                            ),
+                            onChanged: (v) {
+                              setState(() {});
+                              _searchDiagnoses(v);
+                            },
+                            onSubmitted: _addDiagnosis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (diagnosisVisibleSuggestions.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: diagnosisVisibleSuggestions
+                            .map(
+                              (d) => GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTapDown: (_) => _selectDiagnosisSuggestion(d),
+                                child: Chip(
+                                  label: Text(
+                                    d.icdCode != null
+                                        ? '${d.diagnosisName} (${d.icdCode})'
+                                        : d.diagnosisName,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
+                ],
+              );
+
+              if (narrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    observationField,
+                    const SizedBox(height: 16),
+                    investigationField,
+                    const SizedBox(height: 16),
+                    diagnosisField,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: observationField),
+                  const SizedBox(width: 12),
+                  Expanded(child: investigationField),
+                  const SizedBox(width: 12),
+                  Expanded(child: diagnosisField),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 16),
           Row(
             children: [
