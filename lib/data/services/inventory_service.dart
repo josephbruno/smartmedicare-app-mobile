@@ -42,13 +42,42 @@ class InventoryService {
   }
 
   Future<List<StockMovement>> movements({Map<String, dynamic>? query}) async {
+    final result = await movementsPaginated(
+      page: int.tryParse(query?['page']?.toString() ?? '') ?? 1,
+      perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
+      productId: int.tryParse(query?['product_id']?.toString() ?? ''),
+      type: query?['type']?.toString(),
+      manualOnly: query?['manual_only'] == true || query?['manual_only'] == 'true' || query?['manual_only'] == 1,
+      dateFrom: query?['date_from']?.toString(),
+      dateTo: query?['date_to']?.toString(),
+    );
+    return result.items;
+  }
+
+  Future<({List<StockMovement> items, PaginationMeta? meta})> movementsPaginated({
+    int page = 1,
+    int perPage = 20,
+    int? productId,
+    String? search,
+    String? type,
+    bool manualOnly = false,
+    String? dateFrom,
+    String? dateTo,
+    int? userId,
+  }) async {
     try {
-      final res =
-          await _client.get('/inventory/movements', queryParameters: query);
-      return parseEnvelopeData(
-        res,
-        (data) => listFromData(data, StockMovement.fromJson),
-      );
+      final res = await _client.get('/inventory/movements', queryParameters: {
+        'page': page,
+        'per_page': perPage,
+        if (productId != null) 'product_id': productId,
+        if (search != null && search.isNotEmpty) 'search': search,
+        if (type != null && type.isNotEmpty) 'type': type,
+        if (manualOnly) 'manual_only': true,
+        if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
+        if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
+        if (userId != null) 'user_id': userId,
+      });
+      return parseEnvelopeList(res, StockMovement.fromJson);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -108,11 +137,17 @@ class InventoryService {
     int page = 1,
     int perPage = 20,
     bool includeSummary = true,
+    String? search,
+    int? categoryId,
+    bool? lowStock,
   }) async {
     final result = await list(query: {
       'page': page,
       'per_page': perPage,
       if (includeSummary) 'include_summary': true,
+      if (search != null && search.isNotEmpty) 'search': search,
+      if (categoryId != null) 'category_id': categoryId,
+      if (lowStock == true) 'low_stock': 'true',
     });
     return (items: result.items, meta: result.pagination);
   }

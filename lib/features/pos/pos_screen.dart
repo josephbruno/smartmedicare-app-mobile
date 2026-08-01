@@ -487,7 +487,10 @@ class _PosScreenState extends State<PosScreen> {
   double _ic(double size) =>
       _desktop ? size * AppConfig.desktopIconScale : size;
 
-  double _fs(double size) => _desktop ? size + 3 : size;
+  double _fs(double size) => size;
+
+  /// Smaller type for the right-hand cart workspace column.
+  double _cartFs(double size) => size - 2;
 
   Widget _shortcutHint(String keys, String label) {
     return Row(
@@ -512,28 +515,28 @@ class _PosScreenState extends State<PosScreen> {
     return Row(
       children: [
         Container(
-          width: _desktop ? 40 : 36,
-          height: _desktop ? 40 : 36,
+          width: _desktop ? 32 : 28,
+          height: _desktop ? 32 : 28,
           decoration: BoxDecoration(
             color: AppTheme.primary,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(Icons.shopping_cart_rounded, color: Colors.white, size: _ic(20)),
+          child: Icon(Icons.shopping_cart_rounded, color: Colors.white, size: _ic(16)),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
           child: Text(
             'Cart Workspace',
             style: TextStyle(
               fontWeight: FontWeight.w800,
-              fontSize: _fs(18),
+              fontSize: _cartFs(15),
               color: AppTheme.textPrimary,
               height: 1.2,
             ),
           ),
         ),
         Container(
-          padding: EdgeInsets.symmetric(horizontal: _desktop ? 10 : 8, vertical: _desktop ? 4 : 3),
+          padding: EdgeInsets.symmetric(horizontal: _desktop ? 8 : 6, vertical: _desktop ? 3 : 2),
           decoration: BoxDecoration(
             color: AppTheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
@@ -542,7 +545,7 @@ class _PosScreenState extends State<PosScreen> {
             '${cart.items.length} items',
             style: TextStyle(
               color: AppTheme.primary,
-              fontSize: _fs(11),
+              fontSize: _cartFs(10),
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -554,24 +557,24 @@ class _PosScreenState extends State<PosScreen> {
   Widget _buildCartCustomerSection(PosCartNotifier cart) {
     final customer = cart.customer;
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: _desktop ? 14 : 12, vertical: _desktop ? 12 : 10),
+      padding: EdgeInsets.symmetric(horizontal: _desktop ? 10 : 8, vertical: _desktop ? 8 : 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFBFDBFE)),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            radius: _desktop ? 20 : 18,
+            radius: _desktop ? 16 : 14,
             backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
             child: Icon(
               customer == null ? Icons.person_outline_rounded : Icons.person_pin_rounded,
               color: AppTheme.primary,
-              size: _ic(20),
+              size: _ic(16),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -579,18 +582,18 @@ class _PosScreenState extends State<PosScreen> {
                 Text(
                   'BILLING CUSTOMER',
                   style: TextStyle(
-                    fontSize: _fs(10),
+                    fontSize: _cartFs(9),
                     fontWeight: FontWeight.w800,
                     color: AppTheme.textSecondary,
                     letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   customer?.name ?? 'Walk-in Customer',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: _fs(14),
+                    fontSize: _cartFs(12),
                     color: AppTheme.textPrimary,
                   ),
                   maxLines: 1,
@@ -599,37 +602,37 @@ class _PosScreenState extends State<PosScreen> {
                 if (customer?.phone.isNotEmpty == true)
                   Text(
                     customer!.phone,
-                    style: TextStyle(fontSize: _fs(12), color: AppTheme.textSecondary),
+                    style: TextStyle(fontSize: _cartFs(10), color: AppTheme.textSecondary),
                   ),
                 if (customer != null) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
+                    spacing: 4,
+                    runSpacing: 2,
                     children: [
                       if (customer.advanceBalance > 0)
                         _PosBalanceChip(
                           label: 'Adv ₹${customer.advanceBalance.toStringAsFixed(0)}',
                           color: AppTheme.accent,
-                          large: _desktop,
+                          large: false,
                         ),
                       if (customer.loyaltyPoints > 0)
                         _PosBalanceChip(
                           label: '${customer.loyaltyPoints} pts',
                           color: AppTheme.warning,
-                          large: _desktop,
+                          large: false,
                         ),
                       if ((customer.creditLimit ?? 0) > 0)
                         _PosBalanceChip(
                           label: 'Limit ₹${customer.creditLimit!.toStringAsFixed(0)}',
                           color: AppTheme.textSecondary,
-                          large: _desktop,
+                          large: false,
                         ),
                       if ((customer.outstandingBalance ?? 0) > 0)
                         _PosBalanceChip(
                           label: 'Due ₹${customer.outstandingBalance!.toStringAsFixed(0)}',
                           color: AppTheme.danger,
-                          large: _desktop,
+                          large: false,
                         ),
                     ],
                   ),
@@ -640,9 +643,9 @@ class _PosScreenState extends State<PosScreen> {
           if (customer != null)
             IconButton(
               tooltip: 'Clear customer',
-              icon: Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: _ic(18)),
+              icon: Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: _ic(16)),
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
               onPressed: () => cart.setCustomer(null),
             ),
           TextButton(
@@ -657,19 +660,19 @@ class _PosScreenState extends State<PosScreen> {
             },
             style: TextButton.styleFrom(
               foregroundColor: AppTheme.primary,
-              padding: EdgeInsets.symmetric(horizontal: _desktop ? 8 : 4, vertical: 4),
+              padding: EdgeInsets.symmetric(horizontal: _desktop ? 6 : 2, vertical: 2),
               visualDensity: VisualDensity.compact,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.search_rounded, size: _ic(16)),
-                const SizedBox(width: 4),
+                Icon(Icons.search_rounded, size: _ic(14)),
+                const SizedBox(width: 2),
                 Text(
                   customer == null ? 'Select' : 'Change',
-                  style: TextStyle(fontSize: _fs(13), fontWeight: FontWeight.w700),
+                  style: TextStyle(fontSize: _cartFs(11), fontWeight: FontWeight.w500),
                 ),
-                Icon(Icons.chevron_right_rounded, size: _ic(18)),
+                Icon(Icons.chevron_right_rounded, size: _ic(16)),
               ],
             ),
           ),
@@ -687,18 +690,18 @@ class _PosScreenState extends State<PosScreen> {
         runSpacing: 6,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Icon(Icons.pause_circle_filled_rounded, color: AppTheme.warning, size: _ic(16)),
+          Icon(Icons.pause_circle_filled_rounded, color: AppTheme.warning, size: _ic(14)),
           Text(
             'Held:',
-            style: TextStyle(fontSize: _fs(12), fontWeight: FontWeight.bold, color: AppTheme.textSecondary),
+            style: TextStyle(fontSize: _cartFs(10), fontWeight: FontWeight.bold, color: AppTheme.textSecondary),
           ),
           for (final h in cart.heldBills)
             ActionChip(
-              label: Text(h.id.split('-').last, style: TextStyle(fontSize: _fs(11))),
-              visualDensity: _desktop ? VisualDensity.standard : VisualDensity.compact,
+              label: Text(h.id.split('-').last, style: TextStyle(fontSize: _cartFs(10))),
+              visualDensity: VisualDensity.compact,
               backgroundColor: AppTheme.warning.withOpacity(0.08),
               side: const BorderSide(color: AppTheme.warning),
-              labelStyle: TextStyle(color: AppTheme.warning, fontWeight: FontWeight.bold, fontSize: _fs(11)),
+              labelStyle: TextStyle(color: AppTheme.warning, fontWeight: FontWeight.bold, fontSize: _cartFs(10)),
               onPressed: () => cart.restoreHeldBill(h.id),
             ),
         ],
@@ -714,6 +717,152 @@ class _PosScreenState extends State<PosScreen> {
     final desktopShortcuts = useWebLikeShell(context);
     final showBillingQueue = desktopShortcuts && auth.hasPermission('emr.visits.bill');
 
+    final cartTotalsFooter = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Subtotal', style: TextStyle(color: AppTheme.textSecondary, fontSize: _cartFs(11))),
+                  Text(
+                    '₹${cart.subtotal.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: _cartFs(11),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'GST (CGST + SGST)',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: _cartFs(11)),
+                  ),
+                  Text(
+                    '₹${cart.totalGst.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: _cartFs(11),
+                    ),
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: CustomPaint(
+                  painter: _DashedLinePainter(color: const Color(0xFFCBD5E1)),
+                  child: const SizedBox(width: double.infinity, height: 1),
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: _desktop ? 8 : 6,
+                  vertical: _desktop ? 7 : 6,
+                ),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'GRAND TOTAL',
+                      style: TextStyle(
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: _cartFs(11),
+                      ),
+                    ),
+                    Text(
+                      '₹${cart.grandTotal.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: _cartFs(14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: cart.items.isEmpty ? null : () => cart.holdBill(),
+                icon: Icon(Icons.pause_circle_outline_rounded, size: _ic(16)),
+                label: Text('Hold Bill', style: TextStyle(fontSize: _cartFs(12), fontWeight: FontWeight.w500)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.primary,
+                  side: const BorderSide(color: AppTheme.primary, width: 1.4),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: _desktop ? 14 : 12,
+                    vertical: _desktop ? 12 : 10,
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: cart.items.isEmpty
+                    ? null
+                    : () {
+                        final auth = context.read<AuthSession>();
+                        final online = context.read<ConnectivityNotifier>().isOnline;
+                        if (online &&
+                            auth.hasPermission(AppPermissions.cashierShiftStart) &&
+                            (_cashSession == null || !_cashSession!.isOpen)) {
+                          AppMessenger.show(
+                            context,
+                            const SnackBar(
+                              content: Text('Start your cash shift before checkout.'),
+                              backgroundColor: AppTheme.warning,
+                            ),
+                          );
+                          return;
+                        }
+                        _checkout();
+                      },
+                icon: Icon(Icons.add_shopping_cart_rounded, size: _ic(16)),
+                label: Text('Checkout', style: TextStyle(fontSize: _cartFs(12), fontWeight: FontWeight.w500)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: _desktop ? 14 : 12,
+                    vertical: _desktop ? 12 : 10,
+                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
     final cartPanel = Container(
       decoration: const BoxDecoration(
         color: AppTheme.background,
@@ -721,67 +870,76 @@ class _PosScreenState extends State<PosScreen> {
       ),
       child: Padding(
         padding: EdgeInsets.fromLTRB(_desktop ? 14 : 12, _desktop ? 12 : 10, _desktop ? 14 : 12, _desktop ? 12 : 10),
+        // Scrollable workspace + sticky totals/actions so resized Windows
+        // windows never clip the cart column (RenderFlex bottom overflow).
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildCartWorkspaceHeader(cart),
-            const SizedBox(height: 10),
-            CashierShiftPanel(
-              session: _cashSession,
-              dayStatus: _dayStatus,
-              dayClosed: _dayClosed,
-              suggestedOpening: _suggestedOpening,
-              loading: _loadingCashSession,
-              onRefresh: _refreshCashSession,
-              compact: _desktop,
-            ),
-            const SizedBox(height: 8),
-            _buildCartCustomerSection(cart),
-            _buildCartHeldBillsSection(cart),
-            const SizedBox(height: 8),
             Expanded(
-              child: cart.items.isEmpty
-                  ? Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: CustomScrollView(
+                clipBehavior: Clip.hardEdge,
+                slivers: [
+                  SliverToBoxAdapter(child: _buildCartWorkspaceHeader(cart)),
+                  const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                  SliverToBoxAdapter(
+                    child: CashierShiftPanel(
+                      session: _cashSession,
+                      dayStatus: _dayStatus,
+                      dayClosed: _dayClosed,
+                      suggestedOpening: _suggestedOpening,
+                      loading: _loadingCashSession,
+                      onRefresh: _refreshCashSession,
+                      compact: _desktop,
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                  SliverToBoxAdapter(child: _buildCartCustomerSection(cart)),
+                  SliverToBoxAdapter(child: _buildCartHeldBillsSection(cart)),
+                  const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                  if (cart.items.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        alignment: Alignment.center,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                           child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Container(
-                                width: _desktop ? 88 : 72,
-                                height: _desktop ? 88 : 72,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF1F5F9),
+                                width: _desktop ? 64 : 56,
+                                height: _desktop ? 64 : 56,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF1F5F9),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   Icons.shopping_cart_outlined,
-                                  size: _ic(36),
+                                  size: _ic(28),
                                   color: AppTheme.primary.withValues(alpha: 0.35),
                                 ),
                               ),
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 10),
                               Text(
                                 'Your cart is empty',
                                 style: TextStyle(
                                   color: AppTheme.textPrimary,
                                   fontWeight: FontWeight.w800,
-                                  fontSize: _fs(15),
+                                  fontSize: _cartFs(13),
                                 ),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 4),
                               Text(
                                 'Select products on the left to add to cart',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: AppTheme.textSecondary,
-                                  fontSize: _fs(12),
+                                  fontSize: _cartFs(11),
                                 ),
                               ),
                             ],
@@ -789,174 +947,44 @@ class _PosScreenState extends State<PosScreen> {
                         ),
                       ),
                     )
-                  : ListView.builder(
-                      padding: EdgeInsets.zero,
-                      clipBehavior: Clip.hardEdge,
-                      itemCount: cart.items.length,
-                      itemBuilder: (c, i) {
-                        final it = cart.items[i];
-                        final billingVisit = cart.pendingVisitId != null;
-                        final canEditPrice = billingVisit && it.isServiceCharge;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
-                          child: _CartLineTile(
-                            name: it.productName,
-                            unitPrice: it.unitPrice,
-                            quantity: it.quantity,
-                            lineTotal: it.totalAmount,
-                            canEditPrice: canEditPrice,
-                            showQtyControls: !it.isServiceCharge,
-                            desktop: _desktop,
-                            onEditPrice: () => _editCartLinePrice(cart, i),
-                            onDec: () {
-                              if (it.quantity > 1) {
-                                cart.updateQuantity(i, it.quantity - 1);
-                              } else {
-                                cart.removeItem(i);
-                              }
-                            },
-                            onInc: () => cart.updateQuantity(i, it.quantity + 1),
-                            onRemove: () => cart.removeItem(i),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Subtotal', style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(12))),
-                      Text(
-                        '₹${cart.subtotal.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: _fs(12),
-                        ),
+                  else
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (c, i) {
+                          final it = cart.items[i];
+                          final billingVisit = cart.pendingVisitId != null;
+                          final canEditPrice = billingVisit && it.isServiceCharge;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: _CartLineTile(
+                              name: it.productName,
+                              unitPrice: it.unitPrice,
+                              quantity: it.quantity,
+                              lineTotal: it.totalAmount,
+                              canEditPrice: canEditPrice,
+                              showQtyControls: !it.isServiceCharge,
+                              desktop: _desktop,
+                              onEditPrice: () => _editCartLinePrice(cart, i),
+                              onDec: () {
+                                if (it.quantity > 1) {
+                                  cart.updateQuantity(i, it.quantity - 1);
+                                } else {
+                                  cart.removeItem(i);
+                                }
+                              },
+                              onInc: () => cart.updateQuantity(i, it.quantity + 1),
+                              onRemove: () => cart.removeItem(i),
+                            ),
+                          );
+                        },
+                        childCount: cart.items.length,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'GST (CGST + SGST)',
-                        style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(12)),
-                      ),
-                      Text(
-                        '₹${cart.totalGst.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: _fs(12),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: CustomPaint(
-                      painter: _DashedLinePainter(color: const Color(0xFFCBD5E1)),
-                      child: const SizedBox(width: double.infinity, height: 1),
                     ),
-                  ),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: _desktop ? 10 : 8,
-                      vertical: _desktop ? 10 : 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'GRAND TOTAL',
-                          style: TextStyle(
-                            color: AppTheme.primary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: _fs(12),
-                          ),
-                        ),
-                        Text(
-                          '₹${cart.grandTotal.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: AppTheme.primary,
-                            fontWeight: FontWeight.w900,
-                            fontSize: _fs(16),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
             const SizedBox(height: 8),
-            // Actions Row
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: cart.items.isEmpty ? null : () => cart.holdBill(),
-                    icon: Icon(Icons.pause_circle_outline_rounded, size: _ic(18)),
-                    label: Text('Hold Bill', style: TextStyle(fontSize: _fs(13), fontWeight: FontWeight.w700)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.primary,
-                      side: const BorderSide(color: AppTheme.primary, width: 1.4),
-                      padding: EdgeInsets.symmetric(vertical: _desktop ? 12 : 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: cart.items.isEmpty
-                        ? null
-                        : () {
-                            final auth = context.read<AuthSession>();
-                            final online = context.read<ConnectivityNotifier>().isOnline;
-                            if (online &&
-                                auth.hasPermission(AppPermissions.cashierShiftStart) &&
-                                (_cashSession == null || !_cashSession!.isOpen)) {
-                              AppMessenger.show(
-                                context,
-                                const SnackBar(
-                                  content: Text('Start your cash shift before checkout.'),
-                                  backgroundColor: AppTheme.warning,
-                                ),
-                              );
-                              return;
-                            }
-                            _checkout();
-                          },
-                    icon: Icon(Icons.add_shopping_cart_rounded, size: _ic(18)),
-                    label: Text('Checkout', style: TextStyle(fontSize: _fs(13), fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: EdgeInsets.symmetric(vertical: _desktop ? 12 : 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            cartTotalsFooter,
           ],
         ),
       ),
@@ -1317,7 +1345,7 @@ class _PosScreenState extends State<PosScreen> {
                                                       '+ Add',
                                                       style: TextStyle(
                                                         fontSize: _fs(12),
-                                                        fontWeight: FontWeight.w600,
+                                                        fontWeight: FontWeight.w500,
                                                       ),
                                                     ),
                                                   ),
@@ -1358,7 +1386,7 @@ class _PosScreenState extends State<PosScreen> {
               (auth.hasRole(AppRoles.cashier) ||
                   auth.hasPermission(AppPermissions.shopManage)))
             IconButton(
-              tooltip: 'USB Printer (XPrinter ESC/POS)',
+              tooltip: 'USB Printer (XPrinter TSPL · 203 dpi)',
               visualDensity: VisualDensity.compact,
               onPressed: () => context.go('/settings/printer'),
               icon: Icon(Icons.print_outlined, size: _ic(20), color: AppTheme.primary),
@@ -1429,7 +1457,7 @@ class _PosScreenState extends State<PosScreen> {
                 indicatorColor: AppTheme.primary,
                 labelColor: AppTheme.primary,
                 unselectedLabelColor: AppTheme.textSecondary,
-                labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                 tabs: [
                   Tab(
                     child: Row(
@@ -1530,7 +1558,7 @@ class _SelectCustomerDialogState extends State<_SelectCustomerDialog> {
   // Keep dialog typography compact even on desktop POS shells.
   double _ic(double size) => _desktop ? size * 1.15 : size;
 
-  double _fs(double size) => _desktop ? size + 1 : size;
+  double _fs(double size) => size;
 
   @override
   void initState() {
@@ -1840,7 +1868,7 @@ class _IdleSearchState extends StatelessWidget {
               Text(
                 'Find a customer',
                 style: TextStyle(
-                  fontSize: fontSize + 3,
+                  fontSize: fontSize,
                   fontWeight: FontWeight.w800,
                   color: AppTheme.textPrimary,
                 ),
@@ -1935,7 +1963,7 @@ class _EmptyResultsState extends StatelessWidget {
               Text(
                 'No customers found',
                 style: TextStyle(
-                  fontSize: fontSize + 4,
+                  fontSize: fontSize + 1,
                   fontWeight: FontWeight.w800,
                   color: AppTheme.textPrimary,
                 ),
@@ -1999,7 +2027,7 @@ class _MessageState extends StatelessWidget {
             Text(
               title,
               style: TextStyle(
-                fontSize: fontSize + 2,
+                fontSize: fontSize - 1,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textPrimary,
               ),
@@ -2042,7 +2070,7 @@ class _HintChip extends StatelessWidget {
             style: const TextStyle(
               fontWeight: FontWeight.w600,
               color: AppTheme.textPrimary,
-              fontSize: 13,
+              fontSize: 10,
             ),
           ),
         ],
@@ -2255,7 +2283,7 @@ class _QuickCreateCustomerDialogState extends State<_QuickCreateCustomerDialog> 
 
   @override
   Widget build(BuildContext context) {
-    final fs = widget.desktop ? 15.0 : 14.0;
+    final fs = widget.desktop ? 12.0 : 11.0;
     return AlertDialog(
       title: const Text('Create customer'),
       content: SizedBox(
@@ -2368,9 +2396,9 @@ class _CartLineTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final nameSize = desktop ? 13.0 : 12.5;
-    final metaSize = desktop ? 11.5 : 11.0;
-    final totalSize = desktop ? 13.0 : 12.5;
+    final nameSize = desktop ? 10.0 : 9.5;
+    final metaSize = desktop ? 8.5 : 8.0;
+    final totalSize = desktop ? 10.0 : 9.5;
     final btn = desktop ? 28.0 : 26.0;
     final icon = desktop ? 15.0 : 14.0;
 
@@ -2397,7 +2425,7 @@ class _CartLineTile extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      fontSize: desktop ? 13 : 12,
+                      fontSize: desktop ? 10 : 9,
                     ),
                   ),
                 ),
@@ -2577,7 +2605,7 @@ class _PosBalanceChip extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: large ? 12 : 10,
+          fontSize: large ? 9 : 7,
           fontWeight: FontWeight.w700,
           color: color,
         ),

@@ -51,6 +51,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   List<String> _investigations = [];
   final List<_TreatmentRow> _treatments = [];
   final List<_MedicineRow> _medicines = [];
+  final List<_VaccinationRow> _vaccinations = [];
+  final List<_DewormingRow> _dewormings = [];
+  final List<_SurgeryRow> _surgeries = [];
   List<String> _complaintSuggestions = [];
   List<String> _observationSuggestions = [];
   List<String> _investigationSuggestions = [];
@@ -402,6 +405,24 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _medicines
       ..clear()
       ..addAll((visit.medicines ?? []).map(_MedicineRow.fromModel));
+    for (final r in _vaccinations) {
+      r.dispose();
+    }
+    _vaccinations
+      ..clear()
+      ..addAll((visit.vaccinations ?? []).map(_VaccinationRow.fromModel));
+    for (final r in _dewormings) {
+      r.dispose();
+    }
+    _dewormings
+      ..clear()
+      ..addAll((visit.dewormings ?? []).map(_DewormingRow.fromModel));
+    for (final r in _surgeries) {
+      r.dispose();
+    }
+    _surgeries
+      ..clear()
+      ..addAll((visit.surgeries ?? []).map(_SurgeryRow.fromModel));
     if (visit.serviceCharge > 0) {
       _serviceCharge.text = visit.serviceCharge.toString();
     } else {
@@ -1050,6 +1071,21 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           for (final m in _medicines)
             if (m.nameCtrl.text.trim().isNotEmpty) m.toJson(),
         ],
+      if (_isEdit || _vaccinations.isNotEmpty)
+        'vaccinations': [
+          for (final v in _vaccinations)
+            if (v.nameCtrl.text.trim().isNotEmpty) v.toJson(),
+        ],
+      if (_isEdit || _dewormings.isNotEmpty)
+        'dewormings': [
+          for (final d in _dewormings)
+            if (d.nameCtrl.text.trim().isNotEmpty) d.toJson(),
+        ],
+      if (_isEdit || _surgeries.isNotEmpty)
+        'surgeries': [
+          for (final s in _surgeries)
+            if (s.nameCtrl.text.trim().isNotEmpty) s.toJson(),
+        ],
     };
   }
 
@@ -1131,6 +1167,15 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     }
     for (final m in _medicines) {
       m.dispose();
+    }
+    for (final v in _vaccinations) {
+      v.dispose();
+    }
+    for (final d in _dewormings) {
+      d.dispose();
+    }
+    for (final s in _surgeries) {
+      s.dispose();
     }
     super.dispose();
   }
@@ -2269,6 +2314,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             maxLines: 3,
             decoration: const InputDecoration(labelText: 'Clinical notes'),
           ),
+          const SizedBox(height: 20),
+          _buildVaccinationSection(),
+          const SizedBox(height: 20),
+          _buildDewormingSection(),
+          const SizedBox(height: 20),
+          _buildSurgerySection(),
           const SizedBox(height: 16),
           Text('Follow-up', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
@@ -2328,6 +2379,356 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _sectionHeader(String title, VoidCallback onAdd) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(title, style: Theme.of(context).textTheme.titleSmall),
+        ),
+        TextButton.icon(
+          onPressed: onAdd,
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('Add'),
+        ),
+      ],
+    );
+  }
+
+  Future<DateTime?> _pickDueDate(DateTime? current) {
+    return showDatePicker(
+      context: context,
+      initialDate: current ?? DateTime.now().add(const Duration(days: 30)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+  }
+
+  Widget _buildVaccinationSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionHeader('Vaccinations', () {
+          setState(() => _vaccinations.add(_VaccinationRow()));
+        }),
+        Text(
+          'Set next due date to create a vaccination reminder',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+        ),
+        const SizedBox(height: 8),
+        if (_vaccinations.isEmpty)
+          Text(
+            'No vaccinations for this visit',
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+          ),
+        ..._vaccinations.asMap().entries.map((e) {
+          final i = e.key;
+          final row = e.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: row.nameCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Vaccine name *',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove',
+                        onPressed: () {
+                          setState(() {
+                            final removed = _vaccinations.removeAt(i);
+                            WidgetsBinding.instance
+                                .addPostFrameCallback((_) => removed.dispose());
+                          });
+                        },
+                        icon: const Icon(Icons.close, size: 18),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: row.brandCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Brand',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: row.byCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Administered by',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final d = await _pickDueDate(row.nextDueDate);
+                        if (d != null) setState(() => row.nextDueDate = d);
+                      },
+                      icon: const Icon(Icons.notifications_active_outlined, size: 16),
+                      label: Text(
+                        row.nextDueDate != null
+                            ? 'Next due ${row.nextDueDate!.toIso8601String().substring(0, 10)}'
+                            : 'Set next due (reminder)',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildDewormingSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionHeader('Deworming', () {
+          setState(() => _dewormings.add(_DewormingRow()));
+        }),
+        Text(
+          'Set next due date to create a deworming reminder',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+        ),
+        const SizedBox(height: 8),
+        if (_dewormings.isEmpty)
+          Text(
+            'No deworming for this visit',
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+          ),
+        ..._dewormings.asMap().entries.map((e) {
+          final i = e.key;
+          final row = e.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: row.nameCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Medicine *',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove',
+                        onPressed: () {
+                          setState(() {
+                            final removed = _dewormings.removeAt(i);
+                            WidgetsBinding.instance
+                                .addPostFrameCallback((_) => removed.dispose());
+                          });
+                        },
+                        icon: const Icon(Icons.close, size: 18),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: row.dosageCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Dosage',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: row.byCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Administered by',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final d = await _pickDueDate(row.nextDueDate);
+                        if (d != null) setState(() => row.nextDueDate = d);
+                      },
+                      icon: const Icon(Icons.event_outlined, size: 16),
+                      label: Text(
+                        row.nextDueDate != null
+                            ? 'Next due ${row.nextDueDate!.toIso8601String().substring(0, 10)}'
+                            : 'Set next due (reminder)',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildSurgerySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionHeader('Surgery', () {
+          setState(() => _surgeries.add(_SurgeryRow(
+                surgeonName: _selectedDoctor?.name ?? '',
+              )));
+        }),
+        const SizedBox(height: 8),
+        if (_surgeries.isEmpty)
+          Text(
+            'No surgery for this visit',
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+          ),
+        ..._surgeries.asMap().entries.map((e) {
+          final i = e.key;
+          final row = e.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: row.nameCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Surgery name *',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove',
+                        onPressed: () {
+                          setState(() {
+                            final removed = _surgeries.removeAt(i);
+                            WidgetsBinding.instance
+                                .addPostFrameCallback((_) => removed.dispose());
+                          });
+                        },
+                        icon: const Icon(Icons.close, size: 18),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: row.anesthesiaCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Anesthesia',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: row.surgeonCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Surgeon',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: row.costCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Cost',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final d = await _pickDueDate(row.followUpDate);
+                            if (d != null) setState(() => row.followUpDate = d);
+                          },
+                          icon: const Icon(Icons.event_outlined, size: 16),
+                          label: Text(
+                            row.followUpDate != null
+                                ? row.followUpDate!.toIso8601String().substring(0, 10)
+                                : 'Follow-up',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
     );
   }
 }
@@ -2858,6 +3259,128 @@ class _CreateServiceDialogState extends State<_CreateServiceDialog> {
         ),
       ),
     );
+  }
+}
+
+class _VaccinationRow {
+  _VaccinationRow({
+    String name = '',
+    String brand = '',
+    String administeredBy = '',
+    this.nextDueDate,
+  })  : nameCtrl = TextEditingController(text: name),
+        brandCtrl = TextEditingController(text: brand),
+        byCtrl = TextEditingController(text: administeredBy);
+
+  factory _VaccinationRow.fromModel(PetVaccination v) => _VaccinationRow(
+        name: v.vaccineName,
+        brand: v.vaccineBrand ?? '',
+        administeredBy: v.administeredBy ?? '',
+        nextDueDate: v.nextDueDate != null ? DateTime.tryParse(v.nextDueDate!) : null,
+      );
+
+  final TextEditingController nameCtrl;
+  final TextEditingController brandCtrl;
+  final TextEditingController byCtrl;
+  DateTime? nextDueDate;
+
+  Map<String, dynamic> toJson() => {
+        'vaccine_name': nameCtrl.text.trim(),
+        if (brandCtrl.text.trim().isNotEmpty) 'vaccine_brand': brandCtrl.text.trim(),
+        if (byCtrl.text.trim().isNotEmpty) 'administered_by': byCtrl.text.trim(),
+        if (nextDueDate != null)
+          'next_due_date': nextDueDate!.toIso8601String().substring(0, 10),
+        'reminder_days_before': 7,
+      };
+
+  void dispose() {
+    nameCtrl.dispose();
+    brandCtrl.dispose();
+    byCtrl.dispose();
+  }
+}
+
+class _DewormingRow {
+  _DewormingRow({
+    String name = '',
+    String dosage = '',
+    String administeredBy = '',
+    this.nextDueDate,
+  })  : nameCtrl = TextEditingController(text: name),
+        dosageCtrl = TextEditingController(text: dosage),
+        byCtrl = TextEditingController(text: administeredBy);
+
+  factory _DewormingRow.fromModel(PetDeworming d) => _DewormingRow(
+        name: d.medicineName,
+        dosage: d.dosage ?? '',
+        administeredBy: d.administeredBy ?? '',
+        nextDueDate: d.nextDueDate != null ? DateTime.tryParse(d.nextDueDate!) : null,
+      );
+
+  final TextEditingController nameCtrl;
+  final TextEditingController dosageCtrl;
+  final TextEditingController byCtrl;
+  DateTime? nextDueDate;
+
+  Map<String, dynamic> toJson() => {
+        'medicine_name': nameCtrl.text.trim(),
+        if (dosageCtrl.text.trim().isNotEmpty) 'dosage': dosageCtrl.text.trim(),
+        if (byCtrl.text.trim().isNotEmpty) 'administered_by': byCtrl.text.trim(),
+        if (nextDueDate != null)
+          'next_due_date': nextDueDate!.toIso8601String().substring(0, 10),
+      };
+
+  void dispose() {
+    nameCtrl.dispose();
+    dosageCtrl.dispose();
+    byCtrl.dispose();
+  }
+}
+
+class _SurgeryRow {
+  _SurgeryRow({
+    String name = '',
+    String anesthesia = '',
+    String surgeonName = '',
+    String cost = '',
+    this.followUpDate,
+  })  : nameCtrl = TextEditingController(text: name),
+        anesthesiaCtrl = TextEditingController(text: anesthesia),
+        surgeonCtrl = TextEditingController(text: surgeonName),
+        costCtrl = TextEditingController(text: cost);
+
+  factory _SurgeryRow.fromModel(PetSurgery s) => _SurgeryRow(
+        name: s.surgeryName,
+        anesthesia: s.anesthesiaType ?? '',
+        surgeonName: s.surgeonName ?? '',
+        cost: s.cost > 0 ? _formatAmount(s.cost) : '',
+        followUpDate: s.followUpDate != null ? DateTime.tryParse(s.followUpDate!) : null,
+      );
+
+  final TextEditingController nameCtrl;
+  final TextEditingController anesthesiaCtrl;
+  final TextEditingController surgeonCtrl;
+  final TextEditingController costCtrl;
+  DateTime? followUpDate;
+
+  Map<String, dynamic> toJson() => {
+        'surgery_name': nameCtrl.text.trim(),
+        if (anesthesiaCtrl.text.trim().isNotEmpty)
+          'anesthesia_type': anesthesiaCtrl.text.trim(),
+        if (surgeonCtrl.text.trim().isNotEmpty)
+          'surgeon_name': surgeonCtrl.text.trim(),
+        if (costCtrl.text.trim().isNotEmpty)
+          'cost': double.tryParse(costCtrl.text.trim()) ?? 0,
+        if (followUpDate != null)
+          'follow_up_date': followUpDate!.toIso8601String().substring(0, 10),
+        'status': 'completed',
+      };
+
+  void dispose() {
+    nameCtrl.dispose();
+    anesthesiaCtrl.dispose();
+    surgeonCtrl.dispose();
+    costCtrl.dispose();
   }
 }
 

@@ -30,7 +30,7 @@ class DesktopPrefs {
     await p.setBool(_notificationSoundKey, value);
   }
 
-  /// When true on Windows, print ESC/POS raw to the selected USB printer (no dialog).
+  /// When true on Windows/Linux, print TSPL raw to the selected USB printer (no dialog).
   static Future<bool> getDirectThermalPrint() async {
     final p = await SharedPreferences.getInstance();
     return p.getBool(_directPrintKey) ?? true;

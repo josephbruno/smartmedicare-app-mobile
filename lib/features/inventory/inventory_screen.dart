@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
 
@@ -6,9 +9,11 @@ import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
 import '../../data/models/inventory.dart';
+import '../../data/models/product.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -17,8 +22,68 @@ class InventoryScreen extends StatefulWidget {
   State<InventoryScreen> createState() => _InventoryScreenState();
 }
 
-class _InventoryScreenState extends State<InventoryScreen> {
+class _InventoryScreenState extends State<InventoryScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+  final _search = TextEditingController();
+  final _logSearch = TextEditingController();
+  Timer? _searchDebounce;
+  Timer? _logSearchDebounce;
+
   int _reloadToken = 0;
+  int _logReloadToken = 0;
+  int? _categoryId;
+  String _stockFilter = 'all'; // all | low
+  String _logTypeFilter = 'all'; // all | adjustment | damage | expiry
+  List<Category> _categories = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCategories());
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _logSearchDebounce?.cancel();
+    _tabs.dispose();
+    _search.dispose();
+    _logSearch.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final list = await context.read<AppServices>().products.listCategories();
+      if (!mounted) return;
+      setState(() => _categories = list.where((c) => c.isActive).toList());
+    } catch (_) {
+      // Filters still work without categories.
+    }
+  }
+
+  void _onSearchChanged(String _) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 280), () {
+      if (!mounted) return;
+      setState(() => _reloadToken++);
+    });
+  }
+
+  void _onLogSearchChanged(String _) {
+    _logSearchDebounce?.cancel();
+    _logSearchDebounce = Timer(const Duration(milliseconds: 280), () {
+      if (!mounted) return;
+      setState(() => _logReloadToken++);
+    });
+  }
+
+  InputDecoration get _filterDec => const InputDecoration(
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      );
 
   Future<void> _openAdjust(InventoryItem item) async {
     final auth = context.read<AuthSession>();
@@ -68,7 +133,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     const SizedBox(height: 8),
                     TextField(
                       controller: reasonCtrl,
-                      decoration: const InputDecoration(labelText: 'Reason'),
+                      decoration: const InputDecoration(
+                        labelText: 'Reason',
+                        hintText: 'e.g. Physical count / Damage / Expired',
+                      ),
                     ),
                   ],
                 ),
@@ -83,9 +151,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
       },
     );
 
+    final qtyText = qtyCtrl.text.trim();
+    final reasonText = reasonCtrl.text.trim();
+    qtyCtrl.dispose();
+    reasonCtrl.dispose();
+
     if (confirmed != true || !mounted) return;
 
-    final qty = double.tryParse(qtyCtrl.text.trim()) ?? 0;
+    final qty = double.tryParse(qtyText) ?? 0;
     if (qty < 0 || (type != 'set' && qty <= 0)) {
       AppMessenger.show(context, const SnackBar(content: Text('Enter a valid quantity')));
       return;
@@ -93,19 +166,175 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
     try {
       await context.read<AppServices>().inventory.adjust({
+        'inventory_id': item.id,
         'product_id': item.productId,
         'branch_id': branchId,
         'quantity': qty,
         'type': type,
-        'reason': reasonCtrl.text.trim().isEmpty ? 'Stock adjustment' : reasonCtrl.text.trim(),
+        'reason': reasonText.isEmpty ? 'Stock adjustment' : reasonText,
       });
       if (!mounted) return;
-      AppMessenger.show(context, const SnackBar(content: Text('Stock updated')));
-      setState(() => _reloadToken++);
+      AppMessenger.show(context, const SnackBar(content: Text('Stock updated & logged')));
+      setState(() {
+        _reloadToken++;
+        _logReloadToken++;
+      });
     } catch (e) {
       if (!mounted) return;
       AppMessenger.show(context, SnackBar(content: Text('$e')));
     }
+  }
+
+  Widget _buildStockFilters() {
+    final search = _search.text.trim();
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                hintText: 'Search by name, SKU, or barcode…',
+                prefixIcon: Icon(Icons.search, size: 20),
+                isDense: true,
+              ),
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => setState(() => _reloadToken++),
+              onChanged: _onSearchChanged,
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 170,
+            child: AppDropdownButtonFormField<int?>(
+              value: _categoryId,
+              isDense: true,
+              decoration: _filterDec.copyWith(labelText: 'Category'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('All categories')),
+                for (final c in _categories)
+                  DropdownMenuItem(
+                    value: c.id,
+                    child: Text(c.name, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (v) => setState(() {
+                _categoryId = v;
+                _reloadToken++;
+              }),
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 140,
+            child: AppDropdownButtonFormField<String>(
+              value: _stockFilter,
+              isDense: true,
+              decoration: _filterDec.copyWith(labelText: 'Stock'),
+              items: const [
+                DropdownMenuItem(value: 'all', child: Text('All stock')),
+                DropdownMenuItem(value: 'low', child: Text('Low stock')),
+              ],
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() {
+                  _stockFilter = v;
+                  _reloadToken++;
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton(
+            onPressed: () => setState(() => _reloadToken++),
+            child: const Text('Search'),
+          ),
+          if (search.isNotEmpty || _categoryId != null || _stockFilter != 'all') ...[
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () {
+                _search.clear();
+                setState(() {
+                  _categoryId = null;
+                  _stockFilter = 'all';
+                  _reloadToken++;
+                });
+              },
+              child: const Text('Clear'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogFilters() {
+    final search = _logSearch.text.trim();
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: TextField(
+              controller: _logSearch,
+              decoration: const InputDecoration(
+                hintText: 'Search product in log…',
+                prefixIcon: Icon(Icons.search, size: 20),
+                isDense: true,
+              ),
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => setState(() => _logReloadToken++),
+              onChanged: _onLogSearchChanged,
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 160,
+            child: AppDropdownButtonFormField<String>(
+              value: _logTypeFilter,
+              isDense: true,
+              decoration: _filterDec.copyWith(labelText: 'Type'),
+              items: const [
+                DropdownMenuItem(value: 'all', child: Text('All types')),
+                DropdownMenuItem(value: 'adjustment', child: Text('Adjustment')),
+                DropdownMenuItem(value: 'damage', child: Text('Damage')),
+                DropdownMenuItem(value: 'expiry', child: Text('Expiry')),
+              ],
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() {
+                  _logTypeFilter = v;
+                  _logReloadToken++;
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton(
+            onPressed: () => setState(() => _logReloadToken++),
+            child: const Text('Search'),
+          ),
+          if (search.isNotEmpty || _logTypeFilter != 'all') ...[
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () {
+                _logSearch.clear();
+                setState(() {
+                  _logTypeFilter = 'all';
+                  _logReloadToken++;
+                });
+              },
+              child: const Text('Clear'),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -114,44 +343,130 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final auth = context.watch<AuthSession>();
     final canAdjust = auth.hasPermission(AppPermissions.inventoryAdjust);
     final branchId = auth.currentBranchId;
+    final search = _search.text.trim();
+    final logSearch = _logSearch.text.trim();
+    final hasStockFilters =
+        search.length >= 2 || _categoryId != null || _stockFilter != 'all';
+    final hasLogFilters = logSearch.length >= 2 || _logTypeFilter != 'all';
 
     return Scaffold(
-      body: AppPaginatedTable<InventoryItem>(
-        key: ValueKey('inventory-$branchId-$_reloadToken'),
-        loadPage: ({required page, required perPage}) =>
-            services.inventory.listPaginated(page: page, perPage: perPage),
-        onRowTap: canAdjust ? _openAdjust : null,
-        columns: [
-          const TableColumnDef(label: 'Product', flex: 2, cellBuilder: _productCell),
-          const TableColumnDef(label: 'SKU', flex: 1, cellBuilder: _skuCell),
-          const TableColumnDef(
-            label: 'Qty',
-            flex: 0.7,
-            align: TextAlign.center,
-            cellBuilder: _qtyCell,
-          ),
-          const TableColumnDef(
-            label: 'Reserved',
-            flex: 0.8,
-            align: TextAlign.center,
-            cellBuilder: _reservedCell,
-          ),
-          const TableColumnDef(
-            label: 'Available',
-            flex: 0.8,
-            align: TextAlign.center,
-            cellBuilder: _availableCell,
-          ),
-          if (canAdjust)
-            TableColumnDef(
-              label: 'Action',
-              flex: 0.9,
-              align: TextAlign.center,
-              cellBuilder: (context, item) => TextButton(
-                onPressed: () => _openAdjust(item),
-                child: const Text('Adjust'),
-              ),
+      backgroundColor: AppTheme.background,
+      body: Column(
+        children: [
+          Material(
+            color: Colors.white,
+            child: TabBar(
+              controller: _tabs,
+              labelColor: AppTheme.primary,
+              unselectedLabelColor: AppTheme.textSecondary,
+              indicatorColor: AppTheme.primary,
+              tabs: const [
+                Tab(text: 'Stock'),
+                Tab(text: 'Adjustment log'),
+              ],
             ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabs,
+              children: [
+                Column(
+                  children: [
+                    _buildStockFilters(),
+                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    Expanded(
+                      child: AppPaginatedTable<InventoryItem>(
+                        key: ValueKey(
+                          'inventory-$branchId-$_reloadToken-$search-$_categoryId-$_stockFilter',
+                        ),
+                        emptyMessage: hasStockFilters
+                            ? 'No products match your filters.'
+                            : 'No inventory items for this branch.',
+                        loadPage: ({required page, required perPage}) =>
+                            services.inventory.listPaginated(
+                              page: page,
+                              perPage: perPage,
+                              search: search.length >= 2 ? search : null,
+                              categoryId: _categoryId,
+                              lowStock: _stockFilter == 'low' ? true : null,
+                            ),
+                        onRowTap: canAdjust ? _openAdjust : null,
+                        columns: [
+                          const TableColumnDef(label: 'Product', flex: 2, cellBuilder: _productCell),
+                          const TableColumnDef(label: 'SKU', flex: 1, cellBuilder: _skuCell),
+                          const TableColumnDef(
+                            label: 'Qty',
+                            flex: 0.7,
+                            align: TextAlign.center,
+                            cellBuilder: _qtyCell,
+                          ),
+                          const TableColumnDef(
+                            label: 'Reserved',
+                            flex: 0.8,
+                            align: TextAlign.center,
+                            cellBuilder: _reservedCell,
+                          ),
+                          const TableColumnDef(
+                            label: 'Available',
+                            flex: 0.8,
+                            align: TextAlign.center,
+                            cellBuilder: _availableCell,
+                          ),
+                          if (canAdjust)
+                            TableColumnDef(
+                              label: 'Action',
+                              flex: 0.9,
+                              align: TextAlign.center,
+                              cellBuilder: (context, item) => TextButton(
+                                onPressed: () => _openAdjust(item),
+                                child: const Text('Adjust'),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                Column(
+                  children: [
+                    _buildLogFilters(),
+                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    Expanded(
+                      child: AppPaginatedTable<StockMovement>(
+                        key: ValueKey(
+                          'inventory-log-$branchId-$_logReloadToken-$logSearch-$_logTypeFilter',
+                        ),
+                        emptyMessage: hasLogFilters
+                            ? 'No adjustment logs match your filters.'
+                            : 'No stock adjustments logged yet.',
+                        loadPage: ({required page, required perPage}) =>
+                            services.inventory.movementsPaginated(
+                              page: page,
+                              perPage: perPage,
+                              manualOnly: true,
+                              search: logSearch.length >= 2 ? logSearch : null,
+                              type: _logTypeFilter == 'all' ? null : _logTypeFilter,
+                            ),
+                        columns: const [
+                          TableColumnDef(label: 'When', flex: 1.2, cellBuilder: _logWhenCell),
+                          TableColumnDef(label: 'Product', flex: 1.6, cellBuilder: _logProductCell),
+                          TableColumnDef(
+                            label: 'Change',
+                            flex: 0.8,
+                            align: TextAlign.center,
+                            cellBuilder: _logQtyCell,
+                          ),
+                          TableColumnDef(label: 'Type', flex: 0.9, cellBuilder: _logTypeCell),
+                          TableColumnDef(label: 'User', flex: 1.1, cellBuilder: _logUserCell),
+                          TableColumnDef(label: 'Notes', flex: 2.2, cellBuilder: _logNotesCell),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -176,5 +491,51 @@ class _InventoryScreenState extends State<InventoryScreen> {
   static Widget _availableCell(BuildContext context, InventoryItem it) => Text(
         it.availableQuantity.toStringAsFixed(0),
         style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primary),
+      );
+
+  static Widget _logWhenCell(BuildContext context, StockMovement m) {
+    final raw = m.createdAt;
+    DateTime? dt;
+    try {
+      dt = DateTime.tryParse(raw);
+    } catch (_) {}
+    final text = dt != null ? DateFormat('dd MMM yyyy HH:mm').format(dt.toLocal()) : raw;
+    return Text(text, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary));
+  }
+
+  static Widget _logProductCell(BuildContext context, StockMovement m) => Text(
+        m.product?.name ?? 'Product #${m.productId}',
+        style: const TextStyle(fontWeight: FontWeight.w600),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      );
+
+  static Widget _logQtyCell(BuildContext context, StockMovement m) {
+    final q = m.quantity;
+    final sign = q > 0 ? '+' : '';
+    final color = q > 0 ? AppTheme.accent : (q < 0 ? AppTheme.danger : AppTheme.textSecondary);
+    return Text(
+      '$sign${q.toStringAsFixed(q.abs() % 1 == 0 ? 0 : 2)}',
+      style: TextStyle(fontWeight: FontWeight.w700, color: color),
+    );
+  }
+
+  static Widget _logTypeCell(BuildContext context, StockMovement m) => Text(
+        m.type,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+      );
+
+  static Widget _logUserCell(BuildContext context, StockMovement m) => Text(
+        m.createdByName ?? (m.createdById != null ? 'User #${m.createdById}' : '—'),
+        style: const TextStyle(fontSize: 12),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+
+  static Widget _logNotesCell(BuildContext context, StockMovement m) => Text(
+        m.notes?.isNotEmpty == true ? m.notes! : '—',
+        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       );
 }

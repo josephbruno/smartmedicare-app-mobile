@@ -96,7 +96,7 @@ class AuthSession extends ChangeNotifier {
   /// First settings screen the user is allowed to open.
   String? get settingsRoute {
     if (hasPermission(AppPermissions.shopManage)) return '/settings';
-    // Cashier desktops: local USB ESC/POS printer config (no shop.manage needed).
+    // Cashier desktops: local USB TSPL printer config (no shop.manage needed).
     if (hasRole(AppRoles.cashier) &&
         AppConfig.isCashierPlatform &&
         hasPermission(AppPermissions.invoicesCreate)) {

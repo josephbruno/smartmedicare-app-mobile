@@ -51,7 +51,10 @@ class StockMovement {
     this.referenceNumber,
     this.notes,
     required this.createdAt,
+    this.createdById,
+    this.createdByName,
     this.product,
+    this.branchName,
   });
 
   final int id;
@@ -64,13 +67,18 @@ class StockMovement {
   final String? referenceNumber;
   final String? notes;
   final String createdAt;
+  final int? createdById;
+  final String? createdByName;
   final Product? product;
+  final String? branchName;
 
   factory StockMovement.fromJson(Map<String, dynamic> j) {
     Product? p;
     if (j['product'] is Map) {
       p = Product.fromJson(Map<String, dynamic>.from(j['product'] as Map));
     }
+    final createdBy = mapOrNull(j['created_by']) ?? mapOrNull(j['createdBy']);
+    final branch = mapOrNull(j['branch']);
     return StockMovement(
       id: intOrNull(j['id']) ?? 0,
       productId: intOrNull(j['product_id']) ?? 0,
@@ -82,7 +90,10 @@ class StockMovement {
       referenceNumber: j['reference_number']?.toString(),
       notes: j['notes']?.toString(),
       createdAt: j['created_at']?.toString() ?? '',
+      createdById: intOrNull(createdBy?['id']) ?? intOrNull(j['created_by']),
+      createdByName: createdBy?['name']?.toString(),
       product: p,
+      branchName: branch?['name']?.toString(),
     );
   }
 }
@@ -92,6 +103,9 @@ class StockAgeingItem {
     required this.inventoryId,
     required this.productId,
     this.batchId,
+    this.purchaseItemId,
+    this.purchaseId,
+    this.purchaseNumber,
     required this.name,
     this.sku,
     this.barcode,
@@ -117,6 +131,9 @@ class StockAgeingItem {
   final int inventoryId;
   final int productId;
   final int? batchId;
+  final int? purchaseItemId;
+  final int? purchaseId;
+  final String? purchaseNumber;
   final String name;
   final String? sku;
   final String? barcode;
@@ -145,6 +162,9 @@ class StockAgeingItem {
       inventoryId: intOrNull(j['inventory_id']) ?? intOrNull(j['id']) ?? 0,
       productId: intOrNull(j['product_id']) ?? 0,
       batchId: intOrNull(j['batch_id']),
+      purchaseItemId: intOrNull(j['purchase_item_id']),
+      purchaseId: intOrNull(j['purchase_id']),
+      purchaseNumber: j['purchase_number']?.toString(),
       name: j['name']?.toString() ?? '',
       sku: j['sku']?.toString(),
       barcode: j['barcode']?.toString(),

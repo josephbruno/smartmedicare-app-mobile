@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:windows_printer/windows_printer.dart';
 
-/// Direct ESC/POS raw print on Windows (spooler) and Linux (CUPS / USB lp).
+/// Direct TSPL raw print on Windows (spooler) and Linux (CUPS / USB lp).
 bool get isSupported => Platform.isWindows || Platform.isLinux;
 
 Future<List<String>> listPrinters() async {
@@ -29,15 +29,7 @@ Future<bool> printRaw({
   if (name.isEmpty) return false;
 
   if (Platform.isWindows) {
-    try {
-      return await WindowsPrinter.printRawData(
-        printerName: name,
-        data: data,
-        useRawDatatype: true,
-      );
-    } catch (_) {
-      return false;
-    }
+    return _printRawWindows(name, data);
   }
 
   if (Platform.isLinux) {
@@ -45,6 +37,42 @@ Future<bool> printRaw({
   }
 
   return false;
+}
+
+Future<bool> _printRawWindows(String printerName, Uint8List data) async {
+  try {
+    // Write data to temp file and use Windows print command
+    final tmpDir = Directory.systemTemp;
+    final tmpFile = File('${tmpDir.path}/maran_tspl_${DateTime.now().microsecondsSinceEpoch}.bin');
+
+    await tmpFile.writeAsBytes(data);
+
+    try {
+      // Use Windows print spooler to send raw bytes
+      final result = await Process.run(
+        'print',
+        ['/d:$printerName', tmpFile.path],
+        runInShell: true,
+      );
+
+      return result.exitCode == 0;
+    } finally {
+      if (await tmpFile.exists()) {
+        await tmpFile.delete();
+      }
+    }
+  } catch (_) {
+    // Fallback to windows_printer plugin
+    try {
+      return await WindowsPrinter.printRawData(
+        printerName: printerName,
+        data: data,
+        useRawDatatype: true,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 Future<List<String>> _listLinuxPrinters() async {
@@ -63,7 +91,7 @@ Future<List<String>> _listLinuxPrinters() async {
     }
   } catch (_) {}
 
-  // Direct USB thermal device nodes (common for ESC/POS XPrinter).
+  // Direct USB thermal device nodes (common for TSPL XPrinter).
   try {
     final usbDir = Directory('/dev/usb');
     if (await usbDir.exists()) {
@@ -98,9 +126,9 @@ Future<bool> _printRawLinux(String printerName, Uint8List data) async {
       return true;
     }
 
-    // CUPS raw job (passthrough ESC/POS).
+    // CUPS raw job (passthrough TSPL).
     final tmp = File(
-      '${Directory.systemTemp.path}/maran_escpos_${DateTime.now().microsecondsSinceEpoch}.bin',
+      '${Directory.systemTemp.path}/maran_tspl_${DateTime.now().microsecondsSinceEpoch}.bin',
     );
     await tmp.writeAsBytes(data, flush: true);
     try {

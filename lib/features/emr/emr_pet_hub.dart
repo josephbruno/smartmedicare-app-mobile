@@ -8,10 +8,11 @@ import 'pet_visit_summary_screen.dart';
 
 /// Quick navigation to pet-centric EMR modules (matches web timeline hub links).
 class EmrPetHub extends StatelessWidget {
-  const EmrPetHub({super.key, required this.petId, this.petName});
+  const EmrPetHub({super.key, required this.petId, this.petName, this.trailing});
 
   final int petId;
   final String? petName;
+  final Widget? trailing;
 
   void _openVisitSummary(BuildContext context) {
     final router = GoRouter.of(context);
@@ -101,44 +102,63 @@ class EmrPetHub extends StatelessWidget {
                   ),
                 ),
               ),
+              if (trailing != null) ...[
+                const SizedBox(width: 12),
+                trailing!,
+              ],
             ],
           ),
           const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: links.map((l) {
-              final onPressed = l.onTap ?? () => context.push(l.path);
-              if (l.primary) {
-                return FilledButton.icon(
-                  onPressed: onPressed,
-                  icon: Icon(l.icon, size: 16),
-                  label: Text(l.label),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 40),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                );
-              }
-              return OutlinedButton.icon(
-                onPressed: onPressed,
-                icon: Icon(l.icon, size: 16, color: AppTheme.primary),
-                label: Text(l.label),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.textPrimary,
-                  side: const BorderSide(color: Color(0xFFE2E8F0)),
-                  backgroundColor: const Color(0xFFF8FAFC),
-                  minimumSize: const Size(0, 40),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              );
-            }).toList(),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < links.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  _HubButton(link: links[i]),
+                ],
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HubButton extends StatelessWidget {
+  const _HubButton({required this.link});
+
+  final _HubLink link;
+
+  @override
+  Widget build(BuildContext context) {
+    final onPressed = link.onTap ?? () => context.push(link.path);
+    if (link.primary) {
+      return FilledButton.icon(
+        onPressed: onPressed,
+        icon: Icon(link.icon, size: 16),
+        label: Text(link.label),
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(link.icon, size: 16, color: AppTheme.primary),
+      label: Text(link.label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppTheme.textPrimary,
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+        backgroundColor: const Color(0xFFF8FAFC),
+        minimumSize: const Size(0, 40),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }

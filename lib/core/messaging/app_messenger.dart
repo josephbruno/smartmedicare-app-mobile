@@ -52,10 +52,18 @@ class AppMessenger {
   }
 
   /// Drop-in replacement for [AppMessenger.show(context,].
+  ///
+  /// Prefers the root [ScaffoldMessenger] and its context for layout so snackbars
+  /// are not tied to a dialog route that may be popped immediately after.
   static void show(BuildContext context, SnackBar snackBar) {
-    final messenger = _messenger(context);
+    final messenger = rootKey.currentState ?? _messenger(context);
     if (messenger == null) return;
-    messenger.showSnackBar(_positioned(snackBar, context));
+    final layoutContext = rootKey.currentContext ?? context;
+    if (!layoutContext.mounted) {
+      messenger.showSnackBar(snackBar);
+      return;
+    }
+    messenger.showSnackBar(_positioned(snackBar, layoutContext));
   }
 
   static void showMessage(

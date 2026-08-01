@@ -3,8 +3,8 @@ import 'dart:typed_data';
 import 'windows_print_bridge_stub.dart'
     if (dart.library.io) 'windows_print_bridge_io.dart' as impl;
 
-/// Platform bridge for listing printers and sending raw ESC/POS bytes.
-/// On Windows/Linux, local USB thermal printers (XPrinter) are used.
+/// Platform bridge for listing printers and sending raw TSPL bytes.
+/// On Windows/Linux, local USB thermal printers (XPrinter TSPL) are used.
 abstract final class WindowsPrintBridge {
   static bool get isSupported => impl.isSupported;
 

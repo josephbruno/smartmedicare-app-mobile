@@ -202,8 +202,8 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(
-                      'No expired or near-expiry stock in the next $_expiryDays days.\n'
-                      'Add an expiry date on purchases to track batch expiry.',
+                      'No expired or near-expiry PO lines in the next $_expiryDays days.\n'
+                      'Add an expiry date on purchase line items to track expiry.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: AppTheme.textSecondary),
                     ),
@@ -228,6 +228,10 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
                           : (days == 0
                               ? 'Expires today'
                               : (days != null ? '$days days left' : ''));
+                      final poLabel = (item.purchaseNumber != null &&
+                              item.purchaseNumber!.isNotEmpty)
+                          ? 'PO ${item.purchaseNumber}'
+                          : null;
                       return ListTile(
                         leading: CircleAvatar(
                           backgroundColor: color.withValues(alpha: 0.15),
@@ -235,6 +239,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
                         ),
                         title: Text(item.name),
                         subtitle: Text([
+                          if (poLabel != null) poLabel,
                           if (item.batchNumber != null &&
                               item.batchNumber!.isNotEmpty)
                             'Batch ${item.batchNumber}',
@@ -249,6 +254,9 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
                             color: color,
                           ),
                         ),
+                        onTap: item.purchaseId != null
+                            ? () => context.push('/purchases/${item.purchaseId}')
+                            : null,
                       );
                     },
                   ),

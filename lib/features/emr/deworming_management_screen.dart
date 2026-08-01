@@ -37,34 +37,55 @@ class _DewormingManagementScreenState extends State<DewormingManagementScreen> {
     final administeredBy = TextEditingController();
     final notes = TextEditingController();
     var administered = DateTime.now();
+    DateTime? nextDue;
 
     final saved = await showAppAlertForm<bool>(
       context: context,
       title: 'Add deworming record',
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: medicine,
-            decoration: appFormFieldDecoration('Medicine *'),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: dosage,
-            decoration: appFormFieldDecoration('Dosage'),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: administeredBy,
-            decoration: appFormFieldDecoration('Administered by'),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: notes,
-            maxLines: 2,
-            decoration: appFormFieldDecoration('Notes'),
-          ),
-        ],
+      content: StatefulBuilder(
+        builder: (context, setLocal) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: medicine,
+              decoration: appFormFieldDecoration('Medicine *'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: dosage,
+              decoration: appFormFieldDecoration('Dosage'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: administeredBy,
+              decoration: appFormFieldDecoration('Administered by'),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final d = await showDatePicker(
+                  context: context,
+                  initialDate: nextDue ?? DateTime.now().add(const Duration(days: 90)),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime(2100),
+                );
+                if (d != null) setLocal(() => nextDue = d);
+              },
+              icon: const Icon(Icons.event_outlined, size: 18),
+              label: Text(
+                nextDue != null
+                    ? 'Next due ${nextDue!.toIso8601String().substring(0, 10)}'
+                    : 'Set next due (reminder)',
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: notes,
+              maxLines: 2,
+              decoration: appFormFieldDecoration('Notes'),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
@@ -83,6 +104,7 @@ class _DewormingManagementScreenState extends State<DewormingManagementScreen> {
       await context.read<AppServices>().emr.addDeworming(widget.petId, {
         'medicine_name': medicine.text.trim(),
         'administered_date': administered.toIso8601String().substring(0, 10),
+        if (nextDue != null) 'next_due_date': nextDue!.toIso8601String().substring(0, 10),
         if (dosage.text.isNotEmpty) 'dosage': dosage.text.trim(),
         if (administeredBy.text.isNotEmpty) 'administered_by': administeredBy.text.trim(),
         if (notes.text.isNotEmpty) 'notes': notes.text.trim(),

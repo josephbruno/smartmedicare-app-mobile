@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 
 import '../../app_services.dart';
 import '../../core/app_config.dart';
-import '../../core/desktop/desktop_prefs.dart';
 import '../../core/services/thermal_printer_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
@@ -18,6 +17,8 @@ import '../../data/models/shop.dart';
 import 'package:uuid/uuid.dart';
 
 /// Payment-first checkout: invoice is created only when payment is confirmed.
+/// Fully paid bills print and close immediately. Split/partial payments stay open
+/// until the remaining balance is collected.
 Future<bool> showPosCheckoutDialog({
   required BuildContext context,
   required AppServices services,
@@ -33,7 +34,6 @@ Future<bool> showPosCheckoutDialog({
   Customer? customer,
 }) async {
   Customer? billingCustomer = customer;
-  final phoneController = TextEditingController(text: customerPhone ?? '');
   final paidController = TextEditingController(text: grandTotal.toStringAsFixed(2));
   final upiRefController = TextEditingController();
   final loyaltyController = TextEditingController();
@@ -42,9 +42,7 @@ Future<bool> showPosCheckoutDialog({
   String paymentMode = 'cash';
   bool paymentSaved = false;
   bool recordingPayment = false;
-  bool sending = false;
   bool applyAdvance = (billingCustomer?.advanceBalance ?? 0) > 0;
-  bool refreshingCustomer = false;
   var completed = false;
 
   // Shop loyalty rates for redeem value preview (defaults match backend).
@@ -78,38 +76,20 @@ Future<bool> showPosCheckoutDialog({
       builder: (dialogContext) {
         final screenWidth = MediaQuery.sizeOf(dialogContext).width;
         final largeUi = AppConfig.usesLargeUiScale;
-        final dialogWidth = AppConfig.posCheckoutDialogWidth(screenWidth);
-        final horizontalInset = math.max(16.0, (screenWidth - dialogWidth) / 2);
 
         return StatefulBuilder(
           builder: (context, setState) {
-            final hPad = largeUi ? 20.0 : 16.0;
-            final vPad = largeUi ? 16.0 : 12.0;
-            final sectionGap = largeUi ? 12.0 : 8.0;
+            // Compact payment dialog (receipt/share UI removed — print on settle).
+            final dialogWidth = !largeUi
+                ? 360.0
+                : (screenWidth * 0.42).clamp(420.0, 520.0);
+            final horizontalInset = math.max(16.0, (screenWidth - dialogWidth) / 2);
+            final hPad = largeUi ? 14.0 : 12.0;
+            final vPad = largeUi ? 10.0 : 8.0;
+            final sectionGap = largeUi ? 8.0 : 6.0;
 
-            double alertFs(double base) => largeUi ? base + 5 : base;
-            double alertIc(double base) =>
-                largeUi ? base * AppConfig.desktopIconScale : base;
-
-            Future<void> refreshCustomerBalances() async {
-              if (!isOnline || billingCustomer == null || billingCustomer!.id <= 0) {
-                return;
-              }
-              setState(() => refreshingCustomer = true);
-              try {
-                final fresh = await services.customers.get(billingCustomer!.id);
-                if (!context.mounted) return;
-                setState(() {
-                  billingCustomer = fresh;
-                  applyAdvance = fresh.advanceBalance > 0;
-                  refreshingCustomer = false;
-                });
-              } catch (_) {
-                if (context.mounted) {
-                  setState(() => refreshingCustomer = false);
-                }
-              }
-            }
+            double alertFs(double base) => largeUi ? base - 1 : base;
+            double alertIc(double base) => largeUi ? base * 1.1 : base;
 
             double billGross() {
               if (activeInvoice != null) {
@@ -249,17 +229,55 @@ Future<bool> showPosCheckoutDialog({
               return null;
             }
 
-            Future<void> maybeAutoPrintReceipt() async {
-              if (!paymentSaved || activeInvoice == null || printItems.isEmpty) {
-                return;
-              }
-              final autoPrint = await DesktopPrefs.getAutoPrintReceipt();
-              if (!autoPrint) return;
+            Future<void> printReceiptNow() async {
+              if (activeInvoice == null || printItems.isEmpty) return;
               await ThermalPrinterService.printReceipt(
                 invoice: activeInvoice!,
                 items: printItems,
                 shopName: auth.currentShop?.name ?? auth.currentBranch?.name,
               );
+            }
+
+            void _showRootSnack(String message, {Color? backgroundColor}) {
+              // Never attach snackbars to the dialog context — popping the route
+              // while MediaQuery dependents remain causes `_dependents.isEmpty`.
+              final messenger = AppMessenger.rootKey.currentState;
+              if (messenger == null) return;
+              final rootCtx = AppMessenger.rootKey.currentContext;
+              final bar = SnackBar(
+                content: Text(message),
+                backgroundColor: backgroundColor ?? AppTheme.accent,
+                behavior: SnackBarBehavior.floating,
+              );
+              if (rootCtx != null && rootCtx.mounted) {
+                AppMessenger.show(rootCtx, bar);
+              } else {
+                messenger.showSnackBar(bar);
+              }
+            }
+
+            /// Fully paid / credit done → print & close. Split balance → stay open.
+            Future<void> finishOrContinueSplit({required String successMessage}) async {
+              if (!context.mounted) return;
+              final dueLeft = activeInvoice?.dueAmount ?? 0;
+              final isSplitPending =
+                  dueLeft > 0.009 && paymentMode != 'credit';
+
+              if (isSplitPending) {
+                setState(() => recordingPayment = false);
+                _showRootSnack(successMessage);
+                return;
+              }
+
+              completed = true;
+              // Print before close; snack + pop after so dialog InheritedWidgets
+              // are not disposed while still depended on by overlays.
+              await printReceiptNow();
+              if (!dialogContext.mounted) return;
+              Navigator.of(dialogContext).pop();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _showRootSnack(successMessage);
+              });
             }
 
             Future<void> confirmCheckout() async {
@@ -401,18 +419,10 @@ Future<bool> showPosCheckoutDialog({
                   if (updated.dueAmount > 0.009 && paymentMode == 'cash') {
                     paidController.text = updated.dueAmount.toStringAsFixed(2);
                   }
-                  setState(() {});
-                  await maybeAutoPrintReceipt();
-                  if (!context.mounted) return;
-                  AppMessenger.show(context,
-                    SnackBar(
-                      content: Text(
-                        updated.dueAmount > 0.009
-                            ? 'Payment recorded. Balance due ₹${updated.dueAmount.toStringAsFixed(2)}'
-                            : 'Payment recorded. Invoice fully paid',
-                      ),
-                      backgroundColor: AppTheme.accent,
-                    ),
+                  await finishOrContinueSplit(
+                    successMessage: updated.dueAmount > 0.009
+                        ? 'Payment recorded. Balance due ₹${updated.dueAmount.toStringAsFixed(2)} — collect remaining'
+                        : 'Payment recorded. Invoice fully paid',
                   );
                   return;
                 }
@@ -489,33 +499,29 @@ Future<bool> showPosCheckoutDialog({
                 }
 
                 if (!context.mounted) return;
-                setState(() {});
-                await maybeAutoPrintReceipt();
-                if (!context.mounted) return;
                 final dueLeft = activeInvoice?.dueAmount ?? 0;
-                AppMessenger.show(context,
-                  SnackBar(
-                    content: Text(
-                      isOnline
-                          ? (dueLeft > 0.009
-                              ? 'Invoice ${activeInvoice!.invoiceNumber} created. Balance due ₹${dueLeft.toStringAsFixed(2)}'
-                              : 'Invoice ${activeInvoice!.invoiceNumber} created & paid')
-                          : 'Saved offline — will sync when online',
-                    ),
-                    backgroundColor: AppTheme.accent,
-                  ),
+                final invoiceNo = activeInvoice?.invoiceNumber ?? '';
+                await finishOrContinueSplit(
+                  successMessage: isOnline
+                      ? (dueLeft > 0.009 && paymentMode != 'credit'
+                          ? 'Invoice $invoiceNo created. Balance due ₹${dueLeft.toStringAsFixed(2)} — collect remaining'
+                          : paymentMode == 'credit'
+                              ? 'Invoice $invoiceNo created on credit'
+                              : 'Invoice $invoiceNo created & paid')
+                      : 'Saved offline — will sync when online',
                 );
               } catch (e) {
                 if (context.mounted) {
-                  AppMessenger.show(context,
-                    SnackBar(
-                      content: Text('Checkout failed: $e'),
-                      backgroundColor: AppTheme.danger,
-                    ),
+                  _showRootSnack(
+                    'Checkout failed: $e',
+                    backgroundColor: AppTheme.danger,
                   );
                 }
               } finally {
-                if (context.mounted) setState(() => recordingPayment = false);
+                // Skip setState after a successful close — the dialog is gone.
+                if (context.mounted && !completed) {
+                  setState(() => recordingPayment = false);
+                }
               }
             }
 
@@ -540,7 +546,7 @@ Future<bool> showPosCheckoutDialog({
                   color: selected
                       ? AppTheme.primary.withValues(alpha: 0.08)
                       : Colors.white,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                   child: InkWell(
                     onTap: lockPaymentInputs()
                         ? null
@@ -550,19 +556,19 @@ Future<bool> showPosCheckoutDialog({
                                 syncPaidToDue();
                               }
                             }),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                     child: Container(
                       padding: EdgeInsets.symmetric(
-                        vertical: largeUi ? 10 : 8,
-                        horizontal: 6,
+                        vertical: largeUi ? 7 : 6,
+                        horizontal: 4,
                       ),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: selected
                               ? AppTheme.primary
                               : const Color(0xFFE2E8F0),
-                          width: selected ? 2 : 1,
+                          width: selected ? 1.5 : 1,
                         ),
                       ),
                       child: Row(
@@ -570,20 +576,19 @@ Future<bool> showPosCheckoutDialog({
                         children: [
                           Icon(
                             icon,
-                            size: alertIc(18),
+                            size: alertIc(15),
                             color: selected
                                 ? AppTheme.primary
                                 : AppTheme.textSecondary,
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               label,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: alertFs(13),
-                                fontWeight:
-                                    selected ? FontWeight.w700 : FontWeight.w500,
+                                fontSize: alertFs(11),
+                                fontWeight: FontWeight.w500,
                                 color: selected
                                     ? AppTheme.primary
                                     : AppTheme.textSecondary,
@@ -603,16 +608,19 @@ Future<bool> showPosCheckoutDialog({
                 return const SizedBox.shrink();
               }
               final pts = billingCustomer!.loyaltyPoints;
+              // Hide empty loyalty card — fewer clicks / less noise at checkout.
+              if (pts <= 0) return const SizedBox.shrink();
+
               final maxPts = maxRedeemablePoints();
               final redeemValue = loyaltyRedeemValue();
               final requested = loyaltyPtsRequested();
               final belowMin = requested > 0 && requested < minRedeemPoints;
               return Container(
                 width: double.infinity,
-                padding: EdgeInsets.all(largeUi ? 10 : 8),
+                padding: EdgeInsets.all(largeUi ? 8 : 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF8E7),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: const Color(0xFFFDE68A)),
                 ),
                 child: Column(
@@ -621,114 +629,80 @@ Future<bool> showPosCheckoutDialog({
                     Row(
                       children: [
                         Icon(Icons.stars_rounded,
-                            color: AppTheme.warning, size: alertIc(20)),
+                            color: AppTheme.warning, size: alertIc(16)),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Loyalty Points',
+                            'Loyalty · $pts pts · ₹${redeemPerPoint.toStringAsFixed(2)}/pt'
+                            '${maxPts < pts ? ' · max $maxPts' : ''}',
                             style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: alertFs(14),
+                              fontWeight: FontWeight.w500,
+                              fontSize: alertFs(11),
                               color: AppTheme.textPrimary,
                             ),
                           ),
                         ),
-                        TextButton.icon(
-                          onPressed: paymentSaved || refreshingCustomer
-                              ? null
-                              : refreshCustomerBalances,
-                          icon: refreshingCustomer
-                              ? SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: AppTheme.warning,
-                                  ),
-                                )
-                              : Icon(Icons.refresh, size: alertIc(16)),
-                          label: Text('Refresh',
-                              style: TextStyle(fontSize: alertFs(12))),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: largeUi ? 6 : 4),
-                    Text(
-                      pts > 0
-                          ? 'Available: $pts pts · ₹${redeemPerPoint.toStringAsFixed(2)}/pt'
-                              '${maxPts < pts ? ' · max $maxPts on this bill' : ''}'
-                          : 'Available: 0 pts',
-                      style: TextStyle(
-                        fontSize: alertFs(13),
-                        fontWeight: FontWeight.w600,
-                        color: pts > 0
-                            ? AppTheme.warning
-                            : AppTheme.textSecondary,
-                      ),
-                    ),
-                    SizedBox(height: largeUi ? 6 : 4),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: loyaltyController,
-                            enabled: !paymentSaved && pts > 0,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                            onChanged: (_) => setState(() {
-                              syncPaidToDue();
-                            }),
-                            decoration: InputDecoration(
-                              isDense: true,
-                              labelText: pts > 0
-                                  ? 'Points to redeem (max $maxPts)'
-                                  : 'No points to redeem',
-                              filled: true,
-                              fillColor: Colors.white,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (pts > 0) ...[
-                          const SizedBox(width: 8),
-                          OutlinedButton(
-                            onPressed: paymentSaved || maxPts <= 0
+                        if (maxPts > 0)
+                          TextButton(
+                            onPressed: paymentSaved
                                 ? null
                                 : () {
                                     loyaltyController.text = '$maxPts';
                                     setState(() => syncPaidToDue());
                                   },
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              foregroundColor: AppTheme.warning,
+                            ),
                             child: Text('Use all',
-                                style: TextStyle(fontSize: alertFs(12))),
+                                style: TextStyle(fontSize: alertFs(11))),
                           ),
-                        ],
                       ],
                     ),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: loyaltyController,
+                      enabled: !paymentSaved,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      onChanged: (_) => setState(() {
+                        syncPaidToDue();
+                      }),
+                      style: TextStyle(fontSize: alertFs(12)),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        labelText: 'Points to redeem',
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
                     if (belowMin) ...[
-                      SizedBox(height: largeUi ? 6 : 4),
+                      const SizedBox(height: 4),
                       Text(
-                        'Minimum $minRedeemPoints points required to redeem',
+                        'Minimum $minRedeemPoints points required',
                         style: TextStyle(
-                          fontSize: alertFs(12),
-                          fontWeight: FontWeight.w600,
+                          fontSize: alertFs(10),
+                          fontWeight: FontWeight.w500,
                           color: AppTheme.danger,
                         ),
                       ),
                     ] else if (redeemValue > 0) ...[
-                      SizedBox(height: largeUi ? 6 : 4),
+                      const SizedBox(height: 4),
                       Text(
-                        'Redeem value: −₹${redeemValue.toStringAsFixed(2)}',
+                        'Redeem −₹${redeemValue.toStringAsFixed(2)}',
                         style: TextStyle(
-                          fontSize: alertFs(13),
-                          fontWeight: FontWeight.w800,
+                          fontSize: alertFs(11),
+                          fontWeight: FontWeight.w600,
                           color: AppTheme.accent,
                         ),
                       ),
@@ -868,7 +842,7 @@ Future<bool> showPosCheckoutDialog({
               final advanceValue =
                   invoice == null ? advanceApplyValue() : 0.0;
               return Container(
-                padding: EdgeInsets.all(largeUi ? 14 : 10),
+                padding: EdgeInsets.all(largeUi ? 10 : 8),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -878,7 +852,7 @@ Future<bool> showPosCheckoutDialog({
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: AppTheme.primary.withValues(alpha: 0.15),
                   ),
@@ -893,26 +867,26 @@ Future<bool> showPosCheckoutDialog({
                                 Text(
                                   'Invoice No.',
                                   style: TextStyle(
-                                    fontSize: alertFs(13),
+                                    fontSize: alertFs(10),
                                     color: AppTheme.textSecondary,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 2),
                                 Text(
                                   invoiceNo,
                                   style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: alertFs(18),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: alertFs(13),
                                     color: AppTheme.textPrimary,
                                   ),
                                 ),
                                 if (invoice != null && invoice.paidAmount > 0) ...[
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: 4),
                                   Text(
                                     'Paid: ₹${invoice.paidAmount.toStringAsFixed(2)} · Due: ₹${invoice.dueAmount.toStringAsFixed(2)}',
                                     style: TextStyle(
-                                      fontSize: alertFs(13),
+                                      fontSize: alertFs(10),
                                       color: AppTheme.textSecondary,
                                     ),
                                   ),
@@ -926,18 +900,18 @@ Future<bool> showPosCheckoutDialog({
                               Text(
                                 'Total Amount',
                                 style: TextStyle(
-                                  fontSize: alertFs(13),
+                                  fontSize: alertFs(10),
                                   color: AppTheme.textSecondary,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 2),
                               Text(
                                 '₹${total.toStringAsFixed(2)}',
                                 style: TextStyle(
                                   color: AppTheme.primary,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: alertFs(28),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: alertFs(18),
                                 ),
                               ),
                               if (loyaltyValue > 0 || advanceValue > 0)
@@ -948,9 +922,9 @@ Future<bool> showPosCheckoutDialog({
                                           ? 'After loyalty redeem'
                                           : 'After advance',
                                   style: TextStyle(
-                                    fontSize: alertFs(11),
+                                    fontSize: alertFs(10),
                                     color: AppTheme.accent,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                             ],
@@ -1030,26 +1004,26 @@ Future<bool> showPosCheckoutDialog({
                   Text(
                     'Payment Method',
                     style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: alertFs(14),
+                      fontWeight: FontWeight.w600,
+                      fontSize: alertFs(12),
                       color: AppTheme.textPrimary,
                     ),
                   ),
-                  SizedBox(height: largeUi ? 8 : 6),
+                  SizedBox(height: largeUi ? 5 : 4),
                   Row(
                     children: [
                       payModeTile('cash', 'Cash', Icons.payments_outlined),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       payModeTile('upi', 'UPI', Icons.qr_code_2_rounded),
                       if (registered) ...[
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         payModeTile('credit', 'Credit', Icons.schedule_outlined),
                       ],
                     ],
                   ),
                   if (registered &&
                       (billingCustomer?.advanceBalance ?? 0) > 0) ...[
-                    SizedBox(height: largeUi ? 8 : 6),
+                    SizedBox(height: largeUi ? 5 : 4),
                     Row(
                       children: [
                         payModeTile(
@@ -1065,7 +1039,7 @@ Future<bool> showPosCheckoutDialog({
                       visualDensity: VisualDensity.compact,
                       title: Text(
                         'Also auto-apply advance on this bill',
-                        style: TextStyle(fontSize: alertFs(13)),
+                        style: TextStyle(fontSize: alertFs(11)),
                       ),
                       value: applyAdvance && paymentMode != 'advance',
                       onChanged: paymentSaved || paymentMode == 'advance'
@@ -1077,23 +1051,23 @@ Future<bool> showPosCheckoutDialog({
                     ),
                   ],
                   if (registered) ...[
-                    SizedBox(height: largeUi ? 8 : 6),
+                    SizedBox(height: largeUi ? 5 : 4),
                     buildLoyaltyRedeemSection(),
                   ],
                   if (creditLimitWarning() != null) ...[
-                    SizedBox(height: largeUi ? 8 : 6),
+                    SizedBox(height: largeUi ? 5 : 4),
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: creditLimitWarning()!.contains('exceeded')
                             ? AppTheme.danger.withValues(alpha: 0.1)
                             : AppTheme.warning.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         creditLimitWarning()!,
                         style: TextStyle(
-                          fontSize: alertFs(12),
+                          fontSize: alertFs(10),
                           color: creditLimitWarning()!.contains('exceeded')
                               ? AppTheme.danger
                               : AppTheme.warning,
@@ -1103,23 +1077,26 @@ Future<bool> showPosCheckoutDialog({
                   ],
                   if (largeUi)
                     Padding(
-                      padding: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.only(top: 2),
                       child: Text(
-                        registered
-                            ? 'F2 Cash · F3 UPI · Ctrl+Enter confirm'
-                            : 'F2 Cash · F3 UPI · Ctrl+Enter confirm · Select customer for credit / redeem',
-                        style: TextStyle(fontSize: alertFs(11), color: AppTheme.textSecondary),
+                        'F2 Cash · F3 UPI · Ctrl+Enter confirm',
+                        style: TextStyle(fontSize: alertFs(10), color: AppTheme.textSecondary),
                       ),
                     ),
-                  SizedBox(height: largeUi ? 12 : 10),
+                  SizedBox(height: largeUi ? 8 : 6),
                   if (paymentMode == 'cash') ...[
                     TextField(
                       controller: paidController,
                       enabled: !lockPaymentInputs(),
                       onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) {
+                        if ((!paymentSaved || hasOpenBalance()) && !recordingPayment) {
+                          confirmCheckout();
+                        }
+                      },
                       style: TextStyle(
-                        fontSize: alertFs(16),
-                        fontWeight: FontWeight.w600,
+                        fontSize: alertFs(14),
+                        fontWeight: FontWeight.w500,
                       ),
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
@@ -1130,19 +1107,20 @@ Future<bool> showPosCheckoutDialog({
                         ),
                       ],
                       decoration: InputDecoration(
+                        isDense: true,
                         labelText: hasOpenBalance()
                             ? 'Pay remaining (₹)'
                             : 'Amount Paid (₹)',
-                        labelStyle: TextStyle(fontSize: alertFs(14)),
+                        labelStyle: TextStyle(fontSize: alertFs(12)),
                         filled: true,
                         fillColor: Colors.white,
                         prefixIcon: Icon(
                           Icons.currency_rupee_rounded,
-                          size: alertIc(22),
+                          size: alertIc(18),
                         ),
                         contentPadding: EdgeInsets.symmetric(
-                          horizontal: largeUi ? 14 : 12,
-                          vertical: largeUi ? 14 : 10,
+                          horizontal: largeUi ? 12 : 10,
+                          vertical: largeUi ? 10 : 8,
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -1223,387 +1201,14 @@ Future<bool> showPosCheckoutDialog({
               );
             }
 
-            Widget buildWhatsAppButton() {
-              if (sending) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              return SizedBox(
-                width: double.infinity,
-                height: largeUi ? 50 : 44,
-                child: ElevatedButton.icon(
-                  onPressed: paymentSaved &&
-                          activeInvoice != null &&
-                          activeInvoice!.id > 0
-                      ? () async {
-                    final phone = phoneController.text.trim();
-                    if (phone.isEmpty) {
-                      AppMessenger.show(context,
-                        const SnackBar(
-                          content: Text('Please enter a phone number'),
-                        ),
-                      );
-                      return;
-                    }
-                    setState(() => sending = true);
-                    try {
-                      final res = await services.billing.sendWhatsApp(
-                        activeInvoice!.id,
-                        phone: phone,
-                      );
-                      if (context.mounted) {
-                        AppMessenger.show(context,
-                          SnackBar(
-                            content: Text(
-                              res
-                                  ? 'WhatsApp invoice sent!'
-                                  : 'Failed to send WhatsApp.',
-                            ),
-                            backgroundColor:
-                                res ? AppTheme.accent : AppTheme.danger,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        AppMessenger.show(context,
-                          SnackBar(
-                            content: Text('Error: $e'),
-                            backgroundColor: AppTheme.danger,
-                          ),
-                        );
-                      }
-                    } finally {
-                      if (context.mounted) setState(() => sending = false);
-                    }
-                  }
-                      : null,
-                  icon: Icon(Icons.send_rounded, size: alertIc(20)),
-                  label: Text(
-                    'Send WhatsApp Invoice',
-                    style: TextStyle(
-                      fontSize: alertFs(14),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF25D366),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            Widget buildReceiptSection() {
-              return Opacity(
-                opacity: paymentSaved ? 1 : 0.45,
-                child: IgnorePointer(
-                  ignoring: !paymentSaved,
-                  child: Container(
-                padding: EdgeInsets.all(largeUi ? 22 : 0),
-                decoration: largeUi
-                    ? BoxDecoration(
-                        color: AppTheme.background,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      )
-                    : null,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (largeUi)
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.receipt_long_rounded,
-                            size: alertIc(22),
-                            color: paymentSaved
-                                ? AppTheme.primary
-                                : AppTheme.textSecondary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Receipt & Share',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: alertFs(16),
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                          ),
-                          if (!paymentSaved)
-                            Icon(
-                              Icons.lock_outline_rounded,
-                              size: alertIc(18),
-                              color: AppTheme.textSecondary,
-                            ),
-                        ],
-                      )
-                    else
-                      Text(
-                        'WhatsApp Receipt',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: alertFs(14),
-                        ),
-                      ),
-                    if (!paymentSaved) ...[
-                      SizedBox(height: largeUi ? 10 : 6),
-                      Text(
-                        'Confirm payment to unlock receipt & share',
-                        style: TextStyle(
-                          fontSize: alertFs(12),
-                          color: AppTheme.textSecondary,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                    SizedBox(height: largeUi ? 16 : 8),
-                    TextField(
-                      controller: phoneController,
-                      enabled: paymentSaved,
-                      style: TextStyle(fontSize: alertFs(14)),
-                      decoration: InputDecoration(
-                        labelText: 'Phone Number',
-                        hintText: 'Enter 10-digit number',
-                        filled: true,
-                        fillColor: Colors.white,
-                        prefixIcon: Icon(
-                          Icons.phone_iphone_rounded,
-                          color: AppTheme.textSecondary,
-                          size: alertIc(22),
-                        ),
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: largeUi ? 16 : 14,
-                          vertical: largeUi ? 16 : 12,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      keyboardType: TextInputType.phone,
-                    ),
-                    SizedBox(height: largeUi ? 14 : 12),
-                    buildWhatsAppButton(),
-                    SizedBox(height: largeUi ? 14 : 12),
-                    if (largeUi)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: !paymentSaved ||
-                                      printItems.isEmpty ||
-                                      activeInvoice == null
-                                  ? null
-                                  : () async {
-                                      final invoice = activeInvoice!;
-                                      final result =
-                                          await ThermalPrinterService
-                                              .printReceipt(
-                                        invoice: invoice,
-                                        items: printItems,
-                                        shopName: auth.currentShop?.name ??
-                                            auth.currentBranch?.name,
-                                      );
-                                      if (context.mounted) {
-                                        AppMessenger.show(
-                                          context,
-                                          SnackBar(
-                                            content: Text(result.userMessage),
-                                            backgroundColor: result.isSuccess
-                                                ? AppTheme.accent
-                                                : AppTheme.danger,
-                                          ),
-                                        );
-                                      }
-                                    },
-                              icon: Icon(Icons.print_rounded, size: alertIc(18)),
-                              label: Text(
-                                'Print',
-                                style: TextStyle(fontSize: alertFs(14)),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: Size(0, largeUi ? 48 : 44),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: !paymentSaved ||
-                                      activeInvoice?.shareToken == null
-                                  ? null
-                                  : () async {
-                                final shareUrl =
-                                    'http://localhost:8001/share/invoice/${activeInvoice!.shareToken}';
-                                await Clipboard.setData(
-                                  ClipboardData(text: shareUrl),
-                                );
-                                if (context.mounted) {
-                                  AppMessenger.show(context,
-                                    const SnackBar(
-                                      content: Text('Invoice link copied!'),
-                                      backgroundColor: AppTheme.primary,
-                                    ),
-                                  );
-                                }
-                              },
-                              icon: Icon(Icons.copy_rounded, size: alertIc(18)),
-                              label: Text(
-                                'Copy Link',
-                                style: TextStyle(fontSize: alertFs(14)),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: Size(0, largeUi ? 48 : 44),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
-                    else ...[
-                      OutlinedButton.icon(
-                        onPressed: !paymentSaved ||
-                                printItems.isEmpty ||
-                                activeInvoice == null
-                            ? null
-                            : () async {
-                                final invoice = activeInvoice!;
-                                final result =
-                                    await ThermalPrinterService.printReceipt(
-                                  invoice: invoice,
-                                  items: printItems,
-                                  shopName: auth.currentShop?.name ??
-                                      auth.currentBranch?.name,
-                                );
-                                if (context.mounted) {
-                                  AppMessenger.show(context,
-                                    SnackBar(
-                                      content: Text(result.userMessage),
-                                      backgroundColor: result.isSuccess
-                                          ? AppTheme.accent
-                                          : AppTheme.danger,
-                                    ),
-                                  );
-                                }
-                              },
-                        icon: Icon(Icons.print_rounded, size: alertIc(18)),
-                        label: Text(
-                          'Print Receipt',
-                          style: TextStyle(fontSize: alertFs(14)),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: Size(0, largeUi ? 50 : 44),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: !paymentSaved ||
-                                activeInvoice?.shareToken == null
-                            ? null
-                            : () async {
-                          final shareUrl =
-                              'http://localhost:8001/share/invoice/${activeInvoice!.shareToken}';
-                          await Clipboard.setData(
-                            ClipboardData(text: shareUrl),
-                          );
-                          if (context.mounted) {
-                            AppMessenger.show(context,
-                              const SnackBar(
-                                content: Text('Invoice link copied!'),
-                                backgroundColor: AppTheme.primary,
-                              ),
-                            );
-                          }
-                        },
-                        icon: Icon(Icons.copy_rounded, size: alertIc(18)),
-                        label: Text(
-                          'Copy Bill Share Link',
-                          style: TextStyle(fontSize: alertFs(14)),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: Size(0, largeUi ? 50 : 44),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                  ),
-                ),
-              );
-            }
-
             Widget buildBody() {
-              if (largeUi) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 11,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Text(
-                          //   'Invoice Created Successfully!',
-                          //   style: TextStyle(
-                          //     color: AppTheme.accent,
-                          //     fontWeight: FontWeight.w700,
-                          //     fontSize: alertFs(17),
-                          //   ),
-                          // ),
-                          SizedBox(height: sectionGap),
-                          buildInvoiceCard(),
-                          SizedBox(height: sectionGap),
-                          buildPaymentFields(),
-                        ],
-                      ),
-                    ),
-                    SizedBox(width: sectionGap),
-                    Expanded(
-                      flex: 9,
-                      child: buildReceiptSection(),
-                    ),
-                  ],
-                );
-              }
-
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    paymentSaved
-                        ? 'Invoice created successfully!'
-                        : 'Review bill and confirm payment',
-                    style: TextStyle(
-                      color: paymentSaved ? AppTheme.accent : AppTheme.textSecondary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: alertFs(16),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: sectionGap),
                   buildInvoiceCard(),
                   SizedBox(height: sectionGap),
                   buildPaymentFields(),
-                  SizedBox(height: sectionGap),
-                  const Divider(color: Color(0xFFE2E8F0)),
-                  SizedBox(height: sectionGap),
-                  buildReceiptSection(),
                 ],
               );
             }
@@ -1661,19 +1266,16 @@ Future<bool> showPosCheckoutDialog({
                     children: [
                     Container(
                       width: double.infinity,
-                      padding: EdgeInsets.fromLTRB(hPad, vPad, hPad, 12),
-                      decoration: BoxDecoration(
+                      padding: EdgeInsets.fromLTRB(hPad, vPad, hPad * 0.5, 8),
+                      decoration: const BoxDecoration(
                         border: Border(
-                          bottom: BorderSide(
-                            color: const Color(0xFFE2E8F0),
-                            width: largeUi ? 1.5 : 1,
-                          ),
+                          bottom: BorderSide(color: Color(0xFFE2E8F0)),
                         ),
                       ),
                       child: Row(
                         children: [
                           Container(
-                            padding: EdgeInsets.all(largeUi ? 12 : 8),
+                            padding: EdgeInsets.all(largeUi ? 8 : 6),
                             decoration: BoxDecoration(
                               color: AppTheme.accent.withValues(alpha: 0.12),
                               shape: BoxShape.circle,
@@ -1685,53 +1287,53 @@ Future<bool> showPosCheckoutDialog({
                               color: paymentSaved
                                   ? AppTheme.accent
                                   : AppTheme.primary,
-                              size: alertIc(30),
+                              size: alertIc(20),
                             ),
                           ),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  paymentSaved
-                                      ? 'Checkout Success'
+                                  hasOpenBalance()
+                                      ? 'Collect remaining balance'
                                       : 'Checkout',
                                   style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: alertFs(22),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: alertFs(16),
                                     color: AppTheme.textPrimary,
                                   ),
                                 ),
                                 if (largeUi)
                                   Text(
-                                    paymentSaved
-                                        ? 'Send receipt or start a new bill'
-                                        : 'Confirm payment to generate invoice',
+                                    hasOpenBalance()
+                                        ? 'Switch to UPI/Cash and pay the balance'
+                                        : 'Confirm payment to print invoice',
                                     style: TextStyle(
-                                      fontSize: alertFs(13),
+                                      fontSize: alertFs(11),
                                       color: AppTheme.textSecondary,
                                     ),
                                   ),
                               ],
                             ),
                           ),
-                          if (paymentSaved)
+                          if (hasOpenBalance())
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
+                                horizontal: 10,
+                                vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: AppTheme.accent.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(20),
+                                color: AppTheme.warning.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(16),
                               ),
                               child: Text(
-                                'Paid',
+                                'Due ₹${activeInvoice!.dueAmount.toStringAsFixed(0)}',
                                 style: TextStyle(
-                                  color: AppTheme.accent,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: alertFs(13),
+                                  color: AppTheme.warning,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: alertFs(11),
                                 ),
                               ),
                             )
@@ -1741,7 +1343,7 @@ Future<bool> showPosCheckoutDialog({
                               onPressed: recordingPayment ? null : handleEscape,
                               icon: Icon(
                                 Icons.close_rounded,
-                                size: alertIc(26),
+                                size: alertIc(20),
                                 color: AppTheme.textSecondary,
                               ),
                             ),
@@ -1758,108 +1360,57 @@ Future<bool> showPosCheckoutDialog({
                       padding: EdgeInsets.fromLTRB(hPad, 0, hPad, vPad),
                       child: SizedBox(
                         width: double.infinity,
-                        height: largeUi ? 50 : 44,
-                        child: paymentSaved && !hasOpenBalance()
-                            ? OutlinedButton(
-                                onPressed: closeAndNewBill,
+                        height: largeUi ? 42 : 40,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed:
+                                    recordingPayment ? null : handleEscape,
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppTheme.primary,
-                                  side: const BorderSide(color: AppTheme.primary),
+                                  foregroundColor: AppTheme.textPrimary,
+                                  side: const BorderSide(
+                                      color: Color(0xFFE2E8F0)),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      'Close & New Bill',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: alertFs(15),
-                                      ),
-                                    ),
-                                    if (largeUi) ...[
-                                      const SizedBox(width: 12),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 3,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.primary
-                                              .withValues(alpha: 0.08),
-                                          borderRadius: BorderRadius.circular(6),
-                                          border: Border.all(
-                                            color: AppTheme.primary
-                                                .withValues(alpha: 0.25),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'Ctrl+D',
-                                          style: TextStyle(
-                                            fontSize: alertFs(11),
-                                            fontWeight: FontWeight.w700,
-                                            color: AppTheme.primary,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
+                                child: Text(
+                                  hasOpenBalance() ? 'Close' : 'Cancel',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: alertFs(13),
+                                  ),
                                 ),
-                              )
-                            : Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton(
-                                      onPressed:
-                                          recordingPayment ? null : handleEscape,
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: AppTheme.textPrimary,
-                                        side: const BorderSide(
-                                            color: Color(0xFFE2E8F0)),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        paymentSaved ? 'Close' : 'Cancel',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: alertFs(15),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    flex: 2,
-                                    child: ElevatedButton(
-                                      onPressed: recordingPayment
-                                          ? null
-                                          : confirmCheckout,
-                                      style: ElevatedButton.styleFrom(
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        recordingPayment
-                                            ? 'Saving…'
-                                            : hasOpenBalance()
-                                                ? 'Pay Remaining Balance'
-                                                : 'Confirm Payment',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: alertFs(15),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
                               ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                onPressed: recordingPayment
+                                    ? null
+                                    : confirmCheckout,
+                                style: ElevatedButton.styleFrom(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                child: Text(
+                                  recordingPayment
+                                      ? 'Saving…'
+                                      : hasOpenBalance()
+                                          ? 'Pay Remaining Balance'
+                                          : 'Confirm Payment',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: alertFs(13),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -1876,7 +1427,6 @@ Future<bool> showPosCheckoutDialog({
     );
     return completed;
   } finally {
-    phoneController.dispose();
     paidController.dispose();
     upiRefController.dispose();
     loyaltyController.dispose();

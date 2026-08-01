@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/desktop/desktop_prefs.dart';
@@ -8,10 +9,11 @@ import '../../../core/services/thermal_printer_service.dart';
 import '../../../core/services/windows_print_bridge.dart';
 import '../../../core/session/auth_session.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_dropdown.dart';
 
 /// POS / desktop toggles stored in SharedPreferences.
 ///
-/// [printerFocused] highlights USB ESC/POS (XPrinter) setup for cashier desktops.
+/// [printerFocused] highlights USB TSPL (203 dpi) setup for cashier desktops.
 class PosDesktopSettingsSection extends StatefulWidget {
   const PosDesktopSettingsSection({super.key, this.printerFocused = false});
 
@@ -81,17 +83,132 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
   Future<void> _testPrint() async {
     setState(() => _testing = true);
     final auth = context.read<AuthSession>();
-    final result = await ThermalPrinterService.printSampleBill(
+    final sample = await ThermalPrinterService.printSampleBill(
       shopName: auth.currentShop?.name ?? auth.currentBranch?.name,
     );
     if (!mounted) return;
     setState(() => _testing = false);
-    AppMessenger.show(
-      context,
-      SnackBar(
-        content: Text(result.userMessage),
-        backgroundColor: result.isSuccess ? Colors.green : Colors.red,
-      ),
+    await _showTsplPreviewDialog(sample);
+  }
+
+  Future<void> _showTsplPreviewDialog(ThermalSamplePrintResult sample) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        var status = sample.result;
+        var printing = false;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final statusColor = status.isSuccess ? AppTheme.accent : Colors.red;
+            return AlertDialog(
+              title: const Text('TSPL command preview'),
+              content: SizedBox(
+                width: 520,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      status.userMessage,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '203 dpi · $_paperWidth mm · $_printerName',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: Scrollbar(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(12),
+                            child: SelectableText(
+                              sample.commands.trimRight(),
+                              style: const TextStyle(
+                                fontFamily: 'Consolas',
+                                fontFamilyFallback: ['Courier New', 'monospace'],
+                                fontSize: 12,
+                                height: 1.4,
+                                color: Color(0xFFE2E8F0),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton.icon(
+                  onPressed: printing
+                      ? null
+                      : () async {
+                          await Clipboard.setData(
+                            ClipboardData(text: sample.commands),
+                          );
+                          if (!ctx.mounted) return;
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(content: Text('TSPL commands copied')),
+                          );
+                        },
+                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  label: const Text('Copy'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: printing || _printerName.isEmpty
+                      ? null
+                      : () async {
+                          setDialogState(() => printing = true);
+                          final result =
+                              await ThermalPrinterService.printTsplCommands(
+                            sample.commands,
+                          );
+                          if (!ctx.mounted) return;
+                          setDialogState(() {
+                            status = result;
+                            printing = false;
+                          });
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text(result.userMessage),
+                              backgroundColor:
+                                  result.isSuccess ? Colors.green : Colors.red,
+                            ),
+                          );
+                        },
+                  icon: printing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.print_outlined, size: 18),
+                  label: Text(printing ? 'Printing…' : 'Direct Print'),
+                ),
+                FilledButton(
+                  onPressed: printing ? null : () => Navigator.of(ctx).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -136,12 +253,12 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
               color: AppTheme.primary,
             ),
             title: Text(
-              printerOnly ? 'USB ESC/POS Printer' : 'Desktop & POS',
+              printerOnly ? 'USB TSPL Printer' : 'Desktop & POS',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             subtitle: Text(
               printerOnly
-                  ? 'Local XPrinter only — configured on this PC'
+                  ? 'Local XPrinter · TSPL · 203 dpi — configured on this PC'
                   : 'Receipt printing and notifications',
             ),
           ),
@@ -174,11 +291,11 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
               const ListTile(
                 leading: Icon(Icons.print_outlined, color: AppTheme.primary),
                 title: Text('USB thermal printer', style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text('XPrinter ESC/POS installed on this computer'),
+                subtitle: Text('XPrinter TSPL (203 dpi) installed on this computer'),
               ),
             SwitchListTile(
               title: const Text('Direct USB print (no dialog)'),
-              subtitle: const Text('ESC/POS raw bytes to the selected local XPrinter'),
+              subtitle: const Text('TSPL commands (203 dpi) to the selected local XPrinter'),
               value: _directPrint,
               onChanged: (v) async {
                 await DesktopPrefs.setDirectThermalPrint(v);
@@ -196,98 +313,86 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                 },
               ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
+                    child: AppDropdownButtonFormField<String>(
+                      value: _dropdownPrinterValue(),
+                      items: _printerDropdownItems(),
+                      hint: const Text('Select XPrinter'),
+                      decoration: InputDecoration(
                         labelText: 'Local USB printer',
-                        isDense: true,
-                        border: OutlineInputBorder(),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          isDense: true,
-                          hint: const Text('Select XPrinter'),
-                          value: _dropdownPrinterValue(),
-                          items: _printerDropdownItems(),
-                          onChanged: (v) async {
-                            if (v == null) return;
-                            await DesktopPrefs.setThermalPrinterName(v);
-                            // Selecting a printer implies direct ESC/POS print.
-                            await DesktopPrefs.setDirectThermalPrint(true);
-                            setState(() {
-                              _printerName = v;
-                              _directPrint = true;
-                            });
-                          },
+                        border: const OutlineInputBorder(),
+                        helperText: _printers.isEmpty
+                            ? 'No printers found — plug in the USB XPrinter, then refresh'
+                            : _printerName.isNotEmpty
+                                ? 'Print goes directly to $_printerName'
+                                : 'TSPL · 203 dpi',
+                        helperMaxLines: 2,
+                        helperStyle: TextStyle(
+                          color: _printerName.isNotEmpty && _printers.isNotEmpty
+                              ? AppTheme.accent
+                              : AppTheme.textSecondary,
+                          fontWeight: _printerName.isNotEmpty && _printers.isNotEmpty
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          height: 1.3,
                         ),
                       ),
+                      onChanged: (v) async {
+                        if (v == null) return;
+                        await DesktopPrefs.setThermalPrinterName(v);
+                        await DesktopPrefs.setDirectThermalPrint(true);
+                        setState(() {
+                          _printerName = v;
+                          _directPrint = true;
+                        });
+                      },
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    tooltip: 'Refresh local printers',
-                    onPressed: _loadingPrinters ? null : _refreshPrinters,
-                    icon: _loadingPrinters
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh),
+                  const SizedBox(width: 4),
+                  Padding(
+                    // Align with the field body (below floating label).
+                    padding: const EdgeInsets.only(top: 8),
+                    child: IconButton(
+                      tooltip: 'Refresh local printers',
+                      onPressed: _loadingPrinters ? null : _refreshPrinters,
+                      icon: _loadingPrinters
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh),
+                    ),
                   ),
                 ],
               ),
             ),
-            if (_printers.isEmpty)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text(
-                  'No printers found. On Linux: plug in the USB XPrinter, then either '
-                  'add it in CUPS (Settings → Printers) or ensure /dev/usb/lp0 appears. '
-                  'On Windows: install it under Devices & Printers. Config is local to this PC only.',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                ),
-              )
-            else if (_printerName.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text(
-                  'Selected: $_printerName · Print will go directly to this printer',
-                  style: const TextStyle(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w600),
-                ),
-              ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: InputDecorator(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: AppDropdownButtonFormField<int>(
+                value: _paperWidth,
+                items: const [
+                  DropdownMenuItem(value: 58, child: Text('58 mm')),
+                  DropdownMenuItem(value: 80, child: Text('80 mm')),
+                ],
                 decoration: const InputDecoration(
                   labelText: 'Paper width',
-                  isDense: true,
+                  helperText: 'TSPL label / receipt width · 203 dpi',
                   border: OutlineInputBorder(),
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<int>(
-                    isExpanded: true,
-                    isDense: true,
-                    value: _paperWidth,
-                    items: const [
-                      DropdownMenuItem(value: 58, child: Text('58 mm')),
-                      DropdownMenuItem(value: 80, child: Text('80 mm')),
-                    ],
-                    onChanged: (v) async {
-                      if (v == null) return;
-                      await DesktopPrefs.setThermalPaperWidthMm(v);
-                      setState(() => _paperWidth = v);
-                    },
-                  ),
-                ),
+                onChanged: (v) async {
+                  if (v == null) return;
+                  await DesktopPrefs.setThermalPaperWidthMm(v);
+                  setState(() => _paperWidth = v);
+                },
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: OutlinedButton.icon(
                 onPressed: _testing || _printerName.isEmpty ? null : _testPrint,
                 icon: _testing
@@ -297,14 +402,14 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.receipt_long_outlined, size: 18),
-                label: Text(_testing ? 'Printing…' : 'Test print (ESC/POS)'),
+                label: Text(_testing ? 'Printing…' : 'Test print (TSPL)'),
               ),
             ),
           ] else if (printerOnly)
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Text(
-                'Direct USB ESC/POS print is available on Windows and Linux cashier desktops only.',
+                'Direct USB TSPL print is available on Windows and Linux cashier desktops only.',
                 style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
               ),
             ),

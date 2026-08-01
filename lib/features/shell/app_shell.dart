@@ -1003,7 +1003,6 @@ List<_MenuItem> _menuItems(AuthSession auth) {
     if (can('inventory.view')) ...[
       _MenuItem(label: 'Inventory', icon: Icons.warehouse_outlined, path: '/inventory'),
       _MenuItem(label: 'Stock Alerts', icon: Icons.notification_important_outlined, path: '/stock-alerts'),
-      _MenuItem(label: 'Stock Expiry', icon: Icons.event_busy_outlined, path: '/stock-alerts?tab=expiry'),
       _MenuItem(label: 'Stock Ageing', icon: Icons.hourglass_bottom_outlined, path: '/stock-ageing'),
     ],
     if (can('inventory.transfer'))
@@ -1061,9 +1060,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/invoices')) return 'Invoices';
   if (path.startsWith('/products')) return 'Products';
   if (path.startsWith('/inventory')) return 'Inventory';
-  if (path.startsWith('/stock-alerts')) {
-    return path.contains('tab=expiry') ? 'Stock Expiry' : 'Stock Alerts';
-  }
+  if (path.startsWith('/stock-alerts')) return 'Stock Alerts';
   if (path.startsWith('/stock-ageing')) return 'Stock Ageing';
   if (path.startsWith('/stock-transfers')) return 'Stock Transfers';
   if (path.startsWith('/purchases')) return 'Purchases';
@@ -1093,7 +1090,7 @@ String _titleForPath(String path) {
   return 'Dashboard';
 }
 
-/// Matches sidebar items that may include query params (e.g. Stock Expiry).
+/// Matches sidebar items that may include query params.
 bool _menuPathSelected(String location, String menuPath) {
   final loc = Uri.tryParse(location.startsWith('/') ? 'app://local$location' : location);
   final menu = Uri.tryParse(menuPath.startsWith('/') ? 'app://local$menuPath' : menuPath);

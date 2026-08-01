@@ -323,6 +323,9 @@ class PetVisit {
     this.diagnoses,
     this.treatments,
     this.medicines,
+    this.vaccinations,
+    this.dewormings,
+    this.surgeries,
     this.invoice,
   });
 
@@ -354,6 +357,9 @@ class PetVisit {
   final List<VisitDiagnosis>? diagnoses;
   final List<VisitTreatment>? treatments;
   final List<VisitMedicine>? medicines;
+  final List<PetVaccination>? vaccinations;
+  final List<PetDeworming>? dewormings;
+  final List<PetSurgery>? surgeries;
   final Map<String, dynamic>? invoice;
 
   factory PetVisit.fromJson(Map<String, dynamic> j) {
@@ -371,6 +377,18 @@ class PetVisit {
     List<VisitMedicine>? medicines;
     if (j['medicines'] is List) {
       medicines = listFromData(j['medicines'], VisitMedicine.fromJson);
+    }
+    List<PetVaccination>? vaccinations;
+    if (j['vaccinations'] is List) {
+      vaccinations = listFromData(j['vaccinations'], PetVaccination.fromJson);
+    }
+    List<PetDeworming>? dewormings;
+    if (j['dewormings'] is List) {
+      dewormings = listFromData(j['dewormings'], PetDeworming.fromJson);
+    }
+    List<PetSurgery>? surgeries;
+    if (j['surgeries'] is List) {
+      surgeries = listFromData(j['surgeries'], PetSurgery.fromJson);
     }
     return PetVisit(
       id: intOrNull(j['id']) ?? 0,
@@ -403,6 +421,9 @@ class PetVisit {
       diagnoses: diagnoses,
       treatments: treatments,
       medicines: medicines,
+      vaccinations: vaccinations,
+      dewormings: dewormings,
+      surgeries: surgeries,
       invoice: mapOrNull(j['invoice']),
     );
   }
@@ -644,10 +665,58 @@ class Doctor {
   }
 }
 
+class PetVaccination {
+  PetVaccination({
+    required this.id,
+    required this.petId,
+    this.visitId,
+    required this.vaccineName,
+    this.vaccineBrand,
+    this.batchNumber,
+    required this.administeredDate,
+    this.nextDueDate,
+    this.reminderDaysBefore = 7,
+    this.administeredBy,
+    this.notes,
+    this.status = 'completed',
+  });
+
+  final int id;
+  final int petId;
+  final int? visitId;
+  final String vaccineName;
+  final String? vaccineBrand;
+  final String? batchNumber;
+  final String administeredDate;
+  final String? nextDueDate;
+  final int reminderDaysBefore;
+  final String? administeredBy;
+  final String? notes;
+  final String status;
+
+  factory PetVaccination.fromJson(Map<String, dynamic> j) => PetVaccination(
+        id: intOrNull(j['id']) ?? 0,
+        petId: intOrNull(j['pet_id']) ?? 0,
+        visitId: intOrNull(j['visit_id']),
+        vaccineName: j['vaccine_name']?.toString() ?? '',
+        vaccineBrand: j['vaccine_brand']?.toString(),
+        batchNumber: j['batch_number']?.toString(),
+        administeredDate: formatApiDate(j['administered_date']?.toString()),
+        nextDueDate: j['next_due_date'] != null
+            ? formatApiDate(j['next_due_date']?.toString())
+            : null,
+        reminderDaysBefore: intOrNull(j['reminder_days_before']) ?? 7,
+        administeredBy: j['administered_by']?.toString(),
+        notes: j['notes']?.toString(),
+        status: j['status']?.toString() ?? 'completed',
+      );
+}
+
 class PetDeworming {
   PetDeworming({
     required this.id,
     required this.petId,
+    this.visitId,
     required this.medicineName,
     required this.administeredDate,
     this.nextDueDate,
@@ -659,6 +728,7 @@ class PetDeworming {
 
   final int id;
   final int petId;
+  final int? visitId;
   final String medicineName;
   final String administeredDate;
   final String? nextDueDate;
@@ -670,6 +740,7 @@ class PetDeworming {
   factory PetDeworming.fromJson(Map<String, dynamic> j) => PetDeworming(
         id: intOrNull(j['id']) ?? 0,
         petId: intOrNull(j['pet_id']) ?? 0,
+        visitId: intOrNull(j['visit_id']),
         medicineName: j['medicine_name']?.toString() ?? '',
         administeredDate: formatApiDate(j['administered_date']?.toString()),
         nextDueDate: j['next_due_date'] != null
@@ -686,6 +757,7 @@ class PetSurgery {
   PetSurgery({
     required this.id,
     required this.petId,
+    this.visitId,
     required this.surgeryName,
     required this.surgeryDate,
     this.surgeonId,
@@ -694,12 +766,14 @@ class PetSurgery {
     this.preOpNotes,
     this.postOpNotes,
     this.followUpDate,
+    this.followUpNotes,
     this.cost = 0,
     required this.status,
   });
 
   final int id;
   final int petId;
+  final int? visitId;
   final String surgeryName;
   final String surgeryDate;
   final int? surgeonId;
@@ -708,12 +782,14 @@ class PetSurgery {
   final String? preOpNotes;
   final String? postOpNotes;
   final String? followUpDate;
+  final String? followUpNotes;
   final double cost;
   final String status;
 
   factory PetSurgery.fromJson(Map<String, dynamic> j) => PetSurgery(
         id: intOrNull(j['id']) ?? 0,
         petId: intOrNull(j['pet_id']) ?? 0,
+        visitId: intOrNull(j['visit_id']),
         surgeryName: j['surgery_name']?.toString() ?? '',
         surgeryDate: formatApiDate(j['surgery_date']?.toString()),
         surgeonId: intOrNull(j['surgeon_id']),
@@ -724,6 +800,7 @@ class PetSurgery {
         followUpDate: j['follow_up_date'] != null
             ? formatApiDate(j['follow_up_date']?.toString())
             : null,
+        followUpNotes: j['follow_up_notes']?.toString(),
         cost: numOrNull(j['cost']) ?? 0,
         status: j['status']?.toString() ?? 'scheduled',
       );

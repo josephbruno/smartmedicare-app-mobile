@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../app_services.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_dropdown.dart';
 import '../../data/models/emr.dart';
 import 'emr_pet_hub.dart';
 
@@ -19,7 +20,7 @@ class PetTimelineScreen extends StatefulWidget {
 
 class _PetTimelineScreenState extends State<PetTimelineScreen> {
   late Future<TimelineResponse> _future;
-  final Set<String> _typeFilters = {};
+  String? _typeFilter;
 
   static const _allTypes = [
     'visit',
@@ -31,6 +32,11 @@ class _PetTimelineScreenState extends State<PetTimelineScreen> {
     'note',
   ];
 
+  static const _filterDec = InputDecoration(
+    isDense: true,
+    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  );
+
   @override
   void initState() {
     super.initState();
@@ -39,8 +45,8 @@ class _PetTimelineScreenState extends State<PetTimelineScreen> {
 
   void _reload() {
     final query = <String, dynamic>{};
-    if (_typeFilters.isNotEmpty) {
-      query['types'] = _typeFilters.join(',');
+    if (_typeFilter != null) {
+      query['types'] = _typeFilter;
     }
     _future = context.read<AppServices>().emr.getTimeline(widget.petId, query: query);
   }
@@ -86,46 +92,54 @@ class _PetTimelineScreenState extends State<PetTimelineScreen> {
     }
   }
 
+  Widget _typeFilterDropdown() {
+    return SizedBox(
+      width: 200,
+      child: AppDropdownButtonFormField<String?>(
+        value: _typeFilter,
+        isDense: true,
+        decoration: _filterDec.copyWith(labelText: 'Type'),
+        items: [
+          const DropdownMenuItem(value: null, child: Text('All types')),
+          for (final t in _allTypes)
+            DropdownMenuItem(
+              value: t,
+              child: Text(t.replaceAll('_', ' ')),
+            ),
+        ],
+        onChanged: (v) {
+          setState(() {
+            _typeFilter = v;
+            _reload();
+          });
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthSession>();
+    final canViewHub = auth.hasPermission('emr.visits.view');
 
     return Scaffold(
+      backgroundColor: AppTheme.background,
       appBar: AppBar(title: const Text('Pet timeline')),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: _allTypes.map((t) {
-                final selected = _typeFilters.contains(t);
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    label: Text(t.replaceAll('_', ' ')),
-                    selected: selected,
-                    onSelected: (_) {
-                      setState(() {
-                        if (selected) {
-                          _typeFilters.remove(t);
-                        } else {
-                          _typeFilters.add(t);
-                        }
-                        _reload();
-                      });
-                    },
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: canViewHub
+                ? EmrPetHub(
+                    petId: widget.petId,
+                    trailing: _typeFilterDropdown(),
+                  )
+                : Align(
+                    alignment: Alignment.centerLeft,
+                    child: _typeFilterDropdown(),
                   ),
-                );
-              }).toList(),
-            ),
           ),
-          if (auth.hasPermission('emr.visits.view'))
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: EmrPetHub(petId: widget.petId),
-            ),
           const SizedBox(height: 8),
           Expanded(
             child: RefreshIndicator(

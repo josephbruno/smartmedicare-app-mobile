@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
@@ -7,13 +8,13 @@ import 'package:printing/printing.dart';
 import '../../data/models/customer.dart';
 import '../../data/models/invoice.dart';
 import '../desktop/desktop_prefs.dart';
-import 'esc_pos_receipt_builder.dart';
+import 'tspl_receipt_builder.dart';
 import 'windows_print_bridge.dart';
 
 /// POS receipt printing.
 ///
-/// On Windows with a configured USB thermal printer, sends ESC/POS raw bytes
-/// directly (no dialog). Otherwise falls back to the system PDF print dialog.
+/// On Windows/Linux with a configured USB thermal printer, sends TSPL (203 dpi)
+/// raw bytes directly (no dialog). Otherwise falls back to the system PDF print dialog.
 class ThermalPrinterService {
   static const double printerWidth = 80;
   static const double pageHeight = 300;
@@ -28,13 +29,13 @@ class ThermalPrinterService {
     String? shopAddress,
   }) async {
     try {
-      // Prefer local USB ESC/POS (XPrinter) whenever a printer is configured.
+      // Prefer local USB TSPL (XPrinter) whenever a printer is configured.
       if (WindowsPrintBridge.isSupported) {
         final printer = await DesktopPrefs.getThermalPrinterName();
         final preferDirect = await DesktopPrefs.getDirectThermalPrint();
         if (preferDirect && printer.isNotEmpty) {
           final paper = await DesktopPrefs.getThermalPaperWidthMm();
-          final bytes = await EscPosReceiptBuilder.build(
+          final bytes = TsplReceiptBuilder.build(
             invoice: invoice,
             items: items,
             shopName: shopName,
@@ -75,9 +76,21 @@ class ThermalPrinterService {
     }
   }
 
-  static Future<ThermalPrintResult> printSampleBill({
+  /// Builds sample TSPL text and sends it to the configured USB printer.
+  static Future<ThermalSamplePrintResult> printSampleBill({
     String? shopName,
   }) async {
+    final paper = await DesktopPrefs.getThermalPaperWidthMm();
+    final commands = TsplReceiptBuilder.buildSampleCommands(
+      shopName: shopName ?? 'Maran Billing',
+      paperWidthMm: paper,
+    );
+    final result = await printTsplCommands(commands);
+    return ThermalSamplePrintResult(commands: commands, result: result);
+  }
+
+  /// Sends existing TSPL command text directly to the configured USB printer.
+  static Future<ThermalPrintResult> printTsplCommands(String commands) async {
     if (!WindowsPrintBridge.isSupported) {
       return ThermalPrintResult.unsupported;
     }
@@ -86,14 +99,9 @@ class ThermalPrinterService {
       return ThermalPrintResult.noPrinterConfigured;
     }
     try {
-      final paper = await DesktopPrefs.getThermalPaperWidthMm();
-      final bytes = await EscPosReceiptBuilder.buildSample(
-        shopName: shopName ?? 'Maran Billing',
-        paperWidthMm: paper,
-      );
       final ok = await WindowsPrintBridge.printRaw(
         printerName: printer,
-        data: Uint8List.fromList(bytes),
+        data: Uint8List.fromList(latin1.encode(commands)),
       );
       return ok ? ThermalPrintResult.directSuccess : ThermalPrintResult.failed;
     } catch (_) {
@@ -377,6 +385,20 @@ enum ThermalPrintResult {
   noPrinterConfigured,
 }
 
+/// Sample test print payload: TSPL text + send result.
+class ThermalSamplePrintResult {
+  const ThermalSamplePrintResult({
+    required this.commands,
+    required this.result,
+  });
+
+  final String commands;
+  final ThermalPrintResult result;
+
+  bool get isSuccess => result.isSuccess;
+  String get userMessage => result.userMessage;
+}
+
 extension ThermalPrintResultMessage on ThermalPrintResult {
   String get userMessage {
     switch (this) {
@@ -389,7 +411,7 @@ extension ThermalPrintResultMessage on ThermalPrintResult {
       case ThermalPrintResult.unsupported:
         return 'Direct USB print is available on Windows/Linux desktops only';
       case ThermalPrintResult.noPrinterConfigured:
-        return 'Select a USB XPrinter in USB Printer settings first';
+        return 'Select a USB TSPL printer in USB Printer settings first';
     }
   }
 

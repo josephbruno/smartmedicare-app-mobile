@@ -55,10 +55,32 @@ Users with the **doctor** role see a reduced menu (dashboard, customers, appoint
 ## Run
 
 ```bash
-cd mobile
+cd maran-billing-flutter-app
 flutter pub get
 flutter run
 ```
+
+## Windows installer (Inno Setup)
+
+Produces a single setup EXE that installs the Flutter Windows release bundle.
+
+1. Install [Inno Setup 6](https://jrsoftware.org/isinfo.php) (include the Inno Setup Preprocessor).
+2. From the project root:
+
+```powershell
+.\scripts\build-windows-installer.ps1
+```
+
+Options:
+
+```powershell
+.\scripts\build-windows-installer.ps1 -SkipBuild
+.\scripts\build-windows-installer.ps1 -ApiBaseUrl https://api-maran.biapps.cloud/api/v1
+.\scripts\build-windows-installer.ps1 -OutputDir D:\releases\maran
+```
+
+Output: `dist\windows\MaranBilling-Setup-<version>.exe`  
+Script: `installer\maran_billing.iss`
 
 ## Tests
 

@@ -453,6 +453,57 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
           ),
         ),
       ],
+      if (v.vaccinations != null && v.vaccinations!.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _SectionCard(
+          icon: Icons.vaccines_outlined,
+          iconColor: const Color(0xFF059669),
+          iconBg: const Color(0xFFECFDF5),
+          title: 'Vaccinations',
+          child: Column(
+            children: [
+              for (var i = 0; i < v.vaccinations!.length; i++) ...[
+                if (i > 0) const Divider(height: 20),
+                _VaccinationRow(vaccination: v.vaccinations![i]),
+              ],
+            ],
+          ),
+        ),
+      ],
+      if (v.dewormings != null && v.dewormings!.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _SectionCard(
+          icon: Icons.bug_report_outlined,
+          iconColor: const Color(0xFFD97706),
+          iconBg: const Color(0xFFFFFBEB),
+          title: 'Deworming',
+          child: Column(
+            children: [
+              for (var i = 0; i < v.dewormings!.length; i++) ...[
+                if (i > 0) const Divider(height: 20),
+                _DewormingRow(record: v.dewormings![i]),
+              ],
+            ],
+          ),
+        ),
+      ],
+      if (v.surgeries != null && v.surgeries!.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _SectionCard(
+          icon: Icons.local_hospital_outlined,
+          iconColor: const Color(0xFFDC2626),
+          iconBg: const Color(0xFFFEF2F2),
+          title: 'Surgery',
+          child: Column(
+            children: [
+              for (var i = 0; i < v.surgeries!.length; i++) ...[
+                if (i > 0) const Divider(height: 20),
+                _SurgeryRow(surgery: v.surgeries![i]),
+              ],
+            ],
+          ),
+        ),
+      ],
       if (v.clinicalNotes != null && v.clinicalNotes!.isNotEmpty) ...[
         const SizedBox(height: 12),
         _SectionCard(
@@ -1167,6 +1218,118 @@ class _MedicineRow extends StatelessWidget {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+class _VaccinationRow extends StatelessWidget {
+  const _VaccinationRow({required this.vaccination});
+
+  final PetVaccination vaccination;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = [
+      if (vaccination.vaccineBrand != null && vaccination.vaccineBrand!.isNotEmpty)
+        vaccination.vaccineBrand!,
+      if (vaccination.nextDueDate != null) 'Next due ${vaccination.nextDueDate}',
+      if (vaccination.administeredBy != null && vaccination.administeredBy!.isNotEmpty)
+        vaccination.administeredBy!,
+    ].join(' · ');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          vaccination.vaccineName,
+          style: const TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DewormingRow extends StatelessWidget {
+  const _DewormingRow({required this.record});
+
+  final PetDeworming record;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = [
+      if (record.dosage != null && record.dosage!.isNotEmpty) record.dosage!,
+      if (record.nextDueDate != null) 'Next due ${record.nextDueDate}',
+    ].join(' · ');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          record.medicineName,
+          style: const TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SurgeryRow extends StatelessWidget {
+  const _SurgeryRow({required this.surgery});
+
+  final PetSurgery surgery;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = [
+      if (surgery.surgeonName != null && surgery.surgeonName!.isNotEmpty)
+        surgery.surgeonName!,
+      if (surgery.anesthesiaType != null && surgery.anesthesiaType!.isNotEmpty)
+        surgery.anesthesiaType!,
+      if (surgery.followUpDate != null) 'Follow-up ${surgery.followUpDate}',
+      if (surgery.cost > 0) '₹${surgery.cost.toStringAsFixed(0)}',
+    ].join(' · ');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          surgery.surgeryName,
+          style: const TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary),
+          ),
+        ],
       ],
     );
   }
