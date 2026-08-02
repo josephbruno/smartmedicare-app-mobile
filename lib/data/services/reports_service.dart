@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
 import '../models/api_response.dart';
+import '../models/payment_report.dart';
 import '../models/report_data.dart';
 import '../models/dashboard_data.dart';
 import '../models/stock_transfer.dart';
@@ -83,6 +84,29 @@ class ReportsService {
       return parseEnvelopeData(
         res,
         (data) => SalesTrendData.fromJson(data),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PaymentReportData> payments({
+    required String dateFrom,
+    required String dateTo,
+    int? branchId,
+  }) async {
+    try {
+      final res = await _client.get(
+        '/reports/payments',
+        queryParameters: {
+          'date_from': dateFrom,
+          'date_to': dateTo,
+          if (branchId != null) 'branch_id': branchId,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => PaymentReportData.fromJson(Map<String, dynamic>.from(data as Map)),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);

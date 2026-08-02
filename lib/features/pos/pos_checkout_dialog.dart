@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 
 import '../../app_services.dart';
 import '../../core/app_config.dart';
+import '../../core/desktop/desktop_prefs.dart';
+import '../../core/services/receipt_branch_store.dart';
 import '../../core/services/thermal_printer_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
@@ -231,10 +233,14 @@ Future<bool> showPosCheckoutDialog({
 
             Future<void> printReceiptNow() async {
               if (activeInvoice == null || printItems.isEmpty) return;
+              final header = await ReceiptBranchStore.resolveForPrint(auth);
               await ThermalPrinterService.printReceipt(
                 invoice: activeInvoice!,
                 items: printItems,
-                shopName: auth.currentShop?.name ?? auth.currentBranch?.name,
+                shopName: header.name,
+                shopPhone: header.phone,
+                shopAddress: header.address,
+                billerName: auth.user?.name,
               );
             }
 
@@ -270,9 +276,11 @@ Future<bool> showPosCheckoutDialog({
               }
 
               completed = true;
-              // Print before close; snack + pop after so dialog InheritedWidgets
-              // are not disposed while still depended on by overlays.
-              await printReceiptNow();
+              // Print before close when auto-print is on (direct TSPL on Windows).
+              final autoPrint = await DesktopPrefs.getAutoPrintReceipt();
+              if (autoPrint) {
+                await printReceiptNow();
+              }
               if (!dialogContext.mounted) return;
               Navigator.of(dialogContext).pop();
               WidgetsBinding.instance.addPostFrameCallback((_) {

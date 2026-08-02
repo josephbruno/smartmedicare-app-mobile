@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../app_services.dart';
 import '../../core/extensions/permission_extensions.dart';
 import '../../core/services/permission_service.dart';
+import '../../core/services/receipt_branch_store.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
@@ -74,6 +75,8 @@ class _BranchesScreenState extends State<BranchesScreen> {
 
     try {
       await auth.switchBranch(branch.id);
+      final info = ReceiptBranchStore.fromBranch(branch);
+      if (info != null) await ReceiptBranchStore.save(info);
       if (!mounted) return;
       AppMessenger.success(context, 'Switched to branch');
     } catch (_) {

@@ -16,7 +16,7 @@ import 'windows_print_bridge.dart';
 /// On Windows/Linux with a configured USB thermal printer, sends TSPL (203 dpi)
 /// raw bytes directly (no dialog). Otherwise falls back to the system PDF print dialog.
 class ThermalPrinterService {
-  static const double printerWidth = 80;
+  static const double printerWidth = 70;
   static const double pageHeight = 300;
 
   /// Result of a print attempt.
@@ -27,26 +27,26 @@ class ThermalPrinterService {
     String? shopPhone,
     String? shopGstin,
     String? shopAddress,
+    String? billerName,
   }) async {
     try {
-      // Prefer local USB TSPL (XPrinter) whenever a printer is configured.
+      // Prefer local USB TSPL (XPrinter) whenever direct print is enabled.
       if (WindowsPrintBridge.isSupported) {
-        final printer = await DesktopPrefs.getThermalPrinterName();
         final preferDirect = await DesktopPrefs.getDirectThermalPrint();
+        final printer = preferDirect ? await _resolvePrinterName() : '';
         if (preferDirect && printer.isNotEmpty) {
-          final paper = await DesktopPrefs.getThermalPaperWidthMm();
-          final bytes = TsplReceiptBuilder.build(
+          final bytes = await TsplReceiptBuilder.build(
             invoice: invoice,
             items: items,
             shopName: shopName,
             shopPhone: shopPhone,
             shopGstin: shopGstin,
             shopAddress: shopAddress,
-            paperWidthMm: paper,
+            billerName: billerName,
           );
           final ok = await WindowsPrintBridge.printRaw(
             printerName: printer,
-            data: Uint8List.fromList(bytes),
+            data: bytes,
           );
           if (ok) {
             return ThermalPrintResult.directSuccess;
@@ -76,32 +76,52 @@ class ThermalPrinterService {
     }
   }
 
-  /// Builds sample TSPL text and sends it to the configured USB printer.
+  /// Builds sample TSPL (with logo) and sends it to the configured USB printer.
   static Future<ThermalSamplePrintResult> printSampleBill({
     String? shopName,
+    String? shopPhone,
+    String? shopAddress,
+    String? billerName,
   }) async {
-    final paper = await DesktopPrefs.getThermalPaperWidthMm();
-    final commands = TsplReceiptBuilder.buildSampleCommands(
-      shopName: shopName ?? 'Maran Billing',
-      paperWidthMm: paper,
+    final rawBytes = await TsplReceiptBuilder.buildSampleBytes(
+      shopName: shopName ?? 'Maran Veterinary Hospital',
+      shopPhone: shopPhone,
+      shopAddress: shopAddress,
+      billerName: billerName,
+      includeLogo: true,
     );
-    final result = await printTsplCommands(commands);
-    return ThermalSamplePrintResult(commands: commands, result: result);
+    final commands = await TsplReceiptBuilder.buildSampleCommands(
+      shopName: shopName ?? 'Maran Veterinary Hospital',
+      shopPhone: shopPhone,
+      shopAddress: shopAddress,
+      billerName: billerName,
+    );
+    final result = await printRawBytes(rawBytes);
+    return ThermalSamplePrintResult(
+      commands: commands,
+      rawBytes: rawBytes,
+      result: result,
+    );
   }
 
   /// Sends existing TSPL command text directly to the configured USB printer.
   static Future<ThermalPrintResult> printTsplCommands(String commands) async {
+    return printRawBytes(Uint8List.fromList(latin1.encode(commands)));
+  }
+
+  /// Sends raw TSPL bytes (may include BITMAP logo payload).
+  static Future<ThermalPrintResult> printRawBytes(Uint8List data) async {
     if (!WindowsPrintBridge.isSupported) {
       return ThermalPrintResult.unsupported;
     }
-    final printer = await DesktopPrefs.getThermalPrinterName();
+    final printer = await _resolvePrinterName();
     if (printer.isEmpty) {
       return ThermalPrintResult.noPrinterConfigured;
     }
     try {
       final ok = await WindowsPrintBridge.printRaw(
         printerName: printer,
-        data: Uint8List.fromList(latin1.encode(commands)),
+        data: data,
       );
       return ok ? ThermalPrintResult.directSuccess : ThermalPrintResult.failed;
     } catch (_) {
@@ -111,6 +131,62 @@ class ThermalPrinterService {
 
   static Future<List<String>> listWindowsPrinters() =>
       WindowsPrintBridge.listPrinters();
+
+  /// Saved printer name, or auto-pick the best local TSPL queue.
+  ///
+  /// Prefer `*TSPL Raw*` / Generic Text queues — the Seagull "Xprinter XP-470B"
+  /// driver often accepts RAW jobs (toast success) then never prints.
+  static Future<String> _resolvePrinterName() async {
+    final printers = await WindowsPrintBridge.listPrinters();
+    final preferred = _preferTsplQueue(printers);
+
+    final saved = (await DesktopPrefs.getThermalPrinterName()).trim();
+    if (saved.isNotEmpty) {
+      // Migrate away from Seagull queue when a dedicated TSPL Raw queue exists.
+      final savedLower = saved.toLowerCase();
+      final seagullOnly = savedLower.contains('xprinter') &&
+          !savedLower.contains('tspl') &&
+          !savedLower.contains('generic');
+      if (seagullOnly && preferred != null && preferred != saved) {
+        await DesktopPrefs.setThermalPrinterName(preferred);
+        return preferred;
+      }
+      return saved;
+    }
+
+    if (preferred == null || preferred.isEmpty) return '';
+    await DesktopPrefs.setThermalPrinterName(preferred);
+    await DesktopPrefs.setDirectThermalPrint(true);
+    return preferred;
+  }
+
+  static String? _preferTsplQueue(List<String> printers) {
+    if (printers.isEmpty) return null;
+    for (final name in printers) {
+      final lower = name.toLowerCase();
+      if (lower.contains('tspl') && lower.contains('raw')) return name;
+    }
+    for (final name in printers) {
+      final lower = name.toLowerCase();
+      if (lower.contains('xp-470') && lower.contains('raw')) return name;
+    }
+    for (final name in printers) {
+      final lower = name.toLowerCase();
+      if (lower.contains('generic') &&
+          lower.contains('text') &&
+          (lower.contains('470') || lower.contains('xprinter'))) {
+        return name;
+      }
+    }
+    for (final name in printers) {
+      final lower = name.toLowerCase();
+      if (lower.contains('xp-470') || lower.contains('xp470')) return name;
+    }
+    for (final name in printers) {
+      if (name.toLowerCase().contains('xprinter')) return name;
+    }
+    return null;
+  }
 
   static pw.Document _generateReceiptPdf({
     required Invoice invoice,
@@ -390,10 +466,14 @@ class ThermalSamplePrintResult {
   const ThermalSamplePrintResult({
     required this.commands,
     required this.result,
+    this.rawBytes,
   });
 
   final String commands;
   final ThermalPrintResult result;
+
+  /// Full TSPL payload including BITMAP logo (for Direct Print).
+  final Uint8List? rawBytes;
 
   bool get isSuccess => result.isSuccess;
   String get userMessage => result.userMessage;
@@ -407,7 +487,7 @@ extension ThermalPrintResultMessage on ThermalPrintResult {
       case ThermalPrintResult.dialogOpened:
         return 'Print dialog opened';
       case ThermalPrintResult.failed:
-        return 'Print failed';
+        return 'Print failed — job stuck or printer busy. Select "XP-470B TSPL Raw", clear the Windows print queue, then retry';
       case ThermalPrintResult.unsupported:
         return 'Direct USB print is available on Windows/Linux desktops only';
       case ThermalPrintResult.noPrinterConfigured:

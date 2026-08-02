@@ -51,15 +51,11 @@ class DesktopPrefs {
     await p.setString(_printerNameKey, value.trim());
   }
 
-  /// 58 or 80 (mm).
-  static Future<int> getThermalPaperWidthMm() async {
-    final p = await SharedPreferences.getInstance();
-    final v = p.getInt(_paperWidthKey) ?? 80;
-    return v == 58 ? 58 : 80;
-  }
+  /// Receipt width in mm. Always 70 for XP-470B TSPL stock.
+  static Future<int> getThermalPaperWidthMm() async => 70;
 
   static Future<void> setThermalPaperWidthMm(int value) async {
     final p = await SharedPreferences.getInstance();
-    await p.setInt(_paperWidthKey, value == 58 ? 58 : 80);
+    await p.setInt(_paperWidthKey, 70);
   }
 }

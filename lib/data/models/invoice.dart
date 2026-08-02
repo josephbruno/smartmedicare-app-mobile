@@ -201,6 +201,74 @@ class InvoicePayment {
   }
 }
 
+class ReturnableInvoiceItem {
+  ReturnableInvoiceItem({
+    required this.invoiceItemId,
+    required this.productId,
+    required this.productName,
+    this.batchId,
+    required this.quantity,
+    required this.returnedQuantity,
+    required this.returnableQty,
+    required this.unitPrice,
+    required this.gstRate,
+    required this.totalAmount,
+  });
+
+  final int invoiceItemId;
+  final int productId;
+  final String productName;
+  final int? batchId;
+  final double quantity;
+  final double returnedQuantity;
+  final double returnableQty;
+  final double unitPrice;
+  final double gstRate;
+  final double totalAmount;
+
+  factory ReturnableInvoiceItem.fromJson(Map<String, dynamic> j) =>
+      ReturnableInvoiceItem(
+        invoiceItemId: intOrNull(j['invoice_item_id']) ?? 0,
+        productId: intOrNull(j['product_id']) ?? 0,
+        productName: j['product_name']?.toString() ?? '',
+        batchId: intOrNull(j['batch_id']),
+        quantity: numOrNull(j['quantity']) ?? 0,
+        returnedQuantity: numOrNull(j['returned_quantity']) ?? 0,
+        returnableQty: numOrNull(j['returnable_qty']) ?? 0,
+        unitPrice: numOrNull(j['unit_price']) ?? 0,
+        gstRate: numOrNull(j['gst_rate']) ?? 0,
+        totalAmount: numOrNull(j['total_amount']) ?? 0,
+      );
+}
+
+class InvoiceReturnSummary {
+  InvoiceReturnSummary({
+    required this.id,
+    required this.invoiceNumber,
+    required this.type,
+    required this.status,
+    required this.totalAmount,
+    this.invoiceDate,
+  });
+
+  final int id;
+  final String invoiceNumber;
+  final String type;
+  final String status;
+  final double totalAmount;
+  final String? invoiceDate;
+
+  factory InvoiceReturnSummary.fromJson(Map<String, dynamic> j) =>
+      InvoiceReturnSummary(
+        id: intOrNull(j['id']) ?? 0,
+        invoiceNumber: j['invoice_number']?.toString() ?? '',
+        type: j['type']?.toString() ?? '',
+        status: j['status']?.toString() ?? '',
+        totalAmount: numOrNull(j['total_amount']) ?? 0,
+        invoiceDate: j['invoice_date']?.toString(),
+      );
+}
+
 class Invoice {
   Invoice({
     required this.id,
@@ -231,6 +299,10 @@ class Invoice {
     this.items,
     this.payments,
     this.createdAt,
+    this.returnOfInvoiceId,
+    this.originalInvoice,
+    this.returns = const [],
+    this.returnableItems = const [],
   });
 
   final int id;
@@ -261,6 +333,22 @@ class Invoice {
   final List<InvoiceItem>? items;
   final List<InvoicePayment>? payments;
   final String? createdAt;
+  final int? returnOfInvoiceId;
+  final InvoiceReturnSummary? originalInvoice;
+  final List<InvoiceReturnSummary> returns;
+  final List<ReturnableInvoiceItem> returnableItems;
+
+  bool get canReturn =>
+      type == 'tax_invoice' &&
+      status.toLowerCase() != 'cancelled' &&
+      returnableItems.any((i) => i.returnableQty > 0.0005);
+
+  bool get isReturnInvoice => type == 'return_invoice';
+
+  /// Previous invoice this return/credit is against.
+  String? get againstInvoiceNumber =>
+      originalInvoice?.invoiceNumber ??
+      (returnOfInvoiceId != null ? '#$returnOfInvoiceId' : null);
 
   String get displayDate => formatApiDate(invoiceDate);
   String get branchName => branch?.name ?? '—';
@@ -383,6 +471,30 @@ class Invoice {
       branch = BranchLite.fromJson(Map<String, dynamic>.from(j['branch'] as Map));
     }
     final branchId = intOrNull(j['branch_id']) ?? branch?.id;
+    final returns = <InvoiceReturnSummary>[];
+    if (j['returns'] is List) {
+      for (final e in j['returns'] as List) {
+        if (e is Map) {
+          returns.add(InvoiceReturnSummary.fromJson(Map<String, dynamic>.from(e)));
+        }
+      }
+    }
+    InvoiceReturnSummary? originalInvoice;
+    if (j['original_invoice'] is Map) {
+      originalInvoice = InvoiceReturnSummary.fromJson(
+        Map<String, dynamic>.from(j['original_invoice'] as Map),
+      );
+    }
+    final returnable = <ReturnableInvoiceItem>[];
+    if (j['returnable_items'] is List) {
+      for (final e in j['returnable_items'] as List) {
+        if (e is Map) {
+          returnable.add(
+            ReturnableInvoiceItem.fromJson(Map<String, dynamic>.from(e)),
+          );
+        }
+      }
+    }
     return Invoice(
       id: intOrNull(j['id']) ?? 0,
       invoiceNumber: j['invoice_number']?.toString() ?? '',
@@ -412,6 +524,42 @@ class Invoice {
       items: items,
       payments: payments,
       createdAt: j['created_at']?.toString(),
+      returnOfInvoiceId: intOrNull(j['return_of_invoice_id']) ?? originalInvoice?.id,
+      originalInvoice: originalInvoice,
+      returns: returns,
+      returnableItems: returnable,
+    );
+  }
+}
+
+class SaleReturnResult {
+  SaleReturnResult({
+    required this.returnInvoice,
+    this.exchangeInvoice,
+    required this.refundAmount,
+    required this.amountDue,
+    required this.advanceCredited,
+  });
+
+  final Invoice returnInvoice;
+  final Invoice? exchangeInvoice;
+  final double refundAmount;
+  final double amountDue;
+  final double advanceCredited;
+
+  factory SaleReturnResult.fromJson(Map<String, dynamic> j) {
+    final ret = j['return_invoice'];
+    final exch = j['exchange_invoice'];
+    return SaleReturnResult(
+      returnInvoice: Invoice.fromJson(
+        Map<String, dynamic>.from(ret as Map),
+      ),
+      exchangeInvoice: exch is Map
+          ? Invoice.fromJson(Map<String, dynamic>.from(exch))
+          : null,
+      refundAmount: numOrNull(j['refund_amount']) ?? 0,
+      amountDue: numOrNull(j['amount_due']) ?? 0,
+      advanceCredited: numOrNull(j['advance_credited']) ?? 0,
     );
   }
 }

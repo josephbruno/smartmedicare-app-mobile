@@ -253,7 +253,7 @@ class _ManagerDashboardContent extends StatelessWidget {
 
   Widget _branchAndSummary(BuildContext context, {required bool wide, required double width, required double spacing}) {
     final auth = context.read<AuthSession>();
-    final canViewReports = auth.hasPermission(AppPermissions.reportsView) && auth.isSuperAdmin;
+    final canViewReports = auth.hasPermission(AppPermissions.reportsView);
     final header = DashboardSectionHeader(
       icon: Icons.apartment_rounded,
       title: 'Performance by Branch',
@@ -339,8 +339,7 @@ class _ManagerDashboardContent extends StatelessWidget {
 
   List<Widget> _branchCards(BuildContext context, {bool fillHeight = false}) {
     final auth = context.read<AuthSession>();
-    final canViewReports =
-        auth.hasPermission(AppPermissions.reportsView) && auth.isSuperAdmin;
+    final canViewReports = auth.hasPermission(AppPermissions.reportsView);
     final branches = d.branches ?? const <BranchDashboardStat>[];
     return [
       for (var i = 0; i < branches.length; i++)

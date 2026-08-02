@@ -4,16 +4,18 @@ import 'dart:typed_data';
 
 import 'package:windows_printer/windows_printer.dart';
 
+import 'windows_raw_spooler.dart';
+
 /// Direct TSPL raw print on Windows (spooler) and Linux (CUPS / USB lp).
 bool get isSupported => Platform.isWindows || Platform.isLinux;
 
 Future<List<String>> listPrinters() async {
   if (Platform.isWindows) {
     try {
-      return await WindowsPrinter.getAvailablePrinters();
-    } catch (_) {
-      return const [];
-    }
+      final fromPlugin = await WindowsPrinter.getAvailablePrinters();
+      if (fromPlugin.isNotEmpty) return fromPlugin;
+    } catch (_) {}
+    return WindowsRawSpooler.listPrinters();
   }
   if (Platform.isLinux) {
     return _listLinuxPrinters();
@@ -40,45 +42,32 @@ Future<bool> printRaw({
 }
 
 Future<bool> _printRawWindows(String printerName, Uint8List data) async {
+  // Prefer WinSpool RAW with queue verification.
+  // The windows_printer plugin returns true as soon as WritePrinter succeeds,
+  // which is a false positive on Seagull "Xprinter XP-470B" (jobs stick forever).
+  if (await WindowsRawSpooler.printRaw(
+    printerName: printerName,
+    data: data,
+    verifyCleared: true,
+  )) {
+    return true;
+  }
+
+  // Plugin fallback (no queue verify — last resort only).
   try {
-    // Write data to temp file and use Windows print command
-    final tmpDir = Directory.systemTemp;
-    final tmpFile = File('${tmpDir.path}/maran_tspl_${DateTime.now().microsecondsSinceEpoch}.bin');
-
-    await tmpFile.writeAsBytes(data);
-
-    try {
-      // Use Windows print spooler to send raw bytes
-      final result = await Process.run(
-        'print',
-        ['/d:$printerName', tmpFile.path],
-        runInShell: true,
-      );
-
-      return result.exitCode == 0;
-    } finally {
-      if (await tmpFile.exists()) {
-        await tmpFile.delete();
-      }
-    }
+    return await WindowsPrinter.printRawData(
+      printerName: printerName,
+      data: data,
+      useRawDatatype: true,
+    );
   } catch (_) {
-    // Fallback to windows_printer plugin
-    try {
-      return await WindowsPrinter.printRawData(
-        printerName: printerName,
-        data: data,
-        useRawDatatype: true,
-      );
-    } catch (_) {
-      return false;
-    }
+    return false;
   }
 }
 
 Future<List<String>> _listLinuxPrinters() async {
   final names = <String>{};
 
-  // CUPS printers installed on this machine.
   try {
     final result = await Process.run('lpstat', ['-a']);
     if (result.exitCode == 0) {
@@ -91,7 +80,6 @@ Future<List<String>> _listLinuxPrinters() async {
     }
   } catch (_) {}
 
-  // Direct USB thermal device nodes (common for TSPL XPrinter).
   try {
     final usbDir = Directory('/dev/usb');
     if (await usbDir.exists()) {
@@ -112,7 +100,6 @@ Future<List<String>> _listLinuxPrinters() async {
 
 Future<bool> _printRawLinux(String printerName, Uint8List data) async {
   try {
-    // Direct device write — no CUPS driver required.
     if (printerName.startsWith('/dev/')) {
       final file = File(printerName);
       if (!await file.exists()) return false;
@@ -126,7 +113,6 @@ Future<bool> _printRawLinux(String printerName, Uint8List data) async {
       return true;
     }
 
-    // CUPS raw job (passthrough TSPL).
     final tmp = File(
       '${Directory.systemTemp.path}/maran_tspl_${DateTime.now().microsecondsSinceEpoch}.bin',
     );

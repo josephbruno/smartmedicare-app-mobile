@@ -44,6 +44,7 @@ import '../../features/invoices/invoice_list_screen.dart';
 import '../../features/pos/pos_screen.dart';
 import '../../features/products/product_form_screen.dart';
 import '../../features/products/product_list_screen.dart';
+import '../../features/invoices/sale_return_form_screen.dart';
 import '../../features/purchases/purchase_detail_screen.dart';
 import '../../features/purchases/purchase_form_screen.dart';
 import '../../features/purchases/purchase_list_screen.dart';
@@ -53,6 +54,7 @@ import '../../features/purchases/purchase_return_list_screen.dart';
 import '../../features/purchases/supplier_list_screen.dart';
 import '../../features/reports/gst_report_screen.dart';
 import '../../features/reports/day_close_report_screen.dart';
+import '../../features/reports/payment_report_screen.dart';
 import '../../features/reports/sales_report_screen.dart';
 import '../../features/reports/stock_transfer_report_screen.dart';
 import '../../features/settings/branches_screen.dart';
@@ -76,7 +78,11 @@ GoRouter createAppRouter({
       if (need(AppPermissions.invoicesCreate)) return denied;
     }
     if (path.startsWith('/invoices')) {
-      if (need(AppPermissions.invoicesView)) return denied;
+      if (path.endsWith('/return')) {
+        if (need(AppPermissions.invoicesCreate)) return denied;
+      } else if (need(AppPermissions.invoicesView)) {
+        return denied;
+      }
     }
     if (path.startsWith('/products')) {
       if (path.endsWith('/new')) {
@@ -165,6 +171,8 @@ GoRouter createAppRouter({
     }
     if (path.startsWith('/reports/day-close')) {
       if (need(AppPermissions.cashierDayClose)) return denied;
+    } else if (path.startsWith('/reports/payments') || path.startsWith('/reports/sales')) {
+      if (need(AppPermissions.reportsView)) return denied;
     } else if (path.startsWith('/reports')) {
       if (need(AppPermissions.reportsView) || !auth.isSuperAdmin) return denied;
     }
@@ -307,7 +315,21 @@ GoRouter createAppRouter({
           GoRoute(
             path: '/invoices',
             name: 'Invoices',
-            builder: (c, s) => const InvoiceListScreen(),
+            builder: (c, s) {
+              final q = s.uri.queryParameters;
+              return InvoiceListScreen(
+                initialDateFrom: q['date_from'],
+                initialDateTo: q['date_to'],
+              );
+            },
+          ),
+          GoRoute(
+            path: '/invoices/:id/return',
+            name: 'InvoiceSaleReturn',
+            builder: (c, s) {
+              final id = int.tryParse(s.pathParameters['id'] ?? '') ?? 0;
+              return SaleReturnFormScreen(invoiceId: id);
+            },
           ),
           GoRoute(
             path: '/invoices/:id',
@@ -549,10 +571,9 @@ GoRouter createAppRouter({
           GoRoute(
             path: '/reports/sales',
             name: 'SalesReport',
-            builder: (c, s) => PermissionGuard(
+            builder: (c, s) => const PermissionGuard(
               permission: AppPermissions.reportsView,
-              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
-              child: const SalesReportScreen(),
+              child: SalesReportScreen(),
             ),
           ),
           GoRoute(
@@ -571,6 +592,14 @@ GoRouter createAppRouter({
               permission: AppPermissions.reportsView,
               additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
               child: const StockTransferReportScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/reports/payments',
+            name: 'PaymentReport',
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.reportsView,
+              child: PaymentReportScreen(),
             ),
           ),
           GoRoute(

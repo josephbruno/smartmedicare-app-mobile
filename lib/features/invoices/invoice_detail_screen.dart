@@ -7,6 +7,8 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/services/permission_service.dart';
+import '../../core/services/receipt_branch_store.dart';
 import '../../core/services/thermal_printer_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
@@ -215,10 +217,14 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   Future<void> _handlePrint(Invoice inv) async {
     if (inv.items == null || inv.items!.isEmpty) return;
     final auth = context.read<AuthSession>();
+    final header = await ReceiptBranchStore.resolveForPrint(auth);
     final result = await ThermalPrinterService.printReceipt(
       invoice: inv,
       items: inv.items!,
-      shopName: auth.currentShop?.name ?? auth.currentBranch?.name,
+      shopName: header.name,
+      shopPhone: header.phone,
+      shopAddress: header.address,
+      billerName: auth.user?.name,
     );
     if (!mounted) return;
     AppMessenger.show(
@@ -320,6 +326,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               _buildItemsCard(items),
               const SizedBox(height: 14),
               _buildNotesAndTotals(inv),
+              if (inv.returns.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _buildReturnsCard(inv),
+              ],
               if (inv.hasCashPaymentSummary) ...[
                 const SizedBox(height: 14),
                 _buildCashSummaryCard(inv),
@@ -400,6 +410,22 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
     final meta = <(String, Widget)>[
       ('Invoice No.', Text(inv.invoiceNumber, style: _metaValueStyle)),
+      if (inv.isReturnInvoice || inv.againstInvoiceNumber != null)
+        (
+          'Against Invoice',
+          inv.returnOfInvoiceId != null
+              ? InkWell(
+                  onTap: () => context.push('/invoices/${inv.returnOfInvoiceId}'),
+                  child: Text(
+                    inv.againstInvoiceNumber ?? '—',
+                    style: _metaValueStyle.copyWith(
+                      color: AppTheme.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                )
+              : Text(inv.againstInvoiceNumber ?? '—', style: _metaValueStyle),
+        ),
       ('Invoice Date', Text(_prettyDate(inv.invoiceDate), style: _metaValueStyle)),
       if (inv.dueDate != null && inv.dueDate!.isNotEmpty)
         ('Due Date', Text(_prettyDate(inv.dueDate!), style: _metaValueStyle)),
@@ -407,6 +433,14 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         'Status',
         _statusBadge(statusLabel, statusColor, compact: true),
       ),
+      if (inv.type.isNotEmpty)
+        (
+          'Type',
+          Text(
+            inv.isReturnInvoice ? 'Sale Return' : inv.type.replaceAll('_', ' '),
+            style: _metaValueStyle,
+          ),
+        ),
       if (inv.hasPayments) ...[
         (
           'Payments',
@@ -877,6 +911,67 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     );
   }
 
+  Widget _buildReturnsCard(Invoice inv) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _sectionTitle(Icons.assignment_return_outlined, 'Sale Returns'),
+          const SizedBox(height: 8),
+          const Text(
+            'Returns recorded against this invoice',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          for (final r in inv.returns) ...[
+            InkWell(
+              onTap: () => context.push('/invoices/${r.id}'),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            r.invoiceNumber,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                          if (r.invoiceDate != null && r.invoiceDate!.isNotEmpty)
+                            Text(
+                              _prettyDate(r.invoiceDate!),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      _money(r.totalAmount),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right, size: 18, color: AppTheme.textSecondary),
+                  ],
+                ),
+              ),
+            ),
+            if (r != inv.returns.last) const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildCashSummaryCard(Invoice inv) {
     final cash = inv.cashReceivedTotal;
     final change = inv.changeReturnTotal;
@@ -1002,11 +1097,20 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
   Widget _buildActionButtons(Invoice inv) {
     final canPrint = inv.items != null && inv.items!.isNotEmpty;
+    final canReturn = context.watch<AuthSession>().hasPermission(AppPermissions.invoicesCreate) &&
+        inv.canReturn;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final wrap = constraints.maxWidth < 640;
         final buttons = [
+          if (canReturn)
+            _actionButton(
+              label: 'Sale Return',
+              icon: Icons.assignment_return_outlined,
+              color: const Color(0xFFB45309),
+              onPressed: () => context.push('/invoices/${inv.id}/return'),
+            ),
           _actionButton(
             label: 'Print Invoice',
             icon: Icons.print_outlined,

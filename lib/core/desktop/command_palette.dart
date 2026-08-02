@@ -285,8 +285,11 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
     keywords: ['return', 'expired', 'damaged'],
   );
   add('Expenses', '/expenses', Icons.payments_outlined, visible: () => can(AppPermissions.expensesView));
+  add('Payment report', '/reports/payments', Icons.account_balance_wallet_outlined,
+      visible: () => can(AppPermissions.reportsView),
+      keywords: ['cash', 'upi', 'credit', 'advance', 'due', 'daily']);
   add('Sales report', '/reports/sales', Icons.bar_chart_outlined,
-      visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView));
+      visible: () => can(AppPermissions.reportsView));
   add('Stock transfer report', '/reports/stock-transfers', Icons.swap_horiz_outlined,
       visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView),
       keywords: ['inventory', 'transfer']);

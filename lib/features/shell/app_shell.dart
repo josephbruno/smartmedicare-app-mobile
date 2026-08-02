@@ -1039,10 +1039,12 @@ List<_MenuItem> _menuItems(AuthSession auth) {
   ]);
 
   addSection('REPORTS', [
-    if (auth.isSuperAdmin && can('reports.view')) ...[
+    if (can('reports.view')) ...[
+      _MenuItem(label: 'Payment Report', icon: Icons.account_balance_wallet_outlined, path: '/reports/payments'),
       _MenuItem(label: 'Sales Report', icon: Icons.bar_chart_outlined, path: '/reports/sales'),
-      _MenuItem(label: 'Stock Transfer Report', icon: Icons.swap_horiz_outlined, path: '/reports/stock-transfers'),
     ],
+    if (auth.isSuperAdmin && can('reports.view'))
+      _MenuItem(label: 'Stock Transfer Report', icon: Icons.swap_horiz_outlined, path: '/reports/stock-transfers'),
     if (can('cashier.day_close'))
       _MenuItem(label: 'Day Close Report', icon: Icons.summarize_outlined, path: '/reports/day-close'),
   ]);
@@ -1095,6 +1097,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/emr/visits')) return 'Visit Records';
   if (path.startsWith('/emr/reminders')) return 'Reminders';
   if (path.startsWith('/expenses')) return 'Expenses';
+  if (path.startsWith('/reports/payments')) return 'Payment Report';
   if (path.startsWith('/reports/sales')) return 'Sales Report';
   if (path.startsWith('/reports/gst')) return 'GST Report';
   if (path.startsWith('/reports/stock-transfers')) return 'Stock Transfer Report';

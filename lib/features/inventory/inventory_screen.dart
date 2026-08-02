@@ -27,11 +27,11 @@ class _InventoryScreenState extends State<InventoryScreen>
   late final TabController _tabs;
   final _search = TextEditingController();
   final _logSearch = TextEditingController();
+  final _stockTableKey = GlobalKey<AppPaginatedTableState<InventoryItem>>();
+  final _logTableKey = GlobalKey<AppPaginatedTableState<StockMovement>>();
   Timer? _searchDebounce;
   Timer? _logSearchDebounce;
 
-  int _reloadToken = 0;
-  int _logReloadToken = 0;
   int? _categoryId;
   String _stockFilter = 'all'; // all | low
   String _logTypeFilter = 'all'; // all | adjustment | damage | expiry
@@ -64,11 +64,36 @@ class _InventoryScreenState extends State<InventoryScreen>
     }
   }
 
+  /// Rebuilds so [loadPage] closes over latest filters, then refetches.
+  void _reloadStock() {
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_stockTableKey.currentState?.refresh() ?? Future<void>.value());
+    });
+  }
+
+  void _reloadLog() {
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_logTableKey.currentState?.refresh() ?? Future<void>.value());
+    });
+  }
+
+  Future<void> _refreshAfterAdjust() async {
+    // Yield so the adjust dialog is fully dismissed, then refetch both tabs.
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) return;
+    await Future.wait([
+      _stockTableKey.currentState?.refresh() ?? Future<void>.value(),
+      _logTableKey.currentState?.refresh() ?? Future<void>.value(),
+    ]);
+  }
+
   void _onSearchChanged(String _) {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 280), () {
       if (!mounted) return;
-      setState(() => _reloadToken++);
+      _reloadStock();
     });
   }
 
@@ -76,7 +101,7 @@ class _InventoryScreenState extends State<InventoryScreen>
     _logSearchDebounce?.cancel();
     _logSearchDebounce = Timer(const Duration(milliseconds: 280), () {
       if (!mounted) return;
-      setState(() => _logReloadToken++);
+      _reloadLog();
     });
   }
 
@@ -175,10 +200,7 @@ class _InventoryScreenState extends State<InventoryScreen>
       });
       if (!mounted) return;
       AppMessenger.show(context, const SnackBar(content: Text('Stock updated & logged')));
-      setState(() {
-        _reloadToken++;
-        _logReloadToken++;
-      });
+      await _refreshAfterAdjust();
     } catch (e) {
       if (!mounted) return;
       AppMessenger.show(context, SnackBar(content: Text('$e')));
@@ -202,7 +224,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                 isDense: true,
               ),
               textInputAction: TextInputAction.search,
-              onSubmitted: (_) => setState(() => _reloadToken++),
+              onSubmitted: (_) => _reloadStock(),
               onChanged: _onSearchChanged,
             ),
           ),
@@ -221,10 +243,10 @@ class _InventoryScreenState extends State<InventoryScreen>
                     child: Text(c.name, overflow: TextOverflow.ellipsis),
                   ),
               ],
-              onChanged: (v) => setState(() {
+              onChanged: (v) {
                 _categoryId = v;
-                _reloadToken++;
-              }),
+                _reloadStock();
+              },
             ),
           ),
           const SizedBox(width: 10),
@@ -240,16 +262,14 @@ class _InventoryScreenState extends State<InventoryScreen>
               ],
               onChanged: (v) {
                 if (v == null) return;
-                setState(() {
-                  _stockFilter = v;
-                  _reloadToken++;
-                });
+                _stockFilter = v;
+                _reloadStock();
               },
             ),
           ),
           const SizedBox(width: 10),
           FilledButton(
-            onPressed: () => setState(() => _reloadToken++),
+            onPressed: _reloadStock,
             child: const Text('Search'),
           ),
           if (search.isNotEmpty || _categoryId != null || _stockFilter != 'all') ...[
@@ -257,11 +277,9 @@ class _InventoryScreenState extends State<InventoryScreen>
             TextButton(
               onPressed: () {
                 _search.clear();
-                setState(() {
-                  _categoryId = null;
-                  _stockFilter = 'all';
-                  _reloadToken++;
-                });
+                _categoryId = null;
+                _stockFilter = 'all';
+                _reloadStock();
               },
               child: const Text('Clear'),
             ),
@@ -288,7 +306,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                 isDense: true,
               ),
               textInputAction: TextInputAction.search,
-              onSubmitted: (_) => setState(() => _logReloadToken++),
+              onSubmitted: (_) => _reloadLog(),
               onChanged: _onLogSearchChanged,
             ),
           ),
@@ -307,16 +325,14 @@ class _InventoryScreenState extends State<InventoryScreen>
               ],
               onChanged: (v) {
                 if (v == null) return;
-                setState(() {
-                  _logTypeFilter = v;
-                  _logReloadToken++;
-                });
+                _logTypeFilter = v;
+                _reloadLog();
               },
             ),
           ),
           const SizedBox(width: 10),
           FilledButton(
-            onPressed: () => setState(() => _logReloadToken++),
+            onPressed: _reloadLog,
             child: const Text('Search'),
           ),
           if (search.isNotEmpty || _logTypeFilter != 'all') ...[
@@ -324,10 +340,8 @@ class _InventoryScreenState extends State<InventoryScreen>
             TextButton(
               onPressed: () {
                 _logSearch.clear();
-                setState(() {
-                  _logTypeFilter = 'all';
-                  _logReloadToken++;
-                });
+                _logTypeFilter = 'all';
+                _reloadLog();
               },
               child: const Text('Clear'),
             ),
@@ -342,7 +356,6 @@ class _InventoryScreenState extends State<InventoryScreen>
     final services = context.read<AppServices>();
     final auth = context.watch<AuthSession>();
     final canAdjust = auth.hasPermission(AppPermissions.inventoryAdjust);
-    final branchId = auth.currentBranchId;
     final search = _search.text.trim();
     final logSearch = _logSearch.text.trim();
     final hasStockFilters =
@@ -376,9 +389,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                     const Divider(height: 1, color: Color(0xFFE2E8F0)),
                     Expanded(
                       child: AppPaginatedTable<InventoryItem>(
-                        key: ValueKey(
-                          'inventory-$branchId-$_reloadToken-$search-$_categoryId-$_stockFilter',
-                        ),
+                        key: _stockTableKey,
                         emptyMessage: hasStockFilters
                             ? 'No products match your filters.'
                             : 'No inventory items for this branch.',
@@ -433,9 +444,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                     const Divider(height: 1, color: Color(0xFFE2E8F0)),
                     Expanded(
                       child: AppPaginatedTable<StockMovement>(
-                        key: ValueKey(
-                          'inventory-log-$branchId-$_logReloadToken-$logSearch-$_logTypeFilter',
-                        ),
+                        key: _logTableKey,
                         emptyMessage: hasLogFilters
                             ? 'No adjustment logs match your filters.'
                             : 'No stock adjustments logged yet.',

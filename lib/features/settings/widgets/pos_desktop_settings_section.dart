@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app_services.dart';
 import '../../../core/desktop/desktop_prefs.dart';
 import '../../../core/messaging/app_messenger.dart';
+import '../../../core/services/receipt_branch_store.dart';
 import '../../../core/services/thermal_printer_service.dart';
 import '../../../core/services/windows_print_bridge.dart';
 import '../../../core/session/auth_session.dart';
@@ -28,7 +30,7 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
   bool _sound = true;
   bool _directPrint = true;
   String _printerName = '';
-  int _paperWidth = 80;
+  int _paperWidth = 70;
   List<String> _printers = [];
   bool _loading = true;
   bool _loadingPrinters = false;
@@ -83,12 +85,38 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
   Future<void> _testPrint() async {
     setState(() => _testing = true);
     final auth = context.read<AuthSession>();
+    final services = context.read<AppServices>();
+    await ReceiptBranchStore.sync(branches: services.branches, auth: auth);
+    final header = await ReceiptBranchStore.resolveForPrint(auth);
     final sample = await ThermalPrinterService.printSampleBill(
-      shopName: auth.currentShop?.name ?? auth.currentBranch?.name,
+      shopName: header.name.isEmpty
+          ? 'Maran Veterinary Hospital'
+          : header.name,
+      shopPhone: header.phone,
+      shopAddress: header.address,
+      billerName: auth.user?.name,
     );
     if (!mounted) return;
     setState(() => _testing = false);
     await _showTsplPreviewDialog(sample);
+  }
+
+  void _showRootSnack(String message, {Color? backgroundColor}) {
+    // Never use ScaffoldMessenger.of(dialog/settings context) after async gaps —
+    // the element may already be deactivated (print takes several seconds).
+    final messenger = AppMessenger.rootKey.currentState;
+    if (messenger == null) return;
+    final rootCtx = AppMessenger.rootKey.currentContext;
+    final bar = SnackBar(
+      content: Text(message),
+      backgroundColor: backgroundColor,
+      behavior: SnackBarBehavior.floating,
+    );
+    if (rootCtx != null && rootCtx.mounted) {
+      AppMessenger.show(rootCtx, bar);
+    } else {
+      messenger.showSnackBar(bar);
+    }
   }
 
   Future<void> _showTsplPreviewDialog(ThermalSamplePrintResult sample) {
@@ -161,10 +189,7 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                           await Clipboard.setData(
                             ClipboardData(text: sample.commands),
                           );
-                          if (!ctx.mounted) return;
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            const SnackBar(content: Text('TSPL commands copied')),
-                          );
+                          _showRootSnack('TSPL commands copied');
                         },
                   icon: const Icon(Icons.copy_outlined, size: 18),
                   label: const Text('Copy'),
@@ -174,21 +199,23 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                       ? null
                       : () async {
                           setDialogState(() => printing = true);
-                          final result =
-                              await ThermalPrinterService.printTsplCommands(
-                            sample.commands,
-                          );
-                          if (!ctx.mounted) return;
-                          setDialogState(() {
-                            status = result;
-                            printing = false;
-                          });
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(
-                              content: Text(result.userMessage),
-                              backgroundColor:
-                                  result.isSuccess ? Colors.green : Colors.red,
-                            ),
+                          final result = sample.rawBytes != null
+                              ? await ThermalPrinterService.printRawBytes(
+                                  sample.rawBytes!,
+                                )
+                              : await ThermalPrinterService.printTsplCommands(
+                                  sample.commands,
+                                );
+                          if (ctx.mounted) {
+                            setDialogState(() {
+                              status = result;
+                              printing = false;
+                            });
+                          }
+                          _showRootSnack(
+                            result.userMessage,
+                            backgroundColor:
+                                result.isSuccess ? Colors.green : Colors.red,
                           );
                         },
                   icon: printing
@@ -321,15 +348,17 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                     child: AppDropdownButtonFormField<String>(
                       value: _dropdownPrinterValue(),
                       items: _printerDropdownItems(),
-                      hint: const Text('Select XPrinter'),
+                      hint: const Text('Select TSPL Raw queue'),
                       decoration: InputDecoration(
                         labelText: 'Local USB printer',
                         border: const OutlineInputBorder(),
                         helperText: _printers.isEmpty
                             ? 'No printers found — plug in the USB XPrinter, then refresh'
-                            : _printerName.isNotEmpty
-                                ? 'Print goes directly to $_printerName'
-                                : 'TSPL · 203 dpi',
+                            : _printerName.toLowerCase().contains('tspl')
+                                ? 'RAW TSPL → $_printerName (recommended)'
+                                : _printerName.isNotEmpty
+                                    ? 'Prefer "XP-470B TSPL Raw" — Seagull driver often queues without printing'
+                                    : 'TSPL · 203 dpi',
                         helperMaxLines: 2,
                         helperStyle: TextStyle(
                           color: _printerName.isNotEmpty && _printers.isNotEmpty
@@ -371,24 +400,13 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: AppDropdownButtonFormField<int>(
-                value: _paperWidth,
-                items: const [
-                  DropdownMenuItem(value: 58, child: Text('58 mm')),
-                  DropdownMenuItem(value: 80, child: Text('80 mm')),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'Paper width',
-                  helperText: 'TSPL label / receipt width · 203 dpi',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (v) async {
-                  if (v == null) return;
-                  await DesktopPrefs.setThermalPaperWidthMm(v);
-                  setState(() => _paperWidth = v);
-                },
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Paper width', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text('70 mm · TSPL SIZE command · 203 dpi'),
+                trailing: Text('70 mm', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
             Padding(

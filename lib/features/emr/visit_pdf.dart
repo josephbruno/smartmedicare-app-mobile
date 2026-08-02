@@ -35,6 +35,18 @@ class VisitPdf {
   static const double _marginT = 8;
   static const double _marginB = 8;
 
+  /// Shared font sizes (preview + print).
+  static const double _fsClinic = 15;
+  static const double _fsSubtitle = 10;
+  static const double _fsLabel = 9;
+  static const double _fsBody = 11;
+  static const double _fsSection = 11;
+  static const double _fsMeta = 9.5;
+  static const double _fsFooter = 8.5;
+
+  /// ~4 blank text lines before the clinic header.
+  static const double _headerTopSpace = _fsBody * 1.35 * 4;
+
   /// Empty-field placeholder (ASCII — Helvetica cannot draw em dash U+2014).
   static const String _empty = '-';
 
@@ -97,12 +109,13 @@ class VisitPdf {
           build: (context) => pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
+              pw.SizedBox(height: _headerTopSpace),
               _clinicHeader(
                 name: _t(clinicName),
                 address: _t(clinicAddress),
                 phone: clinicPhone == null ? null : _t(clinicPhone),
               ),
-              pw.SizedBox(height: 4),
+              pw.SizedBox(height: 6),
               _ownerPetRow(
                 visit: visit,
                 petName: _t(petName),
@@ -202,7 +215,7 @@ class VisitPdf {
             _t(name),
             textAlign: pw.TextAlign.center,
             style: pw.TextStyle(
-              fontSize: 12,
+              fontSize: _fsClinic,
               fontWeight: pw.FontWeight.bold,
               color: _primary,
             ),
@@ -211,7 +224,7 @@ class VisitPdf {
             pw.Text(
               subtitle,
               textAlign: pw.TextAlign.center,
-              style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+              style: const pw.TextStyle(fontSize: _fsSubtitle, color: _muted),
             ),
         ],
       ),
@@ -277,7 +290,7 @@ class VisitPdf {
         pw.Text(
           label,
           style: pw.TextStyle(
-            fontSize: 7,
+            fontSize: _fsLabel,
             fontWeight: pw.FontWeight.bold,
             color: _muted,
           ),
@@ -285,7 +298,7 @@ class VisitPdf {
         pw.Text(
           _t(value),
           style: pw.TextStyle(
-            fontSize: 8.5,
+            fontSize: _fsBody,
             fontWeight: pw.FontWeight.bold,
             color: _text,
           ),
@@ -312,7 +325,7 @@ class VisitPdf {
       child: pw.Text(
         title,
         style: pw.TextStyle(
-          fontSize: 8.5,
+          fontSize: _fsSection,
           fontWeight: pw.FontWeight.bold,
           color: _text,
         ),
@@ -384,7 +397,7 @@ class VisitPdf {
                     pw.Text(
                       _t(meds[i].medicineName),
                       style: pw.TextStyle(
-                        fontSize: 8.5,
+                        fontSize: _fsBody,
                         fontWeight: pw.FontWeight.bold,
                         color: _text,
                       ),
@@ -392,7 +405,7 @@ class VisitPdf {
                     if (_medicineMeta(meds[i]).isNotEmpty)
                       pw.Text(
                         _medicineMeta(meds[i]),
-                        style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+                        style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
                       ),
                   ],
                 ),
@@ -400,7 +413,7 @@ class VisitPdf {
               pw.SizedBox(width: 4),
               pw.Text(
                 'x ${meds[i].quantity}',
-                style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+                style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
               ),
             ],
           ),
@@ -435,7 +448,7 @@ class VisitPdf {
                     pw.Text(
                       _t(items[i].treatmentName),
                       style: pw.TextStyle(
-                        fontSize: 8.5,
+                        fontSize: _fsBody,
                         fontWeight: pw.FontWeight.bold,
                         color: _text,
                       ),
@@ -444,7 +457,7 @@ class VisitPdf {
                         items[i].notes!.trim().isNotEmpty)
                       pw.Text(
                         _t(items[i].notes),
-                        style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+                        style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
                       ),
                   ],
                 ),
@@ -452,7 +465,7 @@ class VisitPdf {
               pw.SizedBox(width: 4),
               pw.Text(
                 'x ${items[i].quantity}',
-                style: const pw.TextStyle(fontSize: 7.5, color: _muted),
+                style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
               ),
             ],
           ),
@@ -469,10 +482,10 @@ class VisitPdf {
     return pw.Text(
       _t(text),
       style: pw.TextStyle(
-        fontSize: 8.5,
+        fontSize: _fsBody,
         fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
         color: muted ? _muted : _text,
-        lineSpacing: 1.2,
+        lineSpacing: 1.25,
       ),
     );
   }
@@ -488,11 +501,11 @@ class VisitPdf {
         children: [
           pw.Text(
             'Powered by bestwaveinnovation.com',
-            style: const pw.TextStyle(fontSize: 6.5, color: _muted),
+            style: const pw.TextStyle(fontSize: _fsFooter, color: _muted),
           ),
           pw.Text(
             'Page ${context.pageNumber}',
-            style: const pw.TextStyle(fontSize: 6.5, color: _muted),
+            style: const pw.TextStyle(fontSize: _fsFooter, color: _muted),
           ),
         ],
       ),

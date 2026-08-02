@@ -8,6 +8,7 @@ import '../../data/models/user.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../app_config.dart';
 import '../services/permission_service.dart';
+import '../services/receipt_branch_store.dart';
 
 const _kTokenKey = 'auth_token';
 const _kUserJsonKey = 'auth_user_json';
@@ -226,6 +227,7 @@ class AuthSession extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kUserJsonKey);
     await prefs.remove(_kBranchIdKey);
+    await ReceiptBranchStore.clear();
     notifyListeners();
   }
 }

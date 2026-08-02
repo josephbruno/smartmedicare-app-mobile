@@ -156,9 +156,21 @@ class BillingService {
     }
   }
 
-  Future<void> cancel(int id) async {
+  Future<void> cancel(int id, {required String code}) async {
     try {
-      await _client.post('/invoices/$id/cancel');
+      await _client.post('/invoices/$id/cancel', data: {'code': code});
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<SaleReturnResult> createReturn(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/invoices/$id/returns', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => SaleReturnResult.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }

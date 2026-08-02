@@ -12,7 +12,15 @@ import '../../data/models/invoice.dart';
 import '../reports/report_formatters.dart';
 
 class InvoiceListScreen extends StatefulWidget {
-  const InvoiceListScreen({super.key});
+  const InvoiceListScreen({
+    super.key,
+    this.initialDateFrom,
+    this.initialDateTo,
+  });
+
+  /// Optional `YYYY-MM-DD` from payment report day drill-down.
+  final String? initialDateFrom;
+  final String? initialDateTo;
 
   @override
   State<InvoiceListScreen> createState() => _InvoiceListScreenState();
@@ -23,6 +31,13 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
   final _search = TextEditingController();
   DateTime? _dateFrom;
   DateTime? _dateTo;
+
+  @override
+  void initState() {
+    super.initState();
+    _dateFrom = DateTime.tryParse(widget.initialDateFrom ?? '');
+    _dateTo = DateTime.tryParse(widget.initialDateTo ?? '');
+  }
 
   @override
   void dispose() {

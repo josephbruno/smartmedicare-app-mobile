@@ -1164,30 +1164,6 @@ class _PosScreenState extends State<PosScreen> {
                                         ),
                                       ),
                                     ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(
-                                        'Type',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: _fs(12),
-                                          color: AppTheme.textSecondary,
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: _desktop ? 104 : 92,
-                                      child: Text(
-                                        'Action',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: _fs(12),
-                                          color: AppTheme.textSecondary,
-                                        ),
-                                      ),
-                                    ),
                                   ],
                                 ),
                               ),
@@ -1250,8 +1226,8 @@ class _PosScreenState extends State<PosScreen> {
                                                       child: Text(
                                                         p.name,
                                                         style: TextStyle(
-                                                          fontWeight: FontWeight.w400,
-                                                          fontSize: _fs(11),
+                                                          fontWeight: FontWeight.w600,
+                                                          fontSize: _fs(15),
                                                           color: AppTheme.textPrimary,
                                                         ),
                                                         maxLines: 1,
@@ -1267,8 +1243,8 @@ class _PosScreenState extends State<PosScreen> {
                                                   p.mrp.toStringAsFixed(2),
                                                   textAlign: TextAlign.center,
                                                   style: TextStyle(
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: _fs(12),
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: _fs(18),
                                                     color: AppTheme.primary,
                                                     decoration: p.mrp > p.sellingPrice
                                                         ? TextDecoration.lineThrough
@@ -1282,7 +1258,7 @@ class _PosScreenState extends State<PosScreen> {
                                                   p.sellingPrice.toStringAsFixed(2),
                                                   textAlign: TextAlign.center,
                                                   style: TextStyle(
-                                                    fontWeight: FontWeight.w700,
+                                                    fontWeight: FontWeight.w400,
                                                     fontSize: _fs(12),
                                                     color: AppTheme.danger,
                                                   ),
@@ -1296,58 +1272,11 @@ class _PosScreenState extends State<PosScreen> {
                                                       : '${p.currentStock?.toInt() ?? 0}',
                                                   textAlign: TextAlign.center,
                                                   style: TextStyle(
-                                                    fontWeight: FontWeight.w600,
+                                                    fontWeight: FontWeight.w400,
                                                     fontSize: _fs(12),
                                                     color: isLowStock
                                                         ? AppTheme.warning
                                                         : AppTheme.accent,
-                                                  ),
-                                                ),
-                                              ),
-                                              Expanded(
-                                                flex: 2,
-                                                child: Text(
-                                                  isService ? 'Service' : 'Stock',
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize: _fs(12),
-                                                    color: isService
-                                                        ? AppTheme.primary
-                                                        : AppTheme.accent,
-                                                  ),
-                                                ),
-                                              ),
-                                              SizedBox(
-                                                width: _desktop ? 104 : 92,
-                                                child: Align(
-                                                  alignment: Alignment.center,
-                                                  child: OutlinedButton(
-                                                    onPressed: addToCart,
-                                                    style: OutlinedButton.styleFrom(
-                                                      foregroundColor: AppTheme.primary,
-                                                      side: const BorderSide(
-                                                        color: Color(0xFF93C5FD),
-                                                      ),
-                                                      padding: EdgeInsets.symmetric(
-                                                        horizontal: _desktop ? 18 : 14,
-                                                        vertical: _desktop ? 12 : 10,
-                                                      ),
-                                                      minimumSize: Size.zero,
-                                                      tapTargetSize:
-                                                          MaterialTapTargetSize.shrinkWrap,
-                                                      visualDensity: VisualDensity.standard,
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius: BorderRadius.circular(8),
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      '+ Add',
-                                                      style: TextStyle(
-                                                        fontSize: _fs(12),
-                                                        fontWeight: FontWeight.w500,
-                                                      ),
-                                                    ),
                                                   ),
                                                 ),
                                               ),
