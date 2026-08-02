@@ -24,6 +24,7 @@ class AppServices {
         customers = CustomerService(api),
         inventory = InventoryService(api),
         purchases = PurchaseService(api),
+        purchaseReturns = PurchaseReturnService(api),
         suppliers = SupplierService(api),
         expenses = ExpenseService(api),
         emr = EmrService(api),
@@ -43,6 +44,7 @@ class AppServices {
   final CustomerService customers;
   final InventoryService inventory;
   final PurchaseService purchases;
+  final PurchaseReturnService purchaseReturns;
   final SupplierService suppliers;
   final ExpenseService expenses;
   final EmrService emr;

@@ -4,6 +4,7 @@ import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
 import '../models/api_response.dart';
 import '../models/purchase.dart';
+import '../models/purchase_return.dart';
 
 class PurchaseService {
   PurchaseService(this._client);
@@ -160,6 +161,51 @@ class SupplierService {
       return parseEnvelopeData(
         res,
         (data) => Supplier.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+}
+
+class PurchaseReturnService {
+  PurchaseReturnService(this._client);
+
+  final ApiClient _client;
+
+  Future<({List<PurchaseReturn> items, PaginationMeta? meta})> listPaginated({
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    try {
+      final res = await _client.get('/purchase-returns', queryParameters: {
+        'page': page,
+        'per_page': perPage,
+      });
+      return parseEnvelopeList(res, PurchaseReturn.fromJson);
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PurchaseReturn> get(int id) async {
+    try {
+      final res = await _client.get('/purchase-returns/$id');
+      return parseEnvelopeData(
+        res,
+        (data) => PurchaseReturn.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PurchaseReturn> create(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/purchase-returns', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => PurchaseReturn.fromJson(Map<String, dynamic>.from(data as Map)),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);

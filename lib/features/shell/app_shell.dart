@@ -14,6 +14,7 @@ import '../../core/responsive/desktop_layout_helper.dart';
 import '../../core/desktop/command_palette.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
+import '../../core/services/receipt_branch_store.dart';
 import '../../data/local/sync_coordinator.dart';
 import '../../core/connectivity/connectivity_notifier.dart';
 import '../../core/theme/app_theme.dart';
@@ -44,6 +45,12 @@ class _AppShellState extends State<AppShell> {
       } else if (auth.isAuthenticated &&
           (auth.user?.roles.isEmpty ?? false)) {
         auth.fetchMe();
+      }
+      if (auth.isAuthenticated) {
+        ReceiptBranchStore.sync(
+          branches: context.read<AppServices>().branches,
+          auth: auth,
+        );
       }
     });
   }
@@ -344,6 +351,11 @@ class _DesktopShellState extends State<_DesktopShell> {
     if (branchId == null) return;
     try {
       await widget.auth.switchBranch(branchId);
+      if (!mounted) return;
+      await ReceiptBranchStore.sync(
+        branches: context.read<AppServices>().branches,
+        auth: widget.auth,
+      );
       if (mounted) {
         AppMessenger.success(context, 'Branch switched successfully');
       }
@@ -991,6 +1003,12 @@ List<_MenuItem> _menuItems(AuthSession auth) {
       _MenuItem(label: 'Invoices', icon: Icons.receipt_long_outlined, path: '/invoices'),
     if (can('purchases.view'))
       _MenuItem(label: 'Purchases', icon: Icons.shopping_bag_outlined, path: '/purchases'),
+    if (can('purchases.view'))
+      _MenuItem(
+        label: 'Supplier Returns',
+        icon: Icons.assignment_return_outlined,
+        path: '/purchase-returns',
+      ),
     if (can('expenses.view'))
       _MenuItem(label: 'Expenses', icon: Icons.payments_outlined, path: '/expenses'),
   ]);
@@ -1064,6 +1082,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/stock-ageing')) return 'Stock Ageing';
   if (path.startsWith('/stock-transfers')) return 'Stock Transfers';
   if (path.startsWith('/purchases')) return 'Purchases';
+  if (path.startsWith('/purchase-returns')) return 'Supplier Returns';
   if (path.startsWith('/suppliers')) return 'Suppliers';
   if (path.startsWith('/customers')) return 'Customers';
   if (path.startsWith('/patients')) return 'Patient List';
@@ -1154,6 +1173,11 @@ class _MobileShellState extends State<_MobileShell> {
   Future<void> _switchBranch(int branchId) async {
     try {
       await widget.auth.switchBranch(branchId);
+      if (!mounted) return;
+      await ReceiptBranchStore.sync(
+        branches: context.read<AppServices>().branches,
+        auth: widget.auth,
+      );
       if (!mounted) return;
       AppMessenger.show(
         context,

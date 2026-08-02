@@ -270,6 +270,20 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
       visible: () => can(AppPermissions.inventoryView),
       keywords: ['dead stock', 'slow moving']);
   add('Purchases', '/purchases', Icons.shopping_bag_outlined, visible: () => can(AppPermissions.purchasesView));
+  add(
+    'Supplier Returns',
+    '/purchase-returns',
+    Icons.assignment_return_outlined,
+    visible: () => can(AppPermissions.purchasesView),
+    keywords: ['return', 'expiry', 'damaged', 'supplier return', 'purchase return'],
+  );
+  add(
+    'New supplier return',
+    '/purchase-returns/new',
+    Icons.assignment_return_outlined,
+    visible: () => can(AppPermissions.purchasesCreate),
+    keywords: ['return', 'expired', 'damaged'],
+  );
   add('Expenses', '/expenses', Icons.payments_outlined, visible: () => can(AppPermissions.expensesView));
   add('Sales report', '/reports/sales', Icons.bar_chart_outlined,
       visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView));

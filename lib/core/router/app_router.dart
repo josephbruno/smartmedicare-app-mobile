@@ -47,6 +47,9 @@ import '../../features/products/product_list_screen.dart';
 import '../../features/purchases/purchase_detail_screen.dart';
 import '../../features/purchases/purchase_form_screen.dart';
 import '../../features/purchases/purchase_list_screen.dart';
+import '../../features/purchases/purchase_return_detail_screen.dart';
+import '../../features/purchases/purchase_return_form_screen.dart';
+import '../../features/purchases/purchase_return_list_screen.dart';
 import '../../features/purchases/supplier_list_screen.dart';
 import '../../features/reports/gst_report_screen.dart';
 import '../../features/reports/day_close_report_screen.dart';
@@ -96,7 +99,7 @@ GoRouter createAppRouter({
         path.startsWith('/stock-alerts')) {
       if (need(AppPermissions.inventoryView)) return denied;
     }
-    if (path.startsWith('/purchases')) {
+    if (path.startsWith('/purchases') || path.startsWith('/purchase-returns')) {
       if (path.endsWith('/new')) {
         if (need(AppPermissions.purchasesCreate)) return denied;
       } else if (need(AppPermissions.purchasesView)) {
@@ -388,6 +391,24 @@ GoRouter createAppRouter({
             builder: (c, s) {
               final id = int.tryParse(s.pathParameters['id'] ?? '') ?? 0;
               return PurchaseDetailScreen(id: id);
+            },
+          ),
+          GoRoute(
+            path: '/purchase-returns',
+            name: 'PurchaseReturns',
+            builder: (c, s) => const PurchaseReturnListScreen(),
+          ),
+          GoRoute(
+            path: '/purchase-returns/new',
+            name: 'PurchaseReturnNew',
+            builder: (c, s) => const PurchaseReturnFormScreen(),
+          ),
+          GoRoute(
+            path: '/purchase-returns/:id',
+            name: 'PurchaseReturnDetail',
+            builder: (c, s) {
+              final id = int.tryParse(s.pathParameters['id'] ?? '') ?? 0;
+              return PurchaseReturnDetailScreen(id: id);
             },
           ),
           GoRoute(
