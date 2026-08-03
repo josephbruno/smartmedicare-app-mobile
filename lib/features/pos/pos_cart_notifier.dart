@@ -338,7 +338,8 @@ class PosCartNotifier extends ChangeNotifier {
         return;
       }
       final qty = quantity.abs() < 1 ? 1 : quantity.round();
-      final price = unitPrice > 0 ? unitPrice : product.sellingPrice;
+      // Keep visit unit_price as-is (including 0); do not fall back to catalog price.
+      final price = unitPrice;
       final result = addProduct(
         product,
         quantity: qty,
