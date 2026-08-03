@@ -24,4 +24,16 @@ class AuthRepository {
   Future<User> setPin(String pin) => _service.setPin(pin);
 
   Future<void> verifyPin(String pin) => _service.verifyPin(pin);
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) =>
+      _service.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+
+  Future<User> changePin({String? currentPin, required String newPin}) =>
+      _service.changePin(currentPin: currentPin, newPin: newPin);
 }

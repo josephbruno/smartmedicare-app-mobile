@@ -162,6 +162,26 @@ class AuthSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Self-service password change for the current account. Other devices are
+  /// signed out; the current session token remains valid.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) =>
+      _repository!.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+
+  /// Self-service PIN change/setup for the current account.
+  Future<void> changePin({String? currentPin, required String newPin}) async {
+    final updated =
+        await _repository!.changePin(currentPin: currentPin, newPin: newPin);
+    _user = updated;
+    await _persistUserJson();
+    notifyListeners();
+  }
+
   /// Refreshes profile from API when permissions are missing from cache.
   Future<void> refreshProfileIfNeeded() async {
     if (needsPermissionRefresh) {

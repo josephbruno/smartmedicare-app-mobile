@@ -700,6 +700,11 @@ class _DesktopShellState extends State<_DesktopShell> {
                             ),
                           ),
                           IconButton(
+                            icon: Icon(Icons.shield_outlined, color: AppTheme.textSecondary, size: ic(18)),
+                            onPressed: () => context.go('/settings/security'),
+                            tooltip: 'Account Security',
+                          ),
+                          IconButton(
                             icon: Icon(Icons.logout_rounded, color: AppTheme.textSecondary, size: ic(18)),
                             onPressed: () async {
                               await widget.auth.logout();
@@ -1105,6 +1110,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/settings/doctors')) return 'Doctors';
   if (path.startsWith('/settings/catalog')) return 'Catalog';
   if (path.startsWith('/settings/emr-master-data')) return 'EMR Master Data';
+  if (path.startsWith('/settings/security')) return 'Account Security';
   if (path.startsWith('/settings/printer')) return 'USB Printer';
   if (path.startsWith('/settings/users')) return 'Users';
   if (path.startsWith('/settings/branches')) return 'Branches';
@@ -1491,6 +1497,31 @@ class _MobileShellState extends State<_MobileShell> {
                 onTap: _loadingBranches ? null : _showBranchPicker,
               ),
             ],
+            const Divider(height: 1),
+            ListTile(
+              dense: true,
+              leading: const Icon(
+                Icons.shield_outlined,
+                color: AppTheme.primary,
+                size: 20,
+              ),
+              title: const Text(
+                'Account Security',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              subtitle: const Text(
+                'Change password & PIN',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/settings/security');
+              },
+            ),
             // Drawer Footer Logout Button
             const Divider(height: 1),
             Padding(

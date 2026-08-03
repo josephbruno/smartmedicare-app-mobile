@@ -57,6 +57,7 @@ import '../../features/reports/day_close_report_screen.dart';
 import '../../features/reports/payment_report_screen.dart';
 import '../../features/reports/sales_report_screen.dart';
 import '../../features/reports/stock_transfer_report_screen.dart';
+import '../../features/settings/account_security_screen.dart';
 import '../../features/settings/branches_screen.dart';
 import '../../features/settings/catalog_master_data_screen.dart';
 import '../../features/settings/doctors_screen.dart';
@@ -617,6 +618,13 @@ GoRouter createAppRouter({
               permission: AppPermissions.shopManage,
               child: SettingsScreen(),
             ),
+          ),
+          GoRoute(
+            path: '/settings/security',
+            name: 'AccountSecurity',
+            // Every signed-in user may change their own password/PIN,
+            // regardless of role or shop-management permissions.
+            builder: (c, s) => const AccountSecurityScreen(),
           ),
           GoRoute(
             path: '/settings/printer',

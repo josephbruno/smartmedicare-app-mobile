@@ -105,4 +105,39 @@ class AuthService {
       ApiClient.throwFromDio(e);
     }
   }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await _client.post('/auth/change-password', data: {
+        'current_password': currentPassword,
+        'password': newPassword,
+        'password_confirmation': newPassword,
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<User> changePin({
+    String? currentPin,
+    required String newPin,
+  }) async {
+    try {
+      final res = await _client.post('/auth/change-pin', data: {
+        if (currentPin != null && currentPin.isNotEmpty)
+          'current_pin': currentPin,
+        'pin': newPin,
+        'pin_confirmation': newPin,
+      });
+      return parseEnvelopeData(
+        res,
+        (data) => User.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
 }

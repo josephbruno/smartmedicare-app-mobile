@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/app_config.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
+import '../../core/theme/app_theme.dart';
 import '../../data/models/shop.dart';
 import 'widgets/loyalty_settings_section.dart';
 import 'widgets/pos_desktop_settings_section.dart';
@@ -55,6 +57,17 @@ class SettingsScreen extends StatelessWidget {
                     trailing: Text(s.gstin ?? '—'),
                   ),
                 ],
+              ),
+            ),
+            Card(
+              margin: const EdgeInsets.only(top: 8),
+              child: ListTile(
+                leading: const Icon(Icons.shield_outlined, color: AppTheme.primary),
+                title: const Text('Account Security',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Change your password and PIN'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => context.go('/settings/security'),
               ),
             ),
             if (canManage) LoyaltySettingsSection(initial: loyalty),
