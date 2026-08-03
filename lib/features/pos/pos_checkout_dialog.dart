@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -233,14 +234,18 @@ Future<bool> showPosCheckoutDialog({
 
             Future<void> printReceiptNow() async {
               if (activeInvoice == null || printItems.isEmpty) return;
+              final invoice = activeInvoice!;
               final header = await ReceiptBranchStore.resolveForPrint(auth);
+              // Checkout: if USB printer is connected, print silently; otherwise
+              // skip and continue — never open the system PDF dialog (blocks Saving…).
               await ThermalPrinterService.printReceipt(
-                invoice: activeInvoice!,
+                invoice: invoice,
                 items: printItems,
                 shopName: header.name,
                 shopPhone: header.phone,
                 shopAddress: header.address,
                 billerName: auth.user?.name,
+                allowSystemDialog: false,
               );
             }
 
@@ -276,16 +281,17 @@ Future<bool> showPosCheckoutDialog({
               }
 
               completed = true;
-              // Print before close when auto-print is on (direct TSPL on Windows).
+              // Close checkout first so "Saving…" never sticks on the printer.
+              // If a USB printer is connected, print in the background; otherwise skip.
               final autoPrint = await DesktopPrefs.getAutoPrintReceipt();
-              if (autoPrint) {
-                await printReceiptNow();
-              }
               if (!dialogContext.mounted) return;
               Navigator.of(dialogContext).pop();
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 _showRootSnack(successMessage);
               });
+              if (autoPrint) {
+                unawaited(printReceiptNow());
+              }
             }
 
             Future<void> confirmCheckout() async {

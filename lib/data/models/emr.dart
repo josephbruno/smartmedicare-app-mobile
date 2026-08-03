@@ -483,6 +483,7 @@ class PetReminder {
     required this.status,
     this.pet,
     this.customer,
+    this.createdAt,
   });
 
   final int id;
@@ -493,12 +494,18 @@ class PetReminder {
   final String status;
   final PetSearchResult? pet;
   final CustomerLite? customer;
+  final DateTime? createdAt;
 
   String get displayDueDate => formatApiDate(dueDate);
 
   factory PetReminder.fromJson(Map<String, dynamic> j) {
     final customer = CustomerLite.fromJson(mapOrNull(j['customer']));
     final petMap = mapOrNull(j['pet']);
+    DateTime? createdAt;
+    final rawCreated = j['created_at']?.toString();
+    if (rawCreated != null && rawCreated.isNotEmpty) {
+      createdAt = DateTime.tryParse(rawCreated);
+    }
     return PetReminder(
       id: intOrNull(j['id']) ?? 0,
       reminderType: j['reminder_type']?.toString() ?? '',
@@ -510,6 +517,7 @@ class PetReminder {
           ? PetSearchResult.fromJson(petMap, customerOverride: customer)
           : null,
       customer: customer.id > 0 ? customer : null,
+      createdAt: createdAt,
     );
   }
 }

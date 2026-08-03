@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:intl/intl.dart';
+
 import '../json_helpers.dart';
 import 'api_response.dart';
 import 'customer.dart';
@@ -350,7 +352,24 @@ class Invoice {
       originalInvoice?.invoiceNumber ??
       (returnOfInvoiceId != null ? '#$returnOfInvoiceId' : null);
 
-  String get displayDate => formatApiDate(invoiceDate);
+  /// Display as `dd-MM-yy`, e.g. `03-08-26`.
+  String get displayDate {
+    final raw = formatApiDate(invoiceDate);
+    if (raw.isEmpty) return '';
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw;
+    return DateFormat('dd-MM-yy').format(parsed);
+  }
+
+  /// Strips legacy `INV-` prefix for display (`INV-260803-0001` → `260803-0001`).
+  String get displayInvoiceNumber {
+    final n = invoiceNumber.trim();
+    if (n.toUpperCase().startsWith('INV-')) {
+      return n.substring(4);
+    }
+    return n;
+  }
+
   String get branchName => branch?.name ?? '—';
 
   bool get isPaid => status == 'paid';

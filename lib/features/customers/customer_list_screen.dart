@@ -67,6 +67,10 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                     hintText: 'Search customers by name or phone…',
                     prefixIcon: const Icon(Icons.search),
                     isDense: true,
+                    helperText: search.isNotEmpty && search.length <= 2
+                        ? 'Type more than 2 characters to search'
+                        : null,
+                    helperMaxLines: 1,
                     suffixIcon: search.isNotEmpty
                         ? IconButton(
                             tooltip: 'Clear',
@@ -79,6 +83,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                         : null,
                   ),
                   textInputAction: TextInputAction.search,
+                  onChanged: (_) => _applySearch(),
                   onSubmitted: (_) => _applySearch(),
                 ),
               ),
@@ -97,15 +102,16 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         Expanded(
           child: AppPaginatedTable<Customer>(
             // Remount when search or reload token changes so loadPage re-runs.
-            key: ValueKey('$search-$_reloadToken'),
-            emptyMessage: search.length >= 2
+            // Search applies only after more than 2 characters.
+            key: ValueKey('${search.length > 2 ? search : ''}-$_reloadToken'),
+            emptyMessage: search.length > 2
                 ? 'No customers match your search.'
                 : 'No customers found.',
             loadPage: ({required page, required perPage}) =>
                 services.customers.listPaginated(
                   page: page,
                   perPage: perPage,
-                  search: search.length >= 2 ? search : null,
+                  search: search.length > 2 ? search : null,
                 ),
             isRowSelected: (c) => c.id == _selectedId,
             onRowTap: (c) {
@@ -118,11 +124,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             columns: const [
               TableColumnDef(label: 'Name', flex: 2, cellBuilder: _nameCell),
               TableColumnDef(label: 'Phone', flex: 1.2, cellBuilder: _phoneCell),
-              TableColumnDef(label: 'Email', flex: 1.5, cellBuilder: _emailCell),
               TableColumnDef(label: 'Pets', flex: 0.6, align: TextAlign.center, cellBuilder: _petsCell),
-              TableColumnDef(label: 'City', flex: 1, cellBuilder: _cityCell),
               TableColumnDef(label: 'Balance', flex: 1, align: TextAlign.right, cellBuilder: _balanceCell),
-              TableColumnDef(label: 'Status', flex: 0.8, align: TextAlign.center, cellBuilder: _statusCell),
             ],
           ),
         ),
@@ -163,18 +166,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   static Widget _phoneCell(BuildContext context, Customer c) =>
       Text(c.phone, style: const TextStyle(color: AppTheme.textSecondary));
 
-  static Widget _emailCell(BuildContext context, Customer c) => Text(
-        c.email ?? '—',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-      );
-
   static Widget _petsCell(BuildContext context, Customer c) =>
       Text('${c.pets?.length ?? 0}');
-
-  static Widget _cityCell(BuildContext context, Customer c) =>
-      Text(c.city ?? '—', style: const TextStyle(color: AppTheme.textSecondary));
 
   static Widget _balanceCell(BuildContext context, Customer c) {
     final balance = c.outstandingBalance ?? 0;
@@ -184,13 +177,4 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       style: const TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w600),
     );
   }
-
-  static Widget _statusCell(BuildContext context, Customer c) => Text(
-        c.isActive ? 'Active' : 'Inactive',
-        style: TextStyle(
-          color: c.isActive ? AppTheme.accent : AppTheme.danger,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        ),
-      );
 }

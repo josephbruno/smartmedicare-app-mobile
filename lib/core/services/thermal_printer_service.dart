@@ -20,6 +20,10 @@ class ThermalPrinterService {
   static const double pageHeight = 300;
 
   /// Result of a print attempt.
+  ///
+  /// When [allowSystemDialog] is false (POS checkout auto-print), only the
+  /// connected USB thermal printer is used. If it is connected, print silently
+  /// and continue; if not, skip printing — never open the blocking PDF dialog.
   static Future<ThermalPrintResult> printReceipt({
     required Invoice invoice,
     required List<InvoiceItem> items,
@@ -28,6 +32,7 @@ class ThermalPrinterService {
     String? shopGstin,
     String? shopAddress,
     String? billerName,
+    bool allowSystemDialog = true,
   }) async {
     try {
       // Prefer local USB TSPL (XPrinter) whenever direct print is enabled.
@@ -51,11 +56,16 @@ class ThermalPrinterService {
           if (ok) {
             return ThermalPrintResult.directSuccess;
           }
+          // Do not fall back to a system dialog that would block checkout.
           return ThermalPrintResult.failed;
         }
         if (preferDirect && printer.isEmpty) {
           return ThermalPrintResult.noPrinterConfigured;
         }
+      }
+
+      if (!allowSystemDialog) {
+        return ThermalPrintResult.noPrinterConfigured;
       }
 
       final pdf = _generateReceiptPdf(
@@ -256,7 +266,7 @@ class ThermalPrinterService {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              'Invoice #${invoice.invoiceNumber}',
+              'Invoice #${invoice.displayInvoiceNumber}',
               style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
             ),
             pw.Text(

@@ -77,7 +77,7 @@ class TsplReceiptBuilder {
     lines.add(const _TsplLine(''));
 
     final biller = (billerName ?? '').trim();
-    final billNo = invoice.invoiceNumber.trim();
+    final billNo = invoice.displayInvoiceNumber.trim();
     final dateStr = _billDate(invoice);
     final timeStr = _billTime(invoice);
     final customerName = invoice.customer?.name.trim() ?? '';

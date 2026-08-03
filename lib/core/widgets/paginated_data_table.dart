@@ -164,6 +164,8 @@ class AppPaginatedTable<T> extends StatefulWidget {
     this.emptyBuilder,
     this.header,
     this.showPerPageSelector = true,
+    this.headerFontSize = 11,
+    this.cellFontSize,
   });
 
   final PaginatedLoad<T> loadPage;
@@ -179,6 +181,10 @@ class AppPaginatedTable<T> extends StatefulWidget {
   final WidgetBuilder? emptyBuilder;
   final Widget? header;
   final bool showPerPageSelector;
+  /// Header label size (default 11).
+  final double headerFontSize;
+  /// When set, wraps each desktop cell in [DefaultTextStyle] at this size.
+  final double? cellFontSize;
 
   @override
   State<AppPaginatedTable<T>> createState() => AppPaginatedTableState<T>();
@@ -514,8 +520,8 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
                     child: Text(
                       c.label.toUpperCase(),
                       textAlign: c.align,
-                      style: const TextStyle(
-                        fontSize: 11,
+                      style: TextStyle(
+                        fontSize: widget.headerFontSize,
                         fontWeight: FontWeight.w700,
                         color: AppTheme.textSecondary,
                         letterSpacing: 0.4,
@@ -539,6 +545,14 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
                     : null,
               ),
               children: widget.columns.map((c) {
+                Widget body = c.cellBuilder(context, item);
+                final cellSize = widget.cellFontSize;
+                if (cellSize != null) {
+                  body = DefaultTextStyle.merge(
+                    style: TextStyle(fontSize: cellSize, color: AppTheme.textPrimary),
+                    child: body,
+                  );
+                }
                 final cell = Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: Align(
@@ -547,7 +561,7 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
                         : c.align == TextAlign.center
                             ? Alignment.center
                             : Alignment.centerLeft,
-                    child: c.cellBuilder(context, item),
+                    child: body,
                   ),
                 );
                 if (widget.onRowTap == null) return cell;

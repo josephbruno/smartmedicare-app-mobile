@@ -723,11 +723,11 @@ class _DesktopShellState extends State<_DesktopShell> {
             child: Column(
               children: [
                 Container(
-                  height: desktop ? 72 : 64,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  height: desktop ? 52 : 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   decoration: const BoxDecoration(
                     color: Colors.white,
-                    border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                    border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
                   ),
                   child: Row(
                     children: [
@@ -739,8 +739,9 @@ class _DesktopShellState extends State<_DesktopShell> {
                           Text(
                             _titleForPath(widget.location),
                             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontSize: 20,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w800,
+                                  height: 1.1,
                                 ),
                           ),
                           if (showSubtitle)
@@ -748,7 +749,7 @@ class _DesktopShellState extends State<_DesktopShell> {
                               subtitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                              style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary, height: 1.1),
                             ),
                         ],
                       ),

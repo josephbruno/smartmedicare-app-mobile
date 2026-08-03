@@ -409,7 +409,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     final statusLabel = _statusLabel(inv.status);
 
     final meta = <(String, Widget)>[
-      ('Invoice No.', Text(inv.invoiceNumber, style: _metaValueStyle)),
+      ('Invoice No.', Text(inv.displayInvoiceNumber, style: _metaValueStyle)),
       if (inv.isReturnInvoice || inv.againstInvoiceNumber != null)
         (
           'Against Invoice',
@@ -492,7 +492,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      inv.invoiceNumber,
+                      inv.displayInvoiceNumber,
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
