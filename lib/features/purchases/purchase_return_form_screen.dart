@@ -5,6 +5,7 @@ import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/app_config.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_dropdown.dart';
@@ -56,6 +57,10 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
     ('damaged', 'Damaged'),
     ('other', 'Other'),
   ];
+
+  static const _colGap = 10.0;
+  static const _colNum = 36.0;
+  static const _colAction = 44.0;
 
   @override
   void initState() {
@@ -122,7 +127,19 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
     }
   }
 
+  String? get _branchSubtitle {
+    if (_isSuperAdmin) {
+      final match = _branches.where((b) => b.id == _branchId);
+      if (match.isNotEmpty) return match.first.name;
+      return null;
+    }
+    final auth = context.read<AuthSession>();
+    return auth.currentBranch?.name ?? auth.user?.branch?.name;
+  }
+
   double get _totalAmount => _items.fold(0.0, (sum, item) => sum + item.amount);
+
+  String _formatMoney(double n) => n.toStringAsFixed(2);
 
   String _ymd(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -146,6 +163,13 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
   void _onProductSelect(int rowIdx, int? productId) {
     if (productId == null) {
       setState(() => _items[rowIdx].productId = null);
+      return;
+    }
+    final duplicate = _items.asMap().entries.any(
+          (e) => e.key != rowIdx && e.value.productId == productId,
+        );
+    if (duplicate) {
+      _snack('This product is already in the list');
       return;
     }
     final product = _products.where((p) => p.id == productId).firstOrNull;
@@ -220,6 +244,12 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
       });
     }
 
+    final productIds = payloadItems.map((i) => i['product_id']).toList();
+    if (productIds.toSet().length != productIds.length) {
+      _snack('Each product can only appear once in the return');
+      return;
+    }
+
     setState(() => _saving = true);
     try {
       final ret = await context.read<AppServices>().purchaseReturns.create({
@@ -248,9 +278,10 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
     AppMessenger.show(context, SnackBar(content: Text(msg)));
   }
 
-  InputDecoration _fieldDec(String label) {
+  InputDecoration _fieldDec(String label, {String? hint}) {
     return InputDecoration(
       labelText: label,
+      hintText: hint,
       floatingLabelBehavior: FloatingLabelBehavior.always,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       enabledBorder: OutlineInputBorder(
@@ -288,254 +319,541 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (_error != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('New Supplier Return')),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              FilledButton(onPressed: _bootstrap, child: const Text('Retry')),
-            ],
-          ),
-        ),
-      );
-    }
+    final subtitle = _branchSubtitle;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text('New Supplier Return'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('New Supplier Return'),
+            if (subtitle != null && subtitle.isNotEmpty)
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+          ],
+        ),
+        elevation: 1,
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.textPrimary,
-        surfaceTintColor: Colors.white,
-        elevation: 0,
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFE2E8F0)),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: FilledButton(
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text('Save Return'),
-            ),
-          ),
-        ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Return details',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Standalone return — not linked to a purchase order.',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: 280,
-                      child: AppDropdownButtonFormField<int>(
-                        value: _supplierId,
-                        decoration: _fieldDec('Supplier *'),
-                        items: _suppliers
-                            .map(
-                              (s) => DropdownMenuItem(value: s.id, child: Text(s.name)),
-                            )
-                            .toList(),
-                        onChanged: (v) => setState(() => _supplierId = v),
-                      ),
-                    ),
-                    if (_isSuperAdmin)
-                      SizedBox(
-                        width: 220,
-                        child: AppDropdownButtonFormField<int>(
-                          value: _branchId,
-                          decoration: _fieldDec('Branch *'),
-                          items: _branches
-                              .map(
-                                (b) => DropdownMenuItem(value: b.id, child: Text(b.name)),
-                              )
-                              .toList(),
-                          onChanged: (v) => setState(() => _branchId = v),
-                        ),
-                      ),
-                    SizedBox(
-                      width: 180,
-                      child: AppDropdownButtonFormField<String>(
-                        value: _reason,
-                        decoration: _fieldDec('Reason *'),
-                        items: _reasons
-                            .map(
-                              (r) => DropdownMenuItem(value: r.$1, child: Text(r.$2)),
-                            )
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) setState(() => _reason = v);
-                        },
-                      ),
-                    ),
-                    SizedBox(
-                      width: 180,
-                      child: InkWell(
-                        onTap: _pickDate,
-                        borderRadius: BorderRadius.circular(8),
-                        child: InputDecorator(
-                          decoration: _fieldDec('Return date *'),
-                          child: Text(_ymd(_returnDate)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _notes,
-                  maxLines: 2,
-                  decoration: _fieldDec('Notes'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Items',
-                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: _addItem,
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Add item'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ...List.generate(_items.length, (idx) {
-                  final item = _items[idx];
-                  final products = _productsForRow(idx);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          flex: 4,
-                          child: AppDropdownButtonFormField<int>(
-                            value: item.productId,
-                            decoration: _cellDec(hint: 'Product'),
-                            items: products
-                                .map(
-                                  (p) => DropdownMenuItem(
-                                    value: p.id,
-                                    child: Text(_productLabel(p), overflow: TextOverflow.ellipsis),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) => _onProductSelect(idx, v),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 90,
-                          child: TextField(
-                            controller: item.qty,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                            ],
-                            decoration: _cellDec(hint: 'Qty'),
-                            onChanged: (_) => setState(() {}),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 110,
-                          child: TextField(
-                            controller: item.rate,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            inputFormatters: [
-                              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                            ],
-                            decoration: _cellDec(hint: 'Rate'),
-                            onChanged: (_) => setState(() {}),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 100,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: Text(
-                              '₹${item.amount.toStringAsFixed(2)}',
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: _items.length <= 1 ? null : () => _removeItem(idx),
-                          icon: const Icon(Icons.delete_outline, size: 20),
-                          color: AppTheme.danger,
-                        ),
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        FilledButton(onPressed: _bootstrap, child: const Text('Retry')),
                       ],
                     ),
-                  );
-                }),
-                const Divider(),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    'Total: ₹${_totalAmount.toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                  ),
+                )
+              : Column(
+                  children: [
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                        children: [
+                          _sectionCard(
+                            icon: Icons.assignment_return_outlined,
+                            iconBg: const Color(0xFFDBEAFE),
+                            iconColor: const Color(0xFF2563EB),
+                            title: 'Return Details',
+                            subtitle: 'Standalone return — not linked to a purchase order',
+                            child: _buildReturnDetails(),
+                          ),
+                          const SizedBox(height: 16),
+                          _sectionCard(
+                            icon: Icons.inventory_2_outlined,
+                            iconBg: const Color(0xFFE0E7FF),
+                            iconColor: const Color(0xFF4F46E5),
+                            title: 'Return Items',
+                            subtitle: 'Search and select products to return',
+                            child: _buildItems(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _buildFooter(),
+                  ],
+                ),
+    );
+  }
+
+  Widget _sectionCard({
+    required IconData icon,
+    required Color iconBg,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 1)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReturnDetails() {
+    final wide = AppConfig.usesLargeUiScale ||
+        MediaQuery.sizeOf(context).width >= AppConfig.desktopLayoutBreakpoint;
+
+    final supplier = AppSearchableDropdownField<int>(
+      key: ValueKey('supplier-$_supplierId'),
+      label: 'Supplier',
+      value: _supplierId,
+      searchHint: 'Search supplier…',
+      hint: 'Select supplier',
+      decoration: _fieldDec('Supplier *'),
+      options: [
+        for (final s in _suppliers)
+          AppSearchableOption(value: s.id, label: s.name),
+      ],
+      onChanged: (v) => setState(() => _supplierId = v),
+    );
+
+    final branch = !_isSuperAdmin
+        ? null
+        : AppDropdownButtonFormField<int>(
+            key: ValueKey('branch-$_branchId'),
+            value: _branches.any((b) => b.id == _branchId) ? _branchId : null,
+            isExpanded: true,
+            decoration: _fieldDec('Branch *'),
+            items: [
+              for (final b in _branches)
+                DropdownMenuItem(
+                  value: b.id,
+                  child: Text(b.name, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: (v) => setState(() => _branchId = v),
+          );
+
+    final reason = AppDropdownButtonFormField<String>(
+      key: ValueKey('reason-$_reason'),
+      value: _reason,
+      isExpanded: true,
+      decoration: _fieldDec('Reason *'),
+      items: [
+        for (final r in _reasons)
+          DropdownMenuItem(value: r.$1, child: Text(r.$2)),
+      ],
+      onChanged: (v) {
+        if (v != null) setState(() => _reason = v);
+      },
+    );
+
+    final date = InkWell(
+      onTap: _pickDate,
+      borderRadius: BorderRadius.circular(8),
+      child: InputDecorator(
+        decoration: _fieldDec('Return Date *'),
+        child: Row(
+          children: [
+            Expanded(child: Text(_ymd(_returnDate))),
+            const Icon(Icons.calendar_today_outlined, size: 18, color: AppTheme.textSecondary),
+          ],
+        ),
+      ),
+    );
+
+    final notes = TextField(
+      controller: _notes,
+      maxLines: 2,
+      decoration: _fieldDec('Notes', hint: 'Optional notes'),
+    );
+
+    if (!wide) {
+      return Column(
+        children: [
+          supplier,
+          if (branch != null) ...[
+            const SizedBox(height: 14),
+            branch,
+          ],
+          const SizedBox(height: 14),
+          reason,
+          const SizedBox(height: 14),
+          date,
+          const SizedBox(height: 14),
+          notes,
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: supplier),
+            if (branch != null) ...[
+              const SizedBox(width: 16),
+              Expanded(child: branch),
+            ],
+            const SizedBox(width: 16),
+            Expanded(child: reason),
+            const SizedBox(width: 16),
+            Expanded(child: date),
+          ],
+        ),
+        const SizedBox(height: 14),
+        notes,
+      ],
+    );
+  }
+
+  Widget _buildItems() {
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (wide) ...[
+          _itemsHeader(),
+          const SizedBox(height: 4),
+        ],
+        for (var i = 0; i < _items.length; i++) ...[
+          if (i > 0) SizedBox(height: wide ? 8 : 12),
+          _buildItemRow(i, wide: wide),
+        ],
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _addItem,
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('Add Item'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.primary,
+            side: const BorderSide(color: Color(0xFF93C5FD)),
+            backgroundColor: const Color(0xFFF8FAFC),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFBFDBFE)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Total',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  '₹${_formatMoney(_totalAmount)}',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF2563EB),
                   ),
                 ),
               ],
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _itemsHeader() {
+    const labelStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      color: AppTheme.textSecondary,
+      letterSpacing: 0.2,
+    );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: _colNum,
+            child: Text('#', textAlign: TextAlign.center, style: labelStyle),
+          ),
+          const SizedBox(width: _colGap),
+          const Expanded(flex: 5, child: Text('Product', style: labelStyle)),
+          const SizedBox(width: _colGap),
+          const Expanded(
+            flex: 1,
+            child: Text('Qty', textAlign: TextAlign.right, style: labelStyle),
+          ),
+          const SizedBox(width: _colGap),
+          const Expanded(
+            flex: 2,
+            child: Text('Rate (₹)', textAlign: TextAlign.right, style: labelStyle),
+          ),
+          const SizedBox(width: _colGap),
+          const Expanded(
+            flex: 2,
+            child: Text('Amount (₹)', textAlign: TextAlign.right, style: labelStyle),
+          ),
+          const SizedBox(width: _colGap),
+          const SizedBox(width: _colAction),
         ],
+      ),
+    );
+  }
+
+  Widget _buildItemRow(int idx, {required bool wide}) {
+    final item = _items[idx];
+    final options = _productsForRow(idx);
+
+    final productField = AppSearchableDropdownField<int>(
+      key: ValueKey('product-$idx-${item.productId}'),
+      label: 'Product',
+      value: item.productId,
+      searchHint: 'Search product…',
+      hint: 'Select product',
+      decoration: wide
+          ? _cellDec(hint: 'Select product')
+          : _fieldDec('Product *'),
+      options: [
+        for (final p in options)
+          AppSearchableOption(value: p.id, label: _productLabel(p)),
+      ],
+      onChanged: (v) => _onProductSelect(idx, v),
+    );
+
+    final qtyField = TextField(
+      controller: item.qty,
+      textAlign: wide ? TextAlign.right : TextAlign.start,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+      decoration: wide ? _cellDec(hint: '1') : _fieldDec('Qty'),
+      onChanged: (_) => setState(() {}),
+    );
+
+    final rateField = TextField(
+      controller: item.rate,
+      textAlign: wide ? TextAlign.right : TextAlign.start,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+      decoration: wide ? _cellDec(hint: '0.00') : _fieldDec('Rate (₹)'),
+      onChanged: (_) => setState(() {}),
+    );
+
+    final amountCell = Container(
+      height: 44,
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Text(
+        '₹${_formatMoney(item.amount)}',
+        textAlign: TextAlign.right,
+        style: const TextStyle(
+          color: Color(0xFF2563EB),
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+        ),
+      ),
+    );
+
+    final removeBtn = SizedBox(
+      width: _colAction,
+      child: IconButton(
+        onPressed: _items.length <= 1 ? null : () => _removeItem(idx),
+        icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 20),
+        tooltip: 'Remove',
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+
+    if (wide) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.white,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: _colNum,
+              child: Text(
+                '${idx + 1}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: _colGap),
+            Expanded(flex: 5, child: productField),
+            const SizedBox(width: _colGap),
+            Expanded(flex: 1, child: qtyField),
+            const SizedBox(width: _colGap),
+            Expanded(flex: 2, child: rateField),
+            const SizedBox(width: _colGap),
+            Expanded(flex: 2, child: amountCell),
+            const SizedBox(width: _colGap),
+            removeBtn,
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Item ${idx + 1}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const Spacer(),
+              removeBtn,
+            ],
+          ),
+          const SizedBox(height: 8),
+          productField,
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: qtyField),
+              const SizedBox(width: 12),
+              Expanded(child: rateField),
+            ],
+          ),
+          const SizedBox(height: 12),
+          amountCell,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _saving ? null : () => context.pop(),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.save_outlined, size: 18),
+                label: Text(_saving ? 'Saving…' : 'Save Return'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

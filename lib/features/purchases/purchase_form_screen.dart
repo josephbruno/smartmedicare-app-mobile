@@ -684,21 +684,18 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     final item = _items[idx];
     final options = _productsForRow(idx);
 
-    final productField = AppDropdownButtonFormField<int>(
+    final productField = AppSearchableDropdownField<int>(
       key: ValueKey('product-$idx-${item.productId}'),
+      label: 'Item',
       value: item.productId,
-      isExpanded: true,
-      isDense: true,
+      searchHint: 'Search product…',
+      hint: 'Select product',
       decoration: wide
           ? _cellDec(hint: 'Select product')
           : _fieldDec('Item *'),
-      hint: const Text('Select product', overflow: TextOverflow.ellipsis),
-      items: [
+      options: [
         for (final p in options)
-          DropdownMenuItem(
-            value: p.id,
-            child: Text(_productLabel(p), overflow: TextOverflow.ellipsis),
-          ),
+          AppSearchableOption(value: p.id, label: _productLabel(p)),
       ],
       onChanged: (v) => _onProductSelect(idx, v),
     );

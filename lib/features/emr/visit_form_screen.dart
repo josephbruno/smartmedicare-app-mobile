@@ -317,7 +317,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     final auth = context.read<AuthSession>();
 
     try {
-      _doctors = await emr.listDoctors();
+      _doctors = _uniqueDoctors(await emr.listDoctors());
       _complaintSuggestions = await emr.getComplaints();
       _defaultObservationSuggestions = await emr.getObservations();
       _defaultInvestigationSuggestions = await emr.getInvestigations();
@@ -330,8 +330,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       _frequencySuggestions = await emr.getFrequencySuggestions();
 
       if (auth.hasRole('doctor') && auth.user != null) {
-        _selectedDoctor = _doctors.where((d) => d.id == auth.user!.id).firstOrNull ??
+        final me = _doctors.where((d) => d.id == auth.user!.id).firstOrNull ??
             DoctorLite(id: auth.user!.id, name: auth.user!.name);
+        _setSelectedDoctor(me);
       }
 
       if (_isEdit) {
@@ -363,7 +364,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           customerId: visit.customerId,
           name: 'Pet #${visit.petId}',
         );
-    if (visit.doctor != null) _selectedDoctor = visit.doctor;
+    if (visit.doctor != null) _setSelectedDoctor(visit.doctor);
     _visitType = visit.visitType;
     _visitDate = DateTime.tryParse(visit.visitDate) ?? DateTime.now();
     if (visit.visitTime != null && visit.visitTime!.length >= 5) {
@@ -430,6 +431,33 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     }
     _serviceChargeProductId = visit.serviceChargeProductId;
     _serviceChargeProductName = visit.serviceChargeProduct?.name;
+  }
+
+  List<DoctorLite> _uniqueDoctors(List<DoctorLite> doctors) {
+    final seen = <int>{};
+    return [
+      for (final d in doctors)
+        if (d.id != 0 && seen.add(d.id)) d,
+    ];
+  }
+
+  void _ensureDoctorInList(DoctorLite doctor) {
+    if (doctor.id == 0) return;
+    if (_doctors.any((d) => d.id == doctor.id)) return;
+    _doctors = [..._doctors, doctor];
+  }
+
+  void _setSelectedDoctor(DoctorLite? doctor) {
+    _selectedDoctor = doctor;
+    if (doctor != null) _ensureDoctorInList(doctor);
+  }
+
+  /// Dropdown requires exactly one matching item; fall back to null otherwise.
+  int? get _doctorDropdownValue {
+    final id = _selectedDoctor?.id;
+    if (id == null) return null;
+    final matches = _doctors.where((d) => d.id == id).length;
+    return matches == 1 ? id : null;
   }
 
   void _applyDoctorServiceChargeDefaults() {
@@ -501,7 +529,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         customerPhone: appt.customer?.phone,
       );
     }
-    if (appt.doctor != null) _selectedDoctor = appt.doctor;
+    if (appt.doctor != null) _setSelectedDoctor(appt.doctor);
     _visitType = appt.appointmentType == 'followup'
         ? 'followup'
         : (appt.appointmentType == 'emergency' ? 'emergency' : 'consultation');
@@ -1398,8 +1426,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ],
           if (_doctors.isNotEmpty) ...[
             const SizedBox(height: 12),
-            AppDropdownButtonFormField<int>(
-              value: _selectedDoctor?.id,
+            AppDropdownButtonFormField<int?>(
+              value: _doctorDropdownValue,
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Doctor'),
               selectedItemBuilder: (context) => [
@@ -1413,9 +1441,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 ),
               ],
               items: [
-                const DropdownMenuItem(value: null, child: Text('— None —')),
+                const DropdownMenuItem<int?>(value: null, child: Text('— None —')),
                 ..._doctors.map(
-                  (d) => DropdownMenuItem(
+                  (d) => DropdownMenuItem<int?>(
                     value: d.id,
                     child: Text(
                       d.displayLabel,
@@ -1428,7 +1456,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               onChanged: (id) => setState(() {
                 _selectedDoctor = id == null
                     ? null
-                    : _doctors.firstWhere((d) => d.id == id);
+                    : _doctors.where((d) => d.id == id).firstOrNull;
                 _applyDoctorServiceChargeDefaults();
               }),
             ),
@@ -2184,24 +2212,47 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: TextField(
+                          child: AppDropdownButtonFormField<int?>(
+                            value: m.durationDays,
+                            isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'Days',
                               isDense: true,
                             ),
-                            keyboardType: TextInputType.number,
-                            controller: m.daysCtrl,
+                            items: [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('—'),
+                              ),
+                              ...List.generate(
+                                15,
+                                (i) => DropdownMenuItem<int?>(
+                                  value: i + 1,
+                                  child: Text('${i + 1}'),
+                                ),
+                              ),
+                            ],
+                            onChanged: (v) => setState(() => m.durationDays = v),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: TextField(
+                          child: AppDropdownButtonFormField<int>(
+                            value: m.quantity,
+                            isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'Qty',
                               isDense: true,
                             ),
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            controller: m.qtyCtrl,
+                            items: List.generate(
+                              20,
+                              (i) => DropdownMenuItem(
+                                value: i + 1,
+                                child: Text('${i + 1}'),
+                              ),
+                            ),
+                            onChanged: (v) =>
+                                setState(() => m.quantity = v ?? 1),
                           ),
                         ),
                         IconButton(
@@ -2216,7 +2267,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                               ? 'Medicine product linked'
                               : 'Link medicine product (stock checked)',
                           onPressed: () async {
-                            final qty = double.tryParse(m.qtyCtrl.text) ?? 1;
+                            final qty = m.quantity.toDouble();
                             final p = await _pickProduct(
                               initial: m.nameCtrl.text,
                               type: 'medicine',
@@ -2268,9 +2319,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                                         m.freqCtrl.text = s.defaultFrequency!;
                                       }
                                       if (s.defaultDurationDays != null &&
-                                          m.daysCtrl.text.isEmpty) {
-                                        m.daysCtrl.text =
-                                            s.defaultDurationDays.toString();
+                                          m.durationDays == null) {
+                                        m.durationDays = s.defaultDurationDays!
+                                            .clamp(1, 15);
                                       }
                                       _medicineSuggestForIndex = null;
                                       _medicineSuggestions = [];
@@ -3429,13 +3480,13 @@ class _MedicineRow {
     String dosage = '',
     String frequency = '',
     int? durationDays,
-    double quantity = 1,
+    int quantity = 1,
     double unitPrice = 0,
-  })  : nameCtrl = TextEditingController(text: name),
+  })  : durationDays = durationDays?.clamp(1, 15),
+        quantity = quantity.clamp(1, 20),
+        nameCtrl = TextEditingController(text: name),
         dosageCtrl = TextEditingController(text: dosage),
         freqCtrl = TextEditingController(text: frequency),
-        daysCtrl = TextEditingController(text: durationDays?.toString() ?? ''),
-        qtyCtrl = TextEditingController(text: quantity.toString()),
         priceCtrl = TextEditingController(text: unitPrice.toString());
 
   factory _MedicineRow.fromModel(VisitMedicine m) => _MedicineRow(
@@ -3444,16 +3495,16 @@ class _MedicineRow {
         dosage: m.dosage ?? '',
         frequency: m.frequency ?? '',
         durationDays: m.durationDays,
-        quantity: m.quantity,
+        quantity: m.quantity.round(),
         unitPrice: m.unitPrice,
       );
 
   int? productId;
+  int? durationDays;
+  int quantity;
   final TextEditingController nameCtrl;
   final TextEditingController dosageCtrl;
   final TextEditingController freqCtrl;
-  final TextEditingController daysCtrl;
-  final TextEditingController qtyCtrl;
   final TextEditingController priceCtrl;
 
   Map<String, dynamic> toJson() => {
@@ -3461,8 +3512,8 @@ class _MedicineRow {
         'medicine_name': nameCtrl.text.trim(),
         if (dosageCtrl.text.isNotEmpty) 'dosage': dosageCtrl.text.trim(),
         if (freqCtrl.text.isNotEmpty) 'frequency': freqCtrl.text.trim(),
-        if (daysCtrl.text.isNotEmpty) 'duration_days': int.tryParse(daysCtrl.text),
-        'quantity': double.tryParse(qtyCtrl.text) ?? 1,
+        if (durationDays != null) 'duration_days': durationDays,
+        'quantity': quantity.toDouble(),
         'unit_price': double.tryParse(priceCtrl.text) ?? 0,
       };
 
@@ -3470,8 +3521,6 @@ class _MedicineRow {
     nameCtrl.dispose();
     dosageCtrl.dispose();
     freqCtrl.dispose();
-    daysCtrl.dispose();
-    qtyCtrl.dispose();
     priceCtrl.dispose();
   }
 }

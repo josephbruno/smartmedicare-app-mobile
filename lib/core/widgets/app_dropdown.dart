@@ -217,6 +217,8 @@ class AppSearchableDropdownField<T> extends StatelessWidget {
     this.allowClear = true,
     this.searchHint = 'Search…',
     this.isDense = true,
+    this.decoration,
+    this.hint,
   });
 
   final String label;
@@ -228,6 +230,8 @@ class AppSearchableDropdownField<T> extends StatelessWidget {
   final bool allowClear;
   final String searchHint;
   final bool isDense;
+  final InputDecoration? decoration;
+  final String? hint;
 
   String _labelFor(T v) {
     if (displayText != null) return displayText!(v);
@@ -258,17 +262,21 @@ class AppSearchableDropdownField<T> extends StatelessWidget {
     final theme = Theme.of(context);
     final themePadding = theme.inputDecorationTheme.contentPadding;
     final text = value == null ? null : _labelFor(value as T);
+    final base = decoration ?? InputDecoration(labelText: label);
+    final resolvedPadding = base.contentPadding ?? themePadding;
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () => _openPicker(context),
       child: InputDecorator(
         isEmpty: text == null,
-        decoration: InputDecoration(
-          labelText: label,
+        decoration: base.copyWith(
+          labelText: base.labelText ?? (decoration == null ? label : null),
+          hintText: text == null ? (base.hintText ?? hint) : null,
           isDense: isDense,
-          contentPadding: AppDropdownButtonFormField._contentPadding(themePadding),
-          suffixIcon: const Icon(Icons.arrow_drop_down),
+          contentPadding:
+              AppDropdownButtonFormField._contentPadding(resolvedPadding),
+          suffixIcon: base.suffixIcon ?? const Icon(Icons.arrow_drop_down),
         ),
         child: Text(
           text ?? '',

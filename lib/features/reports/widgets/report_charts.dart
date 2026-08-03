@@ -20,11 +20,13 @@ class ReportSectionCard extends StatelessWidget {
     super.key,
     required this.title,
     required this.child,
+    this.subtitle,
     this.trailing,
     this.height,
   });
 
   final String title;
+  final String? subtitle;
   final Widget child;
   final Widget? trailing;
   final double? height;
@@ -36,29 +38,48 @@ class ReportSectionCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 1)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimary,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               if (trailing != null) trailing!,
             ],
           ),
           const SizedBox(height: 14),
-          SizedBox(height: height, child: child),
+          if (height != null)
+            SizedBox(height: height, child: child)
+          else
+            child,
         ],
       ),
     );
@@ -177,68 +198,110 @@ class ReportBarChart extends StatelessWidget {
     final usePerBar = barColors != null &&
         barColors!.length >= labels.length &&
         series.length == 1;
+    final showLegend = series.length > 1;
+    final barWidth = series.length > 1
+        ? (labels.length <= 2 ? 14.0 : 10.0)
+        : (labels.length <= 2 ? 28.0 : 18.0);
 
     return SizedBox(
       height: height,
-      child: BarChart(
-        BarChartData(
-          maxY: top,
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            getDrawingHorizontalLine: (_) => const FlLine(color: Color(0xFFE2E8F0), strokeWidth: 1),
-          ),
-          borderData: FlBorderData(show: false),
-          titlesData: FlTitlesData(
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 44,
-                getTitlesWidget: (v, _) => Text(
-                  _formatAxisValue(v),
-                  style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+      child: Column(
+        children: [
+          Expanded(
+            child: BarChart(
+              BarChartData(
+                maxY: top,
+                alignment: labels.length <= 3
+                    ? BarChartAlignment.center
+                    : BarChartAlignment.spaceAround,
+                groupsSpace: labels.length <= 3 ? 28 : 12,
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (_) =>
+                      const FlLine(color: Color(0xFFE2E8F0), strokeWidth: 1),
                 ),
-              ),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 28,
-                getTitlesWidget: (v, meta) {
-                  final i = v.toInt();
-                  if (i < 0 || i >= labels.length) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      labels[i],
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 44,
+                      getTitlesWidget: (v, _) => Text(
+                        _formatAxisValue(v),
+                        style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+                      ),
                     ),
-                  );
-                },
-              ),
-            ),
-          ),
-          barGroups: [
-            for (var i = 0; i < labels.length; i++)
-              BarChartGroupData(
-                x: i,
-                barsSpace: 4,
-                barRods: [
-                  for (var s = 0; s < series.length; s++)
-                    BarChartRodData(
-                      toY: i < series[s].values.length ? series[s].values[i] : 0,
-                      color: usePerBar ? barColors![i] : series[s].color,
-                      width: series.length > 1 ? 10 : 18,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 28,
+                      getTitlesWidget: (v, meta) {
+                        final i = v.toInt();
+                        if (i < 0 || i >= labels.length) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            labels[i],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                barGroups: [
+                  for (var i = 0; i < labels.length; i++)
+                    BarChartGroupData(
+                      x: i,
+                      barsSpace: 4,
+                      barRods: [
+                        for (var s = 0; s < series.length; s++)
+                          BarChartRodData(
+                            toY: i < series[s].values.length ? series[s].values[i] : 0,
+                            color: usePerBar ? barColors![i] : series[s].color,
+                            width: barWidth,
+                            borderRadius:
+                                const BorderRadius.vertical(top: Radius.circular(4)),
+                          ),
+                      ],
                     ),
                 ],
               ),
+            ),
+          ),
+          if (showLegend) ...[
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final s in series) ...[
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: s.color,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      s.name,
+                      style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                    ),
+                    const SizedBox(width: 14),
+                  ],
+                ],
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }

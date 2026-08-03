@@ -24,6 +24,7 @@ class PaymentReportScreen extends StatefulWidget {
 class _PaymentReportScreenState extends State<PaymentReportScreen> {
   static final _dayFmt = DateFormat('d MMM yyyy');
   static final _shortFmt = DateFormat('d MMM');
+  static final _rangeFmt = DateFormat('d MMM yyyy');
 
   String _preset = 'today';
   ReportDateRange _range = ReportDateRange.preset('today');
@@ -111,67 +112,137 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
 
   String _money(num n) => formatReportCurrency(n.toDouble());
 
+  String get _rangeLabel {
+    if (_range.fromYmd == _range.toYmd) {
+      return _rangeFmt.format(_range.from);
+    }
+    return '${_rangeFmt.format(_range.from)} – ${_rangeFmt.format(_range.to)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final summary = _data?.summary;
     final days = _data?.days ?? const <PaymentReportDay>[];
-    final wide = MediaQuery.sizeOf(context).width >= 960;
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 960;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: Column(
         children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Payment Report',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Cash · UPI · Credit · Advance · Due — ${_range.label}',
-                  style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
+          _buildToolbar(),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_error!, textAlign: TextAlign.center),
+                              const SizedBox(height: 12),
+                              FilledButton(onPressed: _load, child: const Text('Retry')),
+                            ],
+                          ),
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                          children: [
+                            if (summary != null) ...[
+                              _buildOverview(summary),
+                              const SizedBox(height: 14),
+                              _buildKpiGrid(summary, width),
+                              const SizedBox(height: 16),
+                            ],
+                            if (wide)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: _buildPieCard(summary)),
+                                  const SizedBox(width: 16),
+                                  Expanded(child: _buildBarCard(days)),
+                                ],
+                              )
+                            else ...[
+                              _buildPieCard(summary),
+                              const SizedBox(height: 16),
+                              _buildBarCard(days),
+                            ],
+                            const SizedBox(height: 16),
+                            _buildDaysTable(days),
+                          ],
+                        ),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolbar() {
+    final isSuperAdmin = context.watch<AuthSession>().isSuperAdmin;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 12, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     for (final key in const ['today', 'yesterday', 'week', 'month'])
-                      ChoiceChip(
-                        label: Text(ReportDateRange.preset(key).label),
+                      _PeriodChip(
+                        label: ReportDateRange.preset(key).label,
                         selected: _preset == key,
-                        onSelected: (_) => _applyPreset(key),
+                        onTap: () => _applyPreset(key),
                       ),
-                    OutlinedButton.icon(
-                      onPressed: _pickCustomRange,
-                      icon: const Icon(Icons.date_range_outlined, size: 18),
-                      label: Text(
-                        _preset == 'custom'
-                            ? '${_range.fromYmd} – ${_range.toYmd}'
-                            : 'Custom dates',
-                      ),
+                    _PeriodChip(
+                      label: _preset == 'custom' ? 'Custom' : 'Custom dates',
+                      selected: _preset == 'custom',
+                      icon: Icons.calendar_month_outlined,
+                      onTap: _pickCustomRange,
                     ),
-                    if (context.watch<AuthSession>().isSuperAdmin && _branches.isNotEmpty)
+                    if (isSuperAdmin && _branches.isNotEmpty)
                       SizedBox(
-                        width: 200,
+                        width: 190,
                         child: AppDropdownButtonFormField<int?>(
                           value: _selectedBranchId,
                           isDense: true,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Branch',
                             isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                            ),
                           ),
                           items: [
-                            const DropdownMenuItem<int?>(value: null, child: Text('All branches')),
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('All branches'),
+                            ),
                             ..._branches.map(
-                              (b) => DropdownMenuItem<int?>(value: b.id, child: Text(b.name)),
+                              (b) => DropdownMenuItem<int?>(
+                                value: b.id,
+                                child: Text(b.name, overflow: TextOverflow.ellipsis),
+                              ),
                             ),
                           ],
                           onChanged: (v) {
@@ -180,61 +251,130 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
                           },
                         ),
                       ),
-                    FilledButton.icon(
-                      onPressed: _loading ? null : _load,
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Refresh'),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: _loading ? null : _load,
+                icon: _loading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.schedule, size: 14, color: Color(0xFF2563EB)),
+                    const SizedBox(width: 6),
+                    Text(
+                      _range.label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF2563EB),
+                      ),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_error!, textAlign: TextAlign.center),
-                            const SizedBox(height: 12),
-                            FilledButton(onPressed: _load, child: const Text('Retry')),
-                          ],
-                        ),
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          if (summary != null) _buildKpiRow(summary, wide),
-                          const SizedBox(height: 16),
-                          if (wide)
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(child: _buildPieCard(summary)),
-                                const SizedBox(width: 16),
-                                Expanded(child: _buildBarCard(days)),
-                              ],
-                            )
-                          else ...[
-                            _buildPieCard(summary),
-                            const SizedBox(height: 16),
-                            _buildBarCard(days),
-                          ],
-                          const SizedBox(height: 16),
-                          _buildDaysTable(days),
-                        ],
-                      ),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  _rangeLabel,
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildKpiRow(PaymentReportSummary s, bool wide) {
+  Widget _buildOverview(PaymentReportSummary s) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 1)),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 640;
+          final metrics = [
+            _OverviewMetric(
+              label: 'Collected',
+              value: _money(s.collected),
+              accent: const Color(0xFF16A34A),
+              emphasize: true,
+            ),
+            _OverviewMetric(
+              label: 'Invoice total',
+              value: _money(s.invoiceTotal),
+              accent: const Color(0xFF2563EB),
+            ),
+            _OverviewMetric(
+              label: 'Outstanding',
+              value: _money(s.due),
+              accent: s.due > 0.009 ? AppTheme.danger : AppTheme.textSecondary,
+            ),
+            _OverviewMetric(
+              label: 'Invoices',
+              value: '${s.invoiceCount}',
+              accent: AppTheme.textPrimary,
+            ),
+          ];
+
+          if (compact) {
+            return Wrap(
+              spacing: 20,
+              runSpacing: 14,
+              children: [
+                for (final m in metrics)
+                  SizedBox(width: (constraints.maxWidth - 20) / 2, child: m),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              for (var i = 0; i < metrics.length; i++) ...[
+                if (i > 0) ...[
+                  const SizedBox(width: 12),
+                  Container(width: 1, height: 40, color: const Color(0xFFE2E8F0)),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(child: metrics[i]),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildKpiGrid(PaymentReportSummary s, double width) {
     final cards = [
       ReportKpiCard(
         title: 'Cash',
@@ -267,33 +407,33 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
       ReportKpiCard(
         title: 'Due',
         value: _money(s.due),
-        subtitle: 'Outstanding on invoices',
+        subtitle: 'Outstanding',
         icon: Icons.schedule_outlined,
         color: AppTheme.danger,
       ),
     ];
 
-    if (wide) {
-      return Row(
-        children: [
-          for (var i = 0; i < cards.length; i++) ...[
-            if (i > 0) const SizedBox(width: 12),
-            Expanded(child: cards[i]),
-          ],
-        ],
-      );
-    }
+    final cols = width >= 1200
+        ? 5
+        : width >= 900
+            ? 3
+            : width >= 560
+                ? 2
+                : 1;
 
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        for (final c in cards)
-          SizedBox(
-            width: (MediaQuery.sizeOf(context).width - 44) / 2,
-            child: c,
-          ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gap = 12.0;
+        final itemWidth = (constraints.maxWidth - gap * (cols - 1)) / cols;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final c in cards)
+              SizedBox(width: itemWidth, child: c),
+          ],
+        );
+      },
     );
   }
 
@@ -314,9 +454,16 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
     ];
 
     return ReportSectionCard(
-      title: 'Mix (selected range)',
-      height: 240,
-      child: data.isEmpty ? const ReportEmptyChart() : ReportPieChart(data: data),
+      title: 'Payment mix',
+      subtitle: 'Share of modes in selected range',
+      child: data.isEmpty
+          ? const SizedBox(height: 200, child: ReportEmptyChart())
+          : ReportDonutChart(
+              data: data,
+              centerLabel: 'Collected',
+              centerValue: _money(s?.collected ?? 0),
+              height: 200,
+            ),
     );
   }
 
@@ -327,25 +474,28 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
     }).toList();
     final collected = days.map((d) => d.collected).toList();
     final dues = days.map((d) => d.due).toList();
+    final hasDue = dues.any((v) => v > 0.009);
 
     return ReportSectionCard(
-      title: 'Daily collected vs due',
-      height: 260,
+      title: 'Daily trend',
+      subtitle: hasDue ? 'Collected vs outstanding due' : 'Collected by day',
       child: days.isEmpty
-          ? const ReportEmptyChart()
+          ? const SizedBox(height: 220, child: ReportEmptyChart())
           : ReportBarChart(
               labels: labels,
+              height: 220,
               series: [
                 (
                   name: 'Collected',
                   color: const Color(0xFF2563EB),
                   values: collected,
                 ),
-                (
-                  name: 'Due',
-                  color: AppTheme.danger,
-                  values: dues,
-                ),
+                if (hasDue)
+                  (
+                    name: 'Due',
+                    color: AppTheme.danger,
+                    values: dues,
+                  ),
               ],
             ),
     );
@@ -354,60 +504,238 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
   Widget _buildDaysTable(List<PaymentReportDay> days) {
     return ReportSectionCard(
       title: 'Day-wise breakdown',
-      trailing: Text(
-        'Tap a day to open invoices',
-        style: TextStyle(fontSize: 12, color: AppTheme.textSecondary.withValues(alpha: 0.9)),
-      ),
+      subtitle: days.isEmpty ? null : 'Tap a day to open invoices',
       child: days.isEmpty
           ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
+              padding: EdgeInsets.symmetric(vertical: 20),
               child: ReportEmptyChart(message: 'No payments or invoices in this range'),
             )
-          : SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                showCheckboxColumn: false,
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                columns: const [
-                  DataColumn(label: Text('Date')),
-                  DataColumn(label: Text('Cash'), numeric: true),
-                  DataColumn(label: Text('UPI'), numeric: true),
-                  DataColumn(label: Text('Credit'), numeric: true),
-                  DataColumn(label: Text('Advance'), numeric: true),
-                  DataColumn(label: Text('Due'), numeric: true),
-                  DataColumn(label: Text('Invoices'), numeric: true),
-                  DataColumn(label: Text('')),
+          : Column(
+              children: [
+                for (var i = 0; i < days.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  _DayRow(
+                    day: days[i],
+                    money: _money,
+                    dateLabel: () {
+                      final parsed = DateTime.tryParse(days[i].date);
+                      return parsed != null ? _dayFmt.format(parsed) : days[i].date;
+                    }(),
+                    onTap: () => _openInvoicesForDay(days[i].date),
+                  ),
                 ],
-                rows: [
-                  for (final d in days)
-                    DataRow(
-                      onSelectChanged: (_) => _openInvoicesForDay(d.date),
-                      cells: [
-                        DataCell(Text(
-                          () {
-                            final parsed = DateTime.tryParse(d.date);
-                            return parsed != null ? _dayFmt.format(parsed) : d.date;
-                          }(),
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        )),
-                        DataCell(Text(_money(d.cash))),
-                        DataCell(Text(_money(d.upi))),
-                        DataCell(Text(_money(d.credit))),
-                        DataCell(Text(_money(d.advance))),
-                        DataCell(Text(
-                          _money(d.due),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: d.due > 0.009 ? AppTheme.danger : AppTheme.textPrimary,
-                          ),
-                        )),
-                        DataCell(Text('${d.invoiceCount}')),
-                        const DataCell(Icon(Icons.chevron_right, size: 18, color: AppTheme.textSecondary)),
-                      ],
+              ],
+            ),
+    );
+  }
+}
+
+class _PeriodChip extends StatelessWidget {
+  const _PeriodChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected ? const Color(0xFF93C5FD) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (selected) ...[
+                const Icon(Icons.check, size: 14, color: Color(0xFF2563EB)),
+                const SizedBox(width: 4),
+              ] else if (icon != null) ...[
+                Icon(icon, size: 14, color: AppTheme.textSecondary),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? const Color(0xFF1D4ED8) : AppTheme.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OverviewMetric extends StatelessWidget {
+  const _OverviewMetric({
+    required this.label,
+    required this.value,
+    required this.accent,
+    this.emphasize = false,
+  });
+
+  final String label;
+  final String value;
+  final Color accent;
+  final bool emphasize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: emphasize ? 22 : 18,
+            fontWeight: FontWeight.w800,
+            color: accent,
+            height: 1.15,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DayRow extends StatelessWidget {
+  const _DayRow({
+    required this.day,
+    required this.dateLabel,
+    required this.money,
+    required this.onTap,
+  });
+
+  final PaymentReportDay day;
+  final String dateLabel;
+  final String Function(num) money;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      dateLabel,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: AppTheme.textPrimary,
+                      ),
                     ),
+                  ),
+                  Text(
+                    '${day.invoiceCount} invoice${day.invoiceCount == 1 ? '' : 's'}',
+                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right, size: 18, color: AppTheme.textSecondary),
                 ],
               ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _MiniStat(label: 'Cash', value: money(day.cash), color: const Color(0xFF16A34A)),
+                  _MiniStat(label: 'UPI', value: money(day.upi), color: const Color(0xFF2563EB)),
+                  _MiniStat(label: 'Credit', value: money(day.credit), color: const Color(0xFF7C3AED)),
+                  _MiniStat(label: 'Advance', value: money(day.advance), color: const Color(0xFF0891B2)),
+                  _MiniStat(
+                    label: 'Due',
+                    value: money(day.due),
+                    color: day.due > 0.009 ? AppTheme.danger : AppTheme.textSecondary,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: color,
             ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
