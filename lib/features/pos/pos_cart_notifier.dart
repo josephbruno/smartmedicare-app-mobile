@@ -146,7 +146,11 @@ class PosCartNotifier extends ChangeNotifier {
     CartItem? existing;
     if (mergeExisting) {
       for (final i in items) {
-        if (i.productId == product.id && i.batchId == batchId) {
+        // Never merge a normal line into a service-charge line (or vice versa),
+        // even when product_id matches — visit consultation vs treatment can share a product.
+        if (i.productId == product.id &&
+            i.batchId == batchId &&
+            i.isServiceCharge == isServiceCharge) {
           existing = i;
           break;
         }
@@ -367,10 +371,20 @@ class PosCartNotifier extends ChangeNotifier {
       if (serviceProduct == null && fetchDefaultServiceProduct != null) {
         serviceProduct = await fetchDefaultServiceProduct();
       }
+      // If visit linked a non-consultation service (e.g. Microchipping), prefer a
+      // consultation catalog item so consultation and treatments stay distinct.
+      if (serviceProduct != null &&
+          !_looksLikeConsultationProduct(serviceProduct) &&
+          fetchDefaultServiceProduct != null) {
+        final preferred = await fetchDefaultServiceProduct();
+        if (preferred != null && _looksLikeConsultationProduct(preferred)) {
+          serviceProduct = preferred;
+        }
+      }
       await addLine(
-        productId: visit.serviceChargeProductId ?? serviceProduct?.id,
+        productId: serviceProduct?.id ?? visit.serviceChargeProductId,
         embedded: serviceProduct,
-        label: serviceProduct?.name ?? 'Service charge',
+        label: _serviceChargeLabel(serviceProduct),
         quantity: 1,
         unitPrice: visit.serviceCharge,
         isServiceCharge: true,
@@ -385,6 +399,8 @@ class PosCartNotifier extends ChangeNotifier {
         label: t.treatmentName,
         quantity: t.quantity,
         unitPrice: t.unitPrice,
+        // Keep each visit line distinct; do not collapse into service charge / peers.
+        mergeExisting: false,
       );
     }
 
@@ -395,12 +411,31 @@ class PosCartNotifier extends ChangeNotifier {
         label: m.medicineName,
         quantity: m.quantity,
         unitPrice: m.unitPrice,
+        mergeExisting: false,
       );
     }
 
     notifyListeners();
     _persist();
     return VisitCartLoadResult(linesAdded: linesAdded, skipped: skipped);
+  }
+
+  static bool _looksLikeConsultationProduct(Product product) {
+    final name = product.name.toLowerCase();
+    final barcode = (product.barcode ?? '').toUpperCase();
+    final sku = (product.sku ?? '').toUpperCase();
+    return name.contains('consult') ||
+        name.contains('service charge') ||
+        barcode == 'SVC-CONSULT' ||
+        barcode == 'EMR-CONS' ||
+        sku == 'SVC-CONSULT' ||
+        sku == 'EMR-CONS';
+  }
+
+  static String _serviceChargeLabel(Product? product) {
+    if (product == null) return 'Service charge';
+    if (_looksLikeConsultationProduct(product)) return product.name;
+    return 'Service charge';
   }
 
   String holdBill() {

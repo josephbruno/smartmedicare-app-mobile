@@ -232,25 +232,38 @@ class _PosScreenState extends State<PosScreen> {
       }
 
       Future<Product?> fetchDefaultServiceProduct() async {
-        if (visit.serviceChargeProduct != null) return visit.serviceChargeProduct;
-        if (visit.serviceChargeProductId != null && visit.serviceChargeProductId! > 0) {
-          final p = await fetchProduct(visit.serviceChargeProductId!);
-          if (p != null) return p;
-        }
+        // Resolve a consultation catalog item only — do not return the visit's
+        // linked service product here (it may be a mismatched treatment like Microchipping).
         try {
           final byBarcode = await services.products.findByBarcode('SVC-CONSULT');
           if (byBarcode != null) return byBarcode;
         } catch (_) {}
         try {
+          final byEmr = await services.products.findByBarcode('EMR-CONS');
+          if (byEmr != null) return byEmr;
+        } catch (_) {}
+        try {
           final list = await services.products.list(
-            query: {'type': 'service', 'per_page': 10, 'search': 'consult'},
+            query: {'type': 'service', 'per_page': 20, 'search': 'consult', 'is_active': true},
           );
+          for (final p in list) {
+            final name = p.name.toLowerCase();
+            if (name.contains('consult') || name.contains('service charge')) {
+              return p;
+            }
+          }
           if (list.isNotEmpty) return list.first;
         } catch (_) {}
         try {
           final list = await services.products.list(
-            query: {'type': 'service', 'per_page': 5},
+            query: {'type': 'service', 'per_page': 20, 'is_active': true},
           );
+          for (final p in list) {
+            final name = p.name.toLowerCase();
+            if (name.contains('consult') || name.contains('service charge')) {
+              return p;
+            }
+          }
           return list.isNotEmpty ? list.first : null;
         } catch (_) {
           return null;
@@ -2375,7 +2388,7 @@ class _CartLineTile extends StatelessWidget {
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Text(
-              'Qty 1',
+              'Qty $quantity',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: metaSize,
