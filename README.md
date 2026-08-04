@@ -82,6 +82,27 @@ Options:
 Output: `dist\windows\MaranBilling-Setup-<version>.exe`  
 Script: `installer\maran_billing.iss`
 
+## Windows auto-update (build + zip + upload)
+
+One script builds the release, stages `Update.bat` / `Update.ps1`, zips the Release folder, and uploads it to the Laravel API.
+
+1. On the server: migrate, `php artisan storage:link`, set `APP_UPDATE_DEPLOY_TOKEN` in `.env`.
+2. On your PC (once):
+
+```bat
+setx MARAN_DEPLOY_TOKEN "same-secret-as-server"
+```
+
+3. Bump `version:` in `pubspec.yaml`, then:
+
+```bat
+.\scripts\build-zip-upload-update.bat
+```
+
+Options: `--skip-build`, `--mandatory`, `--notes "text"`.
+
+Clients call `GET /api/v1/app/updates/check?platform=windows&current_build=N` on startup.
+
 ## Tests
 
 ```bash

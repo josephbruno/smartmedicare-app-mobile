@@ -12,6 +12,15 @@ class AppConfig {
     defaultValue: 'https://api-maran.biapps.cloud/api/v1',
   );
 
+  /// Windows desktop auto-update check endpoint (no auth).
+  static String get appUpdateCheckUrl => '$apiBaseUrl/app/updates/check';
+
+  /// Skip silent update checks in debug unless overridden.
+  static const bool enableWindowsAutoUpdate = bool.fromEnvironment(
+    'ENABLE_WINDOWS_AUTO_UPDATE',
+    defaultValue: true,
+  );
+
   /// Web layout: sidebar + top bar from ~840dp.
   static const double desktopLayoutBreakpoint = 840;
 

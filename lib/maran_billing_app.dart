@@ -15,6 +15,7 @@ import 'core/theme/app_theme.dart';
 import 'core/notifications/push_notification_service.dart';
 import 'core/notifications/visit_billing_poll_service.dart';
 import 'core/connectivity/offline_sync_listener.dart';
+import 'core/update/update_flow.dart';
 import 'data/local/customer_local_dao.dart';
 import 'data/local/customer_sync_service.dart';
 import 'data/local/offline_billing_coordinator.dart';
@@ -40,6 +41,7 @@ class MaranBillingApp extends StatefulWidget {
 
 class _MaranBillingAppState extends State<MaranBillingApp> {
   final GlobalKey<NavigatorState> _rootKey = GlobalKey<NavigatorState>();
+  bool _windowsUpdateStarted = false;
   late final AuthSession _session;
   late final ApiClient _api;
   late final AppServices _services;
@@ -178,6 +180,15 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
         theme: AppTheme.light(desktop: AppConfig.usesLargeUiScale),
         routerConfig: _router,
         builder: (context, child) {
+          if (!_windowsUpdateStarted) {
+            _windowsUpdateStarted = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final navCtx = _rootKey.currentContext;
+              if (navCtx != null) {
+                unawaited(runWindowsUpdateFlow(navCtx));
+              }
+            });
+          }
           Widget built = child ?? const SizedBox.shrink();
           built = OfflineSyncListener(child: built);
           if (!AppConfig.usesLargeUiScale) {

@@ -62,6 +62,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 ; Full Flutter Windows release bundle (exe + DLLs + data/)
 Source: "{#FlutterReleaseDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; In-app updater (also staged into Release by build-zip-upload-update.bat)
+Source: "..\updater\Update.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\updater\Update.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

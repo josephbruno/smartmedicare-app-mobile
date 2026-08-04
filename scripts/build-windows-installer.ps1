@@ -115,6 +115,15 @@ Run without -SkipBuild or fix the Flutter build.
 "@
 }
 
+$UpdaterDir = Join-Path $Root 'updater'
+foreach ($name in @('Update.bat', 'Update.ps1')) {
+  $src = Join-Path $UpdaterDir $name
+  if (-not (Test-Path -LiteralPath $src)) {
+    throw "Updater script missing: $src"
+  }
+  Copy-Item -LiteralPath $src -Destination (Join-Path $ReleaseDir $name) -Force
+}
+
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 $OutputDirResolved = (Resolve-Path -LiteralPath $OutputDir).Path
 $ReleaseDirResolved = (Resolve-Path -LiteralPath $ReleaseDir).Path
