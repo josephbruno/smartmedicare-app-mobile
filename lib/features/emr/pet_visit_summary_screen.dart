@@ -20,7 +20,7 @@ class PetVisitSummaryScreen extends StatefulWidget {
 }
 
 class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen> {
-  late Future<List<PetVisit>> _future;
+  late Future<({List<PetVisit> visits, VisitClinicInfo clinic})> _future;
   var _busy = false;
 
   @override
@@ -30,20 +30,24 @@ class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen> {
   }
 
   void _reload() {
-    _future = context.read<AppServices>().emr.listVisitsForPet(widget.petId);
+    final services = context.read<AppServices>();
+    final auth = context.read<AuthSession>();
+    _future = () async {
+      final visits = await services.emr.listVisitsForPet(widget.petId);
+      final clinic = await VisitPdf.resolveClinic(
+        auth: auth,
+        branches: services.branches,
+      );
+      return (visits: visits, clinic: clinic);
+    }();
   }
 
-  VisitClinicInfo _clinicInfo() {
+  Future<VisitClinicInfo> _clinicInfo() {
+    final services = context.read<AppServices>();
     final auth = context.read<AuthSession>();
-    final shop = auth.currentShop;
-    final branch = auth.currentBranch;
-    return VisitPdf.clinicFromAuth(
-      shopName: shop?.name,
-      shopAddress: shop?.formattedAddress,
-      shopPhone: shop?.phone,
-      branchName: branch?.name,
-      branchAddress: branch?.formattedAddress,
-      branchPhone: branch?.phone,
+    return VisitPdf.resolveClinic(
+      auth: auth,
+      branches: services.branches,
     );
   }
 
@@ -51,7 +55,8 @@ class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen> {
     if (visits.isEmpty) return;
     setState(() => _busy = true);
     try {
-      await VisitPdf.printVisits(visits, clinic: _clinicInfo());
+      final clinic = await _clinicInfo();
+      await VisitPdf.printVisits(visits, clinic: clinic);
     } catch (e) {
       if (mounted) {
         AppMessenger.show(context, SnackBar(content: Text('$e')));
@@ -65,7 +70,8 @@ class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen> {
     if (visits.isEmpty) return;
     setState(() => _busy = true);
     try {
-      await VisitPdf.downloadVisits(visits, clinic: _clinicInfo());
+      final clinic = await _clinicInfo();
+      await VisitPdf.downloadVisits(visits, clinic: clinic);
     } catch (e) {
       if (mounted) {
         AppMessenger.show(context, SnackBar(content: Text('$e')));
@@ -77,11 +83,9 @@ class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final clinic = _clinicInfo();
-
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: FutureBuilder<List<PetVisit>>(
+      body: FutureBuilder<({List<PetVisit> visits, VisitClinicInfo clinic})>(
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
@@ -108,7 +112,9 @@ class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen> {
             );
           }
 
-          final visits = snap.data ?? const <PetVisit>[];
+          final visits = snap.data?.visits ?? const <PetVisit>[];
+          final clinic = snap.data?.clinic ??
+              const VisitClinicInfo(name: 'Clinic');
           final petName = visits.isNotEmpty
               ? (visits.first.pet?.name ?? 'Pet #${widget.petId}')
               : 'Pet #${widget.petId}';
@@ -366,7 +372,8 @@ class _VisitSummaryCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Clinic header (matches print)
+              // Match print: ~4 blank lines above clinic header.
+              const SizedBox(height: 56),
               Column(
                 children: [
                   Text(
@@ -613,13 +620,14 @@ class _ClinicalColumn extends StatelessWidget {
               ? visit.investigation!
               : '—',
         ),
+        const _DividerLine(),
+        const _SectionTitle('Follow-up'),
         if (visit.followUpDate != null) ...[
-          const _DividerLine(),
-          const _SectionTitle('Follow-up'),
           _BodyText(visit.followUpDate!, bold: true),
           if (visit.followUpNotes != null && visit.followUpNotes!.trim().isNotEmpty)
             _BodyText(visit.followUpNotes!, muted: true),
-        ],
+        ] else
+          const _BodyText('—'),
       ],
     );
   }
@@ -701,6 +709,17 @@ class _ProceduresColumn extends StatelessWidget {
               ],
             ),
           ],
+        if (visit.serviceCharge > 0) ...[
+          const _DividerLine(),
+          const _SectionTitle('Consultation'),
+          _BodyText(
+            [
+              visit.serviceChargeProduct?.name ?? 'Consultation Fee',
+              '₹${visit.serviceCharge.toStringAsFixed(0)}',
+            ].join(' · '),
+            bold: true,
+          ),
+        ],
       ],
     );
   }

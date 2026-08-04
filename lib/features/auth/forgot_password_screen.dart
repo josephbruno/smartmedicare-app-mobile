@@ -30,7 +30,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       await context.read<AppServices>().auth.forgotPassword(_email.text.trim());
       setState(() => _message = 'If that email is registered, we have sent instructions to reset your password.');
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      setState(() => _error = e.displayMessage);
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {

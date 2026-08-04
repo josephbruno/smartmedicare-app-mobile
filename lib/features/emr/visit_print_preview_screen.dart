@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
+import 'package:provider/provider.dart';
 
+import '../../app_services.dart';
+import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
 import 'visit_pdf.dart';
@@ -30,6 +33,13 @@ class VisitPrintPreviewScreen extends StatelessWidget {
     );
   }
 
+  Future<VisitClinicInfo> _resolveClinic(BuildContext context) async {
+    // Always refresh from current branch so preview never shows stale shop name.
+    final auth = context.read<AuthSession>();
+    final branches = context.read<AppServices>().branches;
+    return VisitPdf.resolveClinic(auth: auth, branches: branches);
+  }
+
   @override
   Widget build(BuildContext context) {
     final pageFormat = PdfPageFormat.a5.landscape;
@@ -48,7 +58,8 @@ class VisitPrintPreviewScreen extends StatelessWidget {
       ),
       body: PdfPreview(
         build: (format) async {
-          final doc = await VisitPdf.build(visit, clinic: clinic);
+          final resolved = await _resolveClinic(context);
+          final doc = await VisitPdf.build(visit, clinic: resolved);
           return doc.save();
         },
         initialPageFormat: pageFormat,

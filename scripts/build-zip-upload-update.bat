@@ -17,7 +17,10 @@ rem  Optional env:
 rem    MARAN_API_BASE   default: https://api-maran.biapps.cloud/api/v1
 rem ============================================================
 
-cd /d "%~dp0\.."
+set "SCRIPT_DIR=%~dp0"
+set "UPDATER_SRC=%SCRIPT_DIR%..\updater"
+
+cd /d "%SCRIPT_DIR%.."
 if errorlevel 1 (
   echo ERROR: cannot cd to project root
   exit /b 1
@@ -97,7 +100,6 @@ set "OUT_DIR=dist\windows"
 set "ZIP_NAME=maran-%VERSION%+%BUILD_NUM%.zip"
 set "ZIP_PATH=%OUT_DIR%\%ZIP_NAME%"
 set "PUBLISH_URL=%MARAN_API_BASE%/app/updates/publish"
-set "UPDATER_SRC=%~dp0..\updater"
 
 echo.
 echo == Maran Windows update publish ==
@@ -110,7 +112,7 @@ echo.
 if "%SKIP_BUILD%"=="1" goto stage_updater
 
 echo ==> Building Flutter Windows release...
-flutter build windows --release --dart-define=API_BASE_URL=%MARAN_API_BASE%
+call flutter build windows --release --dart-define=API_BASE_URL=%MARAN_API_BASE%
 if errorlevel 1 (
   echo ERROR: flutter build failed
   exit /b 1

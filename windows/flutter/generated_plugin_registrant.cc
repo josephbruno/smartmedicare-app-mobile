@@ -10,6 +10,7 @@
 #include <flutter_secure_storage_windows/flutter_secure_storage_windows_plugin.h>
 #include <printing/printing_plugin.h>
 #include <url_launcher_windows/url_launcher_windows.h>
+#include <video_player_win/video_player_win_plugin_c_api.h>
 #include <windows_printer/windows_printer_plugin_c_api.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
@@ -21,6 +22,8 @@ void RegisterPlugins(flutter::PluginRegistry* registry) {
       registry->GetRegistrarForPlugin("PrintingPlugin"));
   UrlLauncherWindowsRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("UrlLauncherWindows"));
+  VideoPlayerWinPluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("VideoPlayerWinPluginCApi"));
   WindowsPrinterPluginCApiRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("WindowsPrinterPluginCApi"));
 }

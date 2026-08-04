@@ -54,7 +54,7 @@ class _SetPinScreenState extends State<SetPinScreen> {
       if (mounted) context.go('/dashboard');
     } on ApiException catch (e) {
       setState(() {
-        _error = e.message;
+        _error = e.displayMessage;
         _confirming = false;
         _pin = '';
       });

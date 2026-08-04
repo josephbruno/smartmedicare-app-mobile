@@ -112,7 +112,7 @@ class InventoryService {
       final map = responseAsMap(res);
       final ok = map['success'] as bool? ?? true;
       if (!ok) {
-        throw ApiException(map['message']?.toString() ?? 'Request failed');
+        throw apiExceptionFromEnvelope(map);
       }
       final dateRange = (map['date_range'] is List)
           ? (map['date_range'] as List).map((e) => e.toString()).toList()

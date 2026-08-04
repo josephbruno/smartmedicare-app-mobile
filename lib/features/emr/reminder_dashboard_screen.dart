@@ -453,8 +453,8 @@ class _FilterBar extends StatelessWidget {
     );
 
     final applyBtn = SizedBox(
-      height: 40,
-      width: 42,
+      height: 35,
+      width: 35,
       child: FilledButton(
         onPressed: onApply,
         style: FilledButton.styleFrom(
@@ -522,7 +522,7 @@ class _FilterBar extends StatelessWidget {
       isDense: true,
       filled: true,
       fillColor: Colors.white,
-      contentPadding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -790,7 +790,7 @@ class _ReminderCard extends StatelessWidget {
             icon: const Icon(Icons.send_rounded, size: 14),
             label: const Text('Send now', style: TextStyle(fontSize: 12.5)),
             style: FilledButton.styleFrom(
-              minimumSize: const Size(120, 34),
+              minimumSize: const Size(120, 44),
               padding: const EdgeInsets.symmetric(horizontal: 12),
               visualDensity: VisualDensity.compact,
               shape: RoundedRectangleBorder(
@@ -806,7 +806,7 @@ class _ReminderCard extends StatelessWidget {
             label: const Text('Dismiss', style: TextStyle(fontSize: 12.5)),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppTheme.textSecondary,
-              minimumSize: const Size(120, 34),
+              minimumSize: const Size(120, 44),
               padding: const EdgeInsets.symmetric(horizontal: 12),
               visualDensity: VisualDensity.compact,
               shape: RoundedRectangleBorder(

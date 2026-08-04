@@ -36,17 +36,12 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
     _future = context.read<AppServices>().emr.getVisit(widget.visitId);
   }
 
-  VisitClinicInfo _clinicInfo() {
+  Future<VisitClinicInfo> _clinicInfo() {
     final auth = context.read<AuthSession>();
-    final shop = auth.currentShop;
-    final branch = auth.currentBranch;
-    return VisitPdf.clinicFromAuth(
-      shopName: shop?.name,
-      shopAddress: shop?.formattedAddress,
-      shopPhone: shop?.phone,
-      branchName: branch?.name,
-      branchAddress: branch?.formattedAddress,
-      branchPhone: branch?.phone,
+    final services = context.read<AppServices>();
+    return VisitPdf.resolveClinic(
+      auth: auth,
+      branches: services.branches,
     );
   }
 
@@ -71,10 +66,12 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
     try {
       final visit = await services.emr.completeVisit(widget.visitId);
       if (!mounted) return;
+      final clinic = await _clinicInfo();
+      if (!mounted) return;
       await VisitPrintPreviewScreen.open(
         context,
         visit: visit,
-        clinic: _clinicInfo(),
+        clinic: clinic,
       );
       if (!mounted) return;
       AppMessenger.show(
@@ -245,12 +242,19 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
                       statusLabel: _statusLabel(v.status),
                       visitTypeLabel: _visitTypeLabel(v.visitType),
                       timeLabel: _formatTime(v.visitTime),
-                      onPreview: () => VisitPrintPreviewScreen.open(
-                        context,
-                        visit: v,
-                        clinic: _clinicInfo(),
-                      ),
-                      onDownload: () => VisitPdf.downloadVisit(v, clinic: _clinicInfo()),
+                      onPreview: () async {
+                        final clinic = await _clinicInfo();
+                        if (!context.mounted) return;
+                        await VisitPrintPreviewScreen.open(
+                          context,
+                          visit: v,
+                          clinic: clinic,
+                        );
+                      },
+                      onDownload: () async {
+                        final clinic = await _clinicInfo();
+                        await VisitPdf.downloadVisit(v, clinic: clinic);
+                      },
                       onEdit: canEdit &&
                               (v.status == 'open' || v.status == 'bill_on_hold')
                           ? () => context.push('/emr/visits/${v.id}/edit')

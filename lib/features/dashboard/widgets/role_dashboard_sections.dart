@@ -194,6 +194,9 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
                           ),
                           TextButton(
                             onPressed: _loadBranchData,
+                            style: TextButton.styleFrom(
+                              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
                             child: const Text('Retry'),
                           ),
                         ],
@@ -254,6 +257,7 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
                 'Billing queue',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
+                      fontSize: 14,
                     ),
               ),
             ),
@@ -403,11 +407,15 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
                 'Recent invoices',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
+                      fontSize: 14,
                     ),
               ),
             ),
             TextButton(
               onPressed: () => context.go('/invoices'),
+              style: TextButton.styleFrom(
+                textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
               child: const Text('View all'),
             ),
           ],
@@ -501,6 +509,7 @@ class _CashierHeader extends StatelessWidget {
                       branchName,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
+                            fontSize: 20,
                           ),
                     ),
                   ),
@@ -542,6 +551,9 @@ class _CashierHeader extends StatelessWidget {
             onPressed: onOpenPos,
             icon: const Icon(Icons.add_rounded, size: 18),
             label: const Text('Open POS'),
+            style: FilledButton.styleFrom(
+              textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ],
@@ -598,7 +610,7 @@ class _CashierActionChip extends StatelessWidget {
               Text(
                 label,
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
                 ),
@@ -675,7 +687,7 @@ class _CashierMetricTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.3,
                     color: AppTheme.textPrimary,
@@ -830,7 +842,7 @@ class _CashierInvoiceRow extends StatelessWidget {
                         : 'Invoice #${invoice.id}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: 13.5,
+                      fontSize: 11.5,
                     ),
                   ),
                   if (meta.isNotEmpty) ...[
@@ -852,7 +864,7 @@ class _CashierInvoiceRow extends StatelessWidget {
               children: [
                 Text(
                   '₹${invoice.totalAmount.toStringAsFixed(0)}',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11.5),
                 ),
                 const SizedBox(height: 4),
                 Container(
@@ -923,12 +935,13 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w800,
                 color: AppTheme.textPrimary,
+                fontSize: 22,
               ),
         ),
         const SizedBox(height: 4),
         const Text(
           'Open visits, held bills, and shortcuts for your day.',
-          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13.5),
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 11.5),
         ),
         const SizedBox(height: 20),
         FutureBuilder<List<List<PetVisit>>>(
@@ -975,6 +988,9 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
             onPressed: _reload,
             icon: const Icon(Icons.refresh_rounded, size: 18),
             label: const Text('Refresh'),
+            style: TextButton.styleFrom(
+              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -1015,6 +1031,9 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
                     ),
                     trailing: TextButton(
                       onPressed: () => context.push('/emr/visits/${v.id}/edit'),
+                      style: TextButton.styleFrom(
+                        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
                       child: const Text('Continue'),
                     ),
                     onTap: () => context.push('/emr/visits/${v.id}'),
@@ -1053,6 +1072,9 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
                     subtitle: Text('${v.visitNumber} · awaiting send to cashier'),
                     trailing: TextButton(
                       onPressed: () => context.push('/emr/visits/${v.id}/edit'),
+                      style: TextButton.styleFrom(
+                        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
                       child: const Text('Edit'),
                     ),
                     onTap: () => context.push('/emr/visits/${v.id}'),
@@ -1152,7 +1174,7 @@ class _DoctorStatChip extends StatelessWidget {
               Text(
                 value,
                 style: const TextStyle(
-                  fontSize: 22,
+                  fontSize: 20,
                   fontWeight: FontWeight.w800,
                   color: AppTheme.textPrimary,
                 ),

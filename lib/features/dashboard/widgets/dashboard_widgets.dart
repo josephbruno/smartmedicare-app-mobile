@@ -176,7 +176,7 @@ class DashboardStatCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: AppTheme.textPrimary,
-              fontSize: 24,
+              fontSize: 22,
               fontWeight: FontWeight.w900,
               letterSpacing: -0.5,
             ),
@@ -292,7 +292,7 @@ class SalesSummaryCard extends StatelessWidget {
                 Text(
                   centerValue,
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w900,
                     color: AppTheme.textPrimary,
                   ),
@@ -394,7 +394,7 @@ class SalesSummaryCard extends StatelessWidget {
               const SizedBox(width: 10),
               const Text(
                 'Sales Summary',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
               ),
             ],
           ),
@@ -432,6 +432,7 @@ class SalesSummaryCard extends StatelessWidget {
                   minimumSize: const Size.fromHeight(44),
                   foregroundColor: accent,
                   side: BorderSide(color: accent.withValues(alpha: 0.4)),
+                  textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -494,7 +495,7 @@ class QuickActionCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: color,
                       ),
@@ -579,7 +580,7 @@ class BranchPerformanceCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 15,
+                        fontSize: 13,
                         fontWeight: FontWeight.w800,
                         color: AppTheme.textPrimary,
                       ),
@@ -625,6 +626,7 @@ class BranchPerformanceCard extends StatelessWidget {
                   minimumSize: const Size.fromHeight(40),
                   side: BorderSide(color: color.withValues(alpha: 0.4)),
                   foregroundColor: color,
+                  textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 child: const Text('View Details'),
               ),
@@ -649,7 +651,7 @@ class BranchPerformanceCard extends StatelessWidget {
           value,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: valueColor),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: valueColor),
         ),
       ],
     );
@@ -677,7 +679,7 @@ class DashboardSectionHeader extends StatelessWidget {
         const SizedBox(width: 10),
         Text(
           title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
         ),
         const Spacer(),
         if (trailing != null) trailing!,

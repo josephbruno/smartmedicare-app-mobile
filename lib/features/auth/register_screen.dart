@@ -43,7 +43,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
       if (mounted) context.go('/dashboard');
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      setState(() => _error = e.displayMessage);
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {

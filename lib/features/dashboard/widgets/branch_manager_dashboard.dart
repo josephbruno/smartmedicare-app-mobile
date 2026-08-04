@@ -50,7 +50,10 @@ class _BranchManagerDashboardSectionState extends State<BranchManagerDashboardSe
           children: [
             Text(
               auth.currentBranch?.name ?? 'Branch overview',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                fontSize: 22,
+              ),
             ),
             const SizedBox(height: 4),
             const Text(

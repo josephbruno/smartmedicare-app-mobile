@@ -17,8 +17,7 @@ T parseEnvelopeData<T>(
   final map = responseAsMap(response);
   final ok = map['success'] as bool? ?? true;
   if (!ok) {
-    final msg = map['message']?.toString() ?? 'Request failed';
-    throw ApiException(msg);
+    throw apiExceptionFromEnvelope(map);
   }
   return parse(map['data']);
 }
@@ -31,8 +30,7 @@ T parseEnvelopeData<T>(
   final map = responseAsMap(response);
   final ok = map['success'] as bool? ?? true;
   if (!ok) {
-    final msg = map['message']?.toString() ?? 'Request failed';
-    throw ApiException(msg);
+    throw apiExceptionFromEnvelope(map);
   }
   return (
     items: listFromData(map['data'], item),
@@ -40,6 +38,30 @@ T parseEnvelopeData<T>(
         ? PaginationMeta.fromJson(Map<String, dynamic>.from(map['meta'] as Map))
         : null,
   );
+}
+
+ApiException apiExceptionFromEnvelope(Map<String, dynamic> map) {
+  var msg = map['message']?.toString() ?? 'Request failed';
+  Map<String, List<String>>? errors;
+  final rawErrors = map['errors'];
+  if (rawErrors is Map) {
+    errors = {};
+    rawErrors.forEach((k, v) {
+      if (v is List) {
+        errors![k.toString()] = v.map((e) => e.toString()).toList();
+      }
+    });
+    for (final list in errors.values) {
+      if (list.isNotEmpty) {
+        final first = list.first.trim();
+        if (first.isNotEmpty) {
+          msg = first;
+          break;
+        }
+      }
+    }
+  }
+  return ApiException(msg, errors: errors);
 }
 
 List<T> listFromData<T>(dynamic data, T Function(Map<String, dynamic>) item) {

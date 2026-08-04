@@ -14,6 +14,7 @@ import '../../features/auth/pin_unlock_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/auth/set_pin_screen.dart';
 import '../../features/auth/subscription_expired_screen.dart';
+import '../../features/auth/video_splash_screen.dart';
 import '../../features/common/not_found_screen.dart';
 import '../../features/customers/customer_detail_screen.dart';
 import '../../features/customers/customer_form_screen.dart';
@@ -207,6 +208,7 @@ GoRouter createAppRouter({
 
   const publicAuthRoutes = {
     '/',
+    '/splash',
     '/login',
     '/register',
     '/forgot-password',
@@ -218,12 +220,15 @@ GoRouter createAppRouter({
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     refreshListenable: auth,
-    initialLocation: '/',
+    initialLocation: '/splash',
     errorBuilder: (context, state) => const NotFoundScreen(),
     redirect: (context, state) {
       final loc = state.matchedLocation;
       final session = auth.hasStoredSession;
       final unlocked = auth.isUnlocked;
+
+      // Keep the branded splash visible for its full duration.
+      if (loc == '/splash') return null;
 
       if (session && !unlocked) {
         if (loc == '/set-pin') return null;
@@ -260,6 +265,11 @@ GoRouter createAppRouter({
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        name: 'Splash',
+        builder: (c, s) => const VideoSplashScreen(),
+      ),
       GoRoute(
         path: '/',
         name: 'Landing',

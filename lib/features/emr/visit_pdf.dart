@@ -2,7 +2,11 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../../core/services/receipt_branch_store.dart';
+import '../../core/session/auth_session.dart';
 import '../../data/models/emr.dart';
+import '../../data/models/shop.dart';
+import '../../data/services/settings_service.dart';
 
 /// Clinic header info for visit print/download (A5 landscape).
 class VisitClinicInfo {
@@ -44,7 +48,7 @@ class VisitPdf {
   static const double _fsMeta = 9.5;
   static const double _fsFooter = 8.5;
 
-  /// ~4 blank text lines before the clinic header.
+  /// ~4 blank text lines before the clinic header (applied via top margin).
   static const double _headerTopSpace = _fsBody * 1.35 * 4;
 
   /// Empty-field placeholder (ASCII — Helvetica cannot draw em dash U+2014).
@@ -105,11 +109,16 @@ class VisitPdf {
       doc.addPage(
         pw.Page(
           pageFormat: _pageFormat,
-          margin: const pw.EdgeInsets.fromLTRB(_marginL, _marginT, _marginR, _marginB),
+          // Top margin includes ~4 blank lines so header never sits on the page edge.
+          margin: const pw.EdgeInsets.fromLTRB(
+            _marginL,
+            _marginT + _headerTopSpace,
+            _marginR,
+            _marginB,
+          ),
           build: (context) => pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
-              pw.SizedBox(height: _headerTopSpace),
               _clinicHeader(
                 name: _t(clinicName),
                 address: _t(clinicAddress),
@@ -152,14 +161,15 @@ class VisitPdf {
                                   ? _t(visit.investigation)
                                   : _empty,
                             ),
+                            _divider(),
+                            _sectionTitle('Follow-up'),
                             if (visit.followUpDate != null) ...[
-                              _divider(),
-                              _sectionTitle('Follow-up'),
                               _bodyText(_t(visit.followUpDate), bold: true),
                               if (visit.followUpNotes != null &&
                                   visit.followUpNotes!.trim().isNotEmpty)
                                 _bodyText(_t(visit.followUpNotes), muted: true),
-                            ],
+                            ] else
+                              _bodyText(_empty),
                           ],
                         ),
                       ),
@@ -175,6 +185,17 @@ class VisitPdf {
                             _divider(),
                             _sectionTitle('Treatment'),
                             _medicinesBody(visit),
+                            if ((visit.serviceCharge) > 0) ...[
+                              _divider(),
+                              _sectionTitle('Consultation'),
+                              _bodyText(
+                                _join([
+                                  visit.serviceChargeProduct?.name ??
+                                      'Consultation Fee',
+                                  'Rs ${visit.serviceCharge.toStringAsFixed(0)}',
+                                ]),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -535,15 +556,97 @@ class VisitPdf {
     String? branchAddress,
     String? branchPhone,
   }) {
-    final name = (shopName != null && shopName.trim().isNotEmpty)
-        ? shopName.trim()
-        : (branchName?.trim().isNotEmpty == true ? branchName!.trim() : 'Clinic');
+    // Header title: current branch name first, then shop.
+    final name = (branchName != null && branchName.trim().isNotEmpty)
+        ? branchName.trim()
+        : (shopName?.trim().isNotEmpty == true ? shopName!.trim() : 'Clinic');
+    // Address / phone: prefer current branch details, then shop.
     final address = (branchAddress != null && branchAddress.trim().isNotEmpty)
         ? branchAddress.trim()
         : (shopAddress?.trim() ?? '');
     final phone = (branchPhone != null && branchPhone.trim().isNotEmpty)
         ? branchPhone.trim()
         : shopPhone;
+    return VisitClinicInfo(name: name, address: address, phone: phone);
+  }
+
+  /// Resolve clinic header from the logged-in branch (API + session fallback).
+  /// Always prefers branch name/address/phone — never the shop name when a
+  /// branch is available (shop is "Maran Clinic", branch is e.g. "Maran Veterinary Hospital").
+  static Future<VisitClinicInfo> resolveClinic({
+    required AuthSession auth,
+    BranchService? branches,
+  }) async {
+    final shop = auth.currentShop;
+    final branchLite = auth.currentBranch;
+    final branchId = auth.currentBranchId ?? branchLite?.id;
+
+    // 1) Fresh branch from API (authoritative).
+    Branch? apiBranch;
+    if (branches != null && branchId != null && branchId > 0) {
+      try {
+        final list = await branches.list();
+        for (final b in list) {
+          if (b.id == branchId) {
+            apiBranch = b;
+            break;
+          }
+        }
+      } catch (_) {
+        // Cashiers may lack branch.list — fall back to session branch.
+      }
+    }
+
+    final branchName = (apiBranch?.name.trim().isNotEmpty == true)
+        ? apiBranch!.name.trim()
+        : (branchLite?.name.trim().isNotEmpty == true
+            ? branchLite!.name.trim()
+            : '');
+
+    final branchAddress = apiBranch != null
+        ? [
+            apiBranch.address,
+            apiBranch.city,
+            apiBranch.state,
+            apiBranch.pincode,
+          ]
+            .whereType<String>()
+            .map((p) => p.trim())
+            .where((p) => p.isNotEmpty)
+            .join(', ')
+        : (branchLite?.formattedAddress.trim() ?? '');
+
+    final branchPhone = (apiBranch?.phone?.trim().isNotEmpty == true)
+        ? apiBranch!.phone!.trim()
+        : (branchLite?.phone?.trim().isNotEmpty == true
+            ? branchLite!.phone!.trim()
+            : '');
+
+    // 2) Title MUST be branch name when known — do not use shop name.
+    final name = branchName.isNotEmpty
+        ? branchName
+        : (shop?.name.trim().isNotEmpty == true ? shop!.name.trim() : 'Clinic');
+
+    final address = branchAddress.isNotEmpty
+        ? branchAddress
+        : (shop?.formattedAddress.trim() ?? '');
+
+    final phone = branchPhone.isNotEmpty
+        ? branchPhone
+        : shop?.phone?.trim();
+
+    // Keep thermal receipt cache in sync with the same branch header.
+    if (branchId != null && branchId > 0 && name.isNotEmpty) {
+      await ReceiptBranchStore.save(
+        ReceiptBranchInfo(
+          branchId: branchId,
+          name: name,
+          address: address,
+          phone: phone,
+        ),
+      );
+    }
+
     return VisitClinicInfo(name: name, address: address, phone: phone);
   }
 

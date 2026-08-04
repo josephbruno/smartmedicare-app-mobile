@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_secure_storage_windows
   printing
   url_launcher_windows
+  video_player_win
   windows_printer
 )
 

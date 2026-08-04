@@ -55,7 +55,7 @@ class DashboardScreen extends StatelessWidget {
                   SizedBox(height: 16),
                   Text(
                     'Loading dashboard metrics...',
-                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -72,7 +72,10 @@ class DashboardScreen extends StatelessWidget {
                     const SizedBox(height: 16),
                     Text(
                       'Failed to load dashboard',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -85,7 +88,10 @@ class DashboardScreen extends StatelessWidget {
                       onPressed: () => vm.load(),
                       icon: const Icon(Icons.refresh_rounded, size: 18),
                       label: const Text('Try Again'),
-                      style: ElevatedButton.styleFrom(minimumSize: const Size(160, 44)),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(160, 44),
+                        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),
@@ -198,7 +204,7 @@ class _ManagerDashboardContent extends StatelessWidget {
             SizedBox(width: 10),
             Text(
               'Business Overview',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
             ),
           ],
         ),
@@ -206,7 +212,7 @@ class _ManagerDashboardContent extends StatelessWidget {
           padding: EdgeInsets.only(left: 32, top: 4),
           child: Text(
             "Here's what's happening with your store today.",
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
           ),
         ),
       ],
@@ -267,7 +273,10 @@ class _ManagerDashboardContent extends StatelessWidget {
               onPressed: () => context.go('/reports/sales'),
               icon: const Icon(Icons.assessment_outlined, size: 18),
               label: const Text('View Report'),
-              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 40),
+                textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
             ),
         ],
       ),
@@ -333,6 +342,7 @@ class _ManagerDashboardContent extends StatelessWidget {
         minimumSize: const Size(0, 40),
         foregroundColor: AppTheme.textSecondary,
         side: const BorderSide(color: Color(0xFFE2E8F0)),
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
     );
   }

@@ -739,7 +739,7 @@ class _DesktopShellState extends State<_DesktopShell> {
                           Text(
                             _titleForPath(widget.location),
                             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w800,
                                   height: 1.1,
                                 ),
@@ -1326,7 +1326,7 @@ class _MobileShellState extends State<_MobileShell> {
       appBar: AppBar(
         title: Text(
           _titleForPath(widget.location),
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
         ),
         actions: [
           if (auth.isSuperAdmin)

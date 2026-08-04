@@ -27,7 +27,7 @@ class LoginViewModel extends ChangeNotifier {
             'Cashier accounts can only be used on the Windows or Linux desktop app.';
       }
     } on ApiException catch (e) {
-      error = e.message;
+      error = e.displayMessage;
     } catch (e) {
       error = e.toString();
     } finally {

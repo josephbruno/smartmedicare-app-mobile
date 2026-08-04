@@ -117,6 +117,20 @@ class ApiClient {
         });
       }
     }
+
+    // Prefer the first field error over a generic validation message.
+    if (errors != null && errors.isNotEmpty) {
+      for (final list in errors.values) {
+        if (list.isNotEmpty) {
+          final first = list.first.trim();
+          if (first.isNotEmpty) {
+            msg = first;
+            break;
+          }
+        }
+      }
+    }
+
     throw ApiException(
       msg,
       statusCode: e.response?.statusCode,

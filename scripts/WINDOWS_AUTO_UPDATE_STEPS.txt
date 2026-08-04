@@ -1,0 +1,226 @@
+Maran Billing — Windows Auto-Update Steps
+=========================================
+Last updated: 2026-08-04
+
+Overview
+--------
+Two release artifacts:
+
+  A) Single setup EXE  -> first-time clinic install
+       scripts\build-single-exe.bat
+       -> dist\windows\MaranBilling-Setup-<version>.exe
+
+  B) Update ZIP        -> in-app auto-update for existing installs
+       scripts\build-zip-upload-update.bat
+       -> upload to Laravel API
+
+
+A. One-time server setup (maran-billing-backend)
+------------------------------------------------
+1. Deploy latest backend code (includes app_releases migration + update routes).
+
+2. Run migrations:
+     php artisan migrate
+
+3. Link public storage (so ZIP download URLs work):
+     php artisan storage:link
+
+4. Add to .env:
+     APP_URL=https://api-maran.biapps.cloud
+     APP_UPDATE_DEPLOY_TOKEN=<long-random-secret>
+
+5. Ensure large uploads are allowed (~500 MB):
+   - PHP: upload_max_filesize / post_max_size
+   - nginx: client_max_body_size
+   - Then reload PHP-FPM / nginx
+
+6. Optional smoke test:
+     GET https://api-maran.biapps.cloud/api/v1/app/updates/check?platform=windows&current_build=1
+
+
+B. One-time PC setup (developer machine)
+----------------------------------------
+1. Install Flutter (in PATH).
+
+2. Install Inno Setup 6 (for single EXE):
+     https://jrsoftware.org/isinfo.php
+     (include Inno Setup Preprocessor)
+     ISCC.exe is required by build-single-exe.bat
+
+3. curl is usually already on Windows 10/11 (needed for update upload).
+
+4. Set deploy token (same value as APP_UPDATE_DEPLOY_TOKEN on server):
+     setx MARAN_DEPLOY_TOKEN "your-long-secret"
+
+5. Close and reopen the terminal so the env var is loaded.
+
+6. Optional override:
+     setx MARAN_API_BASE "https://api-maran.biapps.cloud/api/v1"
+
+
+C. Build single setup EXE (first-time install package)
+-----------------------------------------------------
+Use this for new PCs / clinics. Produces one installer EXE.
+
+1. Bump version in maran-billing-flutter-app\pubspec.yaml
+   Example:
+     version: 1.0.1+2
+   (left of + = version name, right of + = build number)
+
+2. Open a terminal in this folder:
+     maran-billing-flutter-app\scripts
+
+3. Run:
+     build-single-exe.bat
+
+4. Options:
+     build-single-exe.bat --skip-build
+       (reuse existing Release folder; only rebuild the installer EXE)
+
+     build-single-exe.bat --api-base https://api-maran.biapps.cloud/api/v1
+       (override API URL baked into the app)
+
+     build-single-exe.bat --output-dir D:\releases\maran
+       (custom output folder)
+
+5. What the bat does:
+   - calls scripts\build-windows-installer.ps1
+   - flutter build windows --release (unless --skip-build)
+   - copies updater\Update.bat and Update.ps1 into Release
+   - compiles Inno Setup script installer\maran_billing.iss
+
+6. Output file:
+     dist\windows\MaranBilling-Setup-<version>.exe
+   Example:
+     dist\windows\MaranBilling-Setup-1.0.1.exe
+
+7. Install on a clinic PC:
+   - Double-click the EXE (Administrator / UAC)
+   - Or silent:
+       MaranBilling-Setup-1.0.1.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+
+8. Default install path (per-user, no admin needed for later updates):
+     %LOCALAPPDATA%\Maran Billing\mobile.exe
+     Example: C:\Users\<you>\AppData\Local\Maran Billing\mobile.exe
+
+   Older installers used Program Files and required UAC on every update.
+   Prefer reinstalling with a new single EXE so updates work without admin.
+
+9. After install, confirm these exist in the install folder:
+     mobile.exe
+     Update.bat
+     Update.ps1
+     data\
+
+
+D. Publish a new update ZIP (existing installs)
+----------------------------------------------
+Use this after clinics already have the app installed.
+Does NOT create the setup EXE — use section C for that.
+
+1. Bump version in maran-billing-flutter-app\pubspec.yaml
+   Example:
+     version: 1.1.0+12
+
+2. From this folder (scripts):
+     build-zip-upload-update.bat
+
+3. Options:
+     build-zip-upload-update.bat --skip-build
+     build-zip-upload-update.bat --mandatory
+     build-zip-upload-update.bat --notes "Critical POS fix"
+
+4. What the bat does:
+   - flutter build windows --release
+   - copies updater\Update.bat and Update.ps1 into Release
+   - zips build\windows\x64\runner\Release\*
+   - POSTs ZIP to:
+       POST /api/v1/app/updates/publish
+       Header: X-Deploy-Token
+
+5. Verify:
+     GET /api/v1/app/updates/check?platform=windows&current_build=1
+   Expect update_available=true and package.url / package.sha256.
+
+6. Typical full release workflow (both artifacts):
+     a) bump pubspec.yaml version
+     b) build-single-exe.bat          -> give EXE to new installs
+     c) build-zip-upload-update.bat   -> push update to existing installs
+        (second bat can use --skip-build if you just built in step b)
+
+
+E. Client update flow (automatic)
+---------------------------------
+On Windows release/profile startup the app:
+1. Reads previous result from %TEMP%\maran_update_result.json (if any)
+2. Calls GET /api/v1/app/updates/check?platform=windows&current_build=<build>
+3. If update available:
+   - optional  -> dialog (Later / Update now)
+   - mandatory -> blocking dialog
+4. Downloads ZIP over HTTPS with progress
+5. Verifies SHA-256
+6. Launches Update.ps1 (elevates if Program Files needs admin / UAC)
+7. Exits the app
+8. Updater waits for process exit, extracts ZIP over install dir,
+   deletes temp files, relaunches mobile.exe
+
+User data is preserved (local DB is under Documents, not in install folder).
+
+
+F. Related files
+----------------
+Flutter scripts:
+  scripts\build-single-exe.bat            <- build single setup EXE (Inno)
+  scripts\build-windows-installer.ps1     <- PowerShell used by build-single-exe.bat
+  scripts\build-zip-upload-update.bat     <- build+zip+upload auto-update package
+  scripts\WINDOWS_AUTO_UPDATE_STEPS.txt     <- this file
+
+Flutter updater / client:
+  updater\Update.bat / Update.ps1         <- external in-place updater
+  installer\maran_billing.iss             <- Inno Setup script
+  lib\core\update\                        <- check / download / UI
+
+Backend:
+  GET  /api/v1/app/updates/check
+  POST /api/v1/app/updates/publish
+  storage/app/public/app-updates/windows/ <- stored ZIP packages
+  table: app_releases
+
+
+G. Logs / troubleshooting
+-------------------------
+Client update log:
+  %LOCALAPPDATA%\MaranBilling\logs\update.log
+
+Updater log:
+  %LOCALAPPDATA%\MaranBilling\logs\updater.log
+
+Last update result:
+  %TEMP%\maran_update_result.json
+
+Common failures:
+  - ISCC not found     -> install Inno Setup 6; required for build-single-exe.bat
+  - 403 on publish     -> MARAN_DEPLOY_TOKEN / APP_UPDATE_DEPLOY_TOKEN mismatch
+  - upload fails       -> PHP/nginx body size limits
+  - 404 on download    -> run php artisan storage:link; check APP_URL
+  - checksum fail      -> re-publish ZIP; do not hand-edit the file on server
+  - updater can't write -> UAC denied for Program Files install
+
+
+H. Quick reference
+------------------
+New clinic PC:
+  build-single-exe.bat
+  -> run MaranBilling-Setup-<version>.exe
+
+Existing clinic PC (auto-update):
+  build-zip-upload-update.bat
+  -> user opens app -> Update now
+
+Verified locally (2026-08-04):
+  - build-single-exe.bat --skip-build -> MaranBilling-Setup-1.0.1.exe
+  - Silent install into C:\Program Files\Maran Billing
+  - mobile.exe + Update.bat + Update.ps1 present
+  - Published 1.0.1+2 ZIP to API (HTTP 201)
+  - In-app download + SHA-256 + Update.ps1: 1.0.0+1 -> 1.0.1+2
+  - Published live test 1.0.2+3 for other-desktop update testing

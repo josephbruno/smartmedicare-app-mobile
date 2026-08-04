@@ -38,7 +38,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen> {
     } on ApiException catch (e) {
       _pinKey.currentState?.clear();
       setState(() {
-        _error = e.message;
+        _error = e.displayMessage;
         _shakeTrigger++;
       });
     } catch (e) {

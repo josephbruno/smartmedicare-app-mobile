@@ -2,7 +2,7 @@ name: maran
 description: Maran Billing — Flutter client (MVVM) for Android, iOS, Windows, macOS.
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.14+15
 
 environment:
   sdk: ^3.5.0
@@ -35,6 +35,8 @@ dependencies:
   image: ^4.5.4
   package_info_plus: ^8.3.0
   crypto: ^3.0.6
+  video_player: ^2.9.5
+  video_player_win: ^3.2.0
 
 dev_dependencies:
   flutter_test:
@@ -47,3 +49,4 @@ flutter:
     - assets/branding/logo.png
     - assets/branding/receipt-logo.png
     - assets/branding/pet-hero.png
+    - assets/branding/splash.mp4

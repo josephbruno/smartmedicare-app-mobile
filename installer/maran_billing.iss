@@ -36,7 +36,8 @@ AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
-DefaultDirName={autopf}\{#MyAppName}
+; Per-user install (Local AppData) so auto-update does not need UAC/admin.
+DefaultDirName={localappdata}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
@@ -46,12 +47,13 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 CloseApplications=yes
 RestartApplications=no
+UsedUserAreasWarning=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

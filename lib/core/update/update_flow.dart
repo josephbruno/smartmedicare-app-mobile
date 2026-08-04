@@ -56,15 +56,19 @@ Future<void> runWindowsUpdateFlow(BuildContext context) async {
 }
 
 Future<bool?> _showOptionalDialog(BuildContext context, UpdateCheckResult check) {
+  final notes = check.releaseNotes?.trim().isNotEmpty == true
+      ? check.releaseNotes!
+      : 'A new version of Maran Billing is available.';
   return showDialog<bool>(
     context: context,
     barrierDismissible: true,
     builder: (ctx) => AlertDialog(
       title: Text('Update available (v${check.version})'),
       content: Text(
-        check.releaseNotes?.trim().isNotEmpty == true
-            ? check.releaseNotes!
-            : 'A new version of Maran Billing is available.',
+        '$notes\n\n'
+        'If the app is installed under Program Files, Windows may ask for '
+        'permission (UAC) — click Yes.\n'
+        'If installed under AppData (recommended), no admin permission is needed.',
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
