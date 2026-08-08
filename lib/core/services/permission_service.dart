@@ -49,6 +49,7 @@ abstract class AppPermissions {
   static const String petsView = 'pets.view';
   static const String petsCreate = 'pets.create';
   static const String petsEdit = 'pets.edit';
+  static const String petsMasterDataManage = 'pets.master_data.manage';
 
   // Expenses & reports
   static const String expensesView = 'expenses.view';

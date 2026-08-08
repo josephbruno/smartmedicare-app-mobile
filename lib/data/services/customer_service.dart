@@ -141,6 +141,102 @@ class CustomerService {
     }
   }
 
+  Future<List<PetSpecies>> adminListPetSpecies({String? search}) async {
+    try {
+      final res = await _client.get('/pets/master-data/species', queryParameters: {
+        if (search != null && search.isNotEmpty) 'search': search,
+      });
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, PetSpecies.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetSpecies> createPetSpecies(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/pets/master-data/species', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => PetSpecies.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetSpecies> updatePetSpecies(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/pets/master-data/species/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => PetSpecies.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deactivatePetSpecies(int id) async {
+    try {
+      await _client.delete('/pets/master-data/species/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<PetBreed>> adminListPetBreeds({
+    int? speciesId,
+    String? search,
+  }) async {
+    try {
+      final res = await _client.get('/pets/master-data/breeds', queryParameters: {
+        if (speciesId != null) 'species_id': speciesId,
+        if (search != null && search.isNotEmpty) 'search': search,
+      });
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, PetBreed.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetBreed> createPetBreed(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/pets/master-data/breeds', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => PetBreed.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PetBreed> updatePetBreed(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/pets/master-data/breeds/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => PetBreed.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deactivatePetBreed(int id) async {
+    try {
+      await _client.delete('/pets/master-data/breeds/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
   Future<({List<AdvanceTransaction> items, double advanceBalance})>
       listAdvances(int customerId, {int page = 1}) async {
     try {

@@ -44,16 +44,25 @@ class PetSpecies {
     required this.id,
     required this.code,
     required this.name,
+    this.sortOrder = 0,
+    this.isActive = true,
+    this.breedsCount,
   });
 
   final int id;
   final String code;
   final String name;
+  final int sortOrder;
+  final bool isActive;
+  final int? breedsCount;
 
   factory PetSpecies.fromJson(Map<String, dynamic> j) => PetSpecies(
         id: intOrNull(j['id']) ?? 0,
         code: j['code']?.toString() ?? '',
         name: j['name']?.toString() ?? '',
+        sortOrder: intOrNull(j['sort_order']) ?? 0,
+        isActive: j['is_active'] != false,
+        breedsCount: intOrNull(j['breeds_count']),
       );
 }
 
@@ -62,17 +71,33 @@ class PetBreed {
     required this.id,
     required this.speciesId,
     required this.name,
+    this.sortOrder = 0,
+    this.isActive = true,
+    this.speciesCode,
+    this.speciesName,
   });
 
   final int id;
   final int speciesId;
   final String name;
+  final int sortOrder;
+  final bool isActive;
+  final String? speciesCode;
+  final String? speciesName;
 
-  factory PetBreed.fromJson(Map<String, dynamic> j) => PetBreed(
-        id: intOrNull(j['id']) ?? 0,
-        speciesId: intOrNull(j['species_id']) ?? 0,
-        name: j['name']?.toString() ?? '',
-      );
+  factory PetBreed.fromJson(Map<String, dynamic> j) {
+    final species = j['species'];
+    final speciesMap = species is Map ? Map<String, dynamic>.from(species) : null;
+    return PetBreed(
+      id: intOrNull(j['id']) ?? 0,
+      speciesId: intOrNull(j['species_id']) ?? 0,
+      name: j['name']?.toString() ?? '',
+      sortOrder: intOrNull(j['sort_order']) ?? 0,
+      isActive: j['is_active'] != false,
+      speciesCode: speciesMap?['code']?.toString(),
+      speciesName: speciesMap?['name']?.toString(),
+    );
+  }
 }
 
 class Customer {

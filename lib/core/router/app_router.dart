@@ -63,6 +63,7 @@ import '../../features/settings/branches_screen.dart';
 import '../../features/settings/catalog_master_data_screen.dart';
 import '../../features/settings/doctors_screen.dart';
 import '../../features/settings/emr_master_data_screen.dart';
+import '../../features/settings/pet_species_breed_master_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/settings/usb_printer_settings_screen.dart';
 import '../../features/settings/users_screen.dart';
@@ -183,6 +184,9 @@ GoRouter createAppRouter({
     }
     if (path.startsWith('/settings/emr-master-data')) {
       if (need(AppPermissions.emrMasterDataManage)) return denied;
+    }
+    if (path.startsWith('/settings/species-breeds')) {
+      if (need(AppPermissions.petsMasterDataManage)) return denied;
     }
     if (path.startsWith('/settings/catalog')) {
       if (need(AppPermissions.productsEdit)) return denied;
@@ -670,6 +674,14 @@ GoRouter createAppRouter({
             builder: (c, s) => const PermissionGuard(
               permission: AppPermissions.emrMasterDataManage,
               child: EmrMasterDataScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/species-breeds',
+            name: 'PetSpeciesBreeds',
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.petsMasterDataManage,
+              child: PetSpeciesBreedMasterScreen(),
             ),
           ),
           GoRoute(
