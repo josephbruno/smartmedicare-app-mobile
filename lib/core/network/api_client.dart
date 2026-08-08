@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../app_config.dart';
 import 'api_exception.dart';
 import 'api_logging_interceptor.dart';
+import 'network_resilience.dart';
 
 typedef TokenGetter = String? Function();
 typedef BranchIdGetter = int? Function();
@@ -26,14 +27,15 @@ class ApiClient {
         dio = Dio(
           BaseOptions(
             baseUrl: baseUrl ?? AppConfig.apiBaseUrl,
-            connectTimeout: const Duration(seconds: 15),
-            receiveTimeout: const Duration(seconds: 15),
+            connectTimeout: const Duration(seconds: 20),
+            receiveTimeout: const Duration(seconds: 20),
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
           ),
         ) {
+    configureDioNetworking(dio);
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
@@ -103,7 +105,7 @@ class ApiClient {
 
   static Never throwFromDio(DioException e) {
     final data = e.response?.data;
-    String msg = e.message ?? 'Network error';
+    String msg = humanizeNetworkError(e);
     Map<String, List<String>>? errors;
     if (data is Map) {
       final m = Map<String, dynamic>.from(data);

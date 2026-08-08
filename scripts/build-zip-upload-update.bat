@@ -125,6 +125,20 @@ if not exist "%RELEASE_DIR%\mobile.exe" (
   exit /b 1
 )
 
+echo ==> Signing release binaries (optional, skipped if MARAN_SIGN_PFX_PATH unset)...
+if "%MARAN_REQUIRE_SIGN%"=="1" (
+  powershell -NoProfile -ExecutionPolicy RemoteSigned -File "%SCRIPT_DIR%sign-windows-release.ps1" -ReleaseDir "%RELEASE_DIR%" -RequireSign
+) else (
+  powershell -NoProfile -ExecutionPolicy RemoteSigned -File "%SCRIPT_DIR%sign-windows-release.ps1" -ReleaseDir "%RELEASE_DIR%"
+)
+if errorlevel 1 (
+  echo ERROR: code signing failed
+  exit /b 1
+)
+if "%MARAN_SIGN_PFX_PATH%"=="" (
+  echo WARNING: Update ZIP will be UNSIGNED — AV/SmartScreen may warn on clinic PCs.
+)
+
 echo ==> Staging Update.bat / Update.ps1 into Release folder...
 copy /Y "%UPDATER_SRC%\Update.bat" "%RELEASE_DIR%\Update.bat" >nul
 if errorlevel 1 (

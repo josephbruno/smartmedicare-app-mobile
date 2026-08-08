@@ -85,17 +85,17 @@ echo.
 
 if "%SKIP_BUILD%"=="1" goto run_skip
 if not "%OUTPUT_DIR%"=="" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -ApiBaseUrl "%API_BASE%" -OutputDir "%OUTPUT_DIR%"
+  powershell -NoProfile -ExecutionPolicy RemoteSigned -File "%PS1%" -ApiBaseUrl "%API_BASE%" -OutputDir "%OUTPUT_DIR%"
 ) else (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -ApiBaseUrl "%API_BASE%"
+  powershell -NoProfile -ExecutionPolicy RemoteSigned -File "%PS1%" -ApiBaseUrl "%API_BASE%"
 )
 goto after_ps
 
 :run_skip
 if not "%OUTPUT_DIR%"=="" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -SkipBuild -ApiBaseUrl "%API_BASE%" -OutputDir "%OUTPUT_DIR%"
+  powershell -NoProfile -ExecutionPolicy RemoteSigned -File "%PS1%" -SkipBuild -ApiBaseUrl "%API_BASE%" -OutputDir "%OUTPUT_DIR%"
 ) else (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" -SkipBuild -ApiBaseUrl "%API_BASE%"
+  powershell -NoProfile -ExecutionPolicy RemoteSigned -File "%PS1%" -SkipBuild -ApiBaseUrl "%API_BASE%"
 )
 
 :after_ps
@@ -109,4 +109,11 @@ if errorlevel 1 (
 
 echo.
 echo Single EXE ready under dist\windows\
+if "%MARAN_SIGN_PFX_PATH%"=="" (
+  echo.
+  echo WARNING: Unsigned installer — SmartScreen will show "Unknown publisher".
+  echo   setx MARAN_SIGN_PFX_PATH "C:\certs\your.pfx"
+  echo   setx MARAN_SIGN_PFX_PASSWORD "your-password"
+  echo   Then rebuild. Temporary workaround: More info -^> Run anyway
+)
 exit /b 0

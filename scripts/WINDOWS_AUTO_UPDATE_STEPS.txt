@@ -207,7 +207,45 @@ Common failures:
   - updater can't write -> UAC denied for Program Files install
 
 
-H. Quick reference
+J. Code signing (required to fix SmartScreen "Unknown publisher")
+----------------------------------------------
+The blue Windows screen "Windows protected your PC" / Unknown publisher means
+the setup EXE is not Authenticode-signed with a TRUSTED certificate.
+
+Local / project self-signed cert (dev only):
+  powershell -File scripts\create-dev-codesign-cert.ps1
+  -> creates certs\maran-codesign.pfx + password (gitignored)
+  -> build scripts auto-detect this PFX
+  NOTE: Self-signed does NOT remove SmartScreen on clinic PCs.
+
+Production (CA-issued Authenticode):
+1) Buy a Windows code-signing certificate (DigiCert / Sectigo / GlobalSign / Azure Trusted Signing)
+2) Place the .pfx in a safe path (or replace certs\maran-codesign.pfx)
+3) Set env vars (once), then open a NEW terminal:
+
+     setx MARAN_SIGN_PFX_PATH "C:\certs\bestwave.pfx"
+     setx MARAN_SIGN_PFX_PASSWORD "your-pfx-password"
+     setx MARAN_SIGN_TIMESTAMP_URL "http://timestamp.digicert.com"
+
+   Optional:
+     setx MARAN_SIGNTOOL_PATH "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
+     setx MARAN_REQUIRE_SIGN "1"
+
+4) Rebuild:
+
+     build-single-exe.bat
+     build-zip-upload-update.bat
+
+5) Verify before sending to clinics:
+     Right-click MaranBilling-Setup-<version>.exe
+     -> Properties -> Digital Signatures
+     Publisher must NOT be "Unknown publisher".
+
+Temporary clinic workaround (unsigned / self-signed builds):
+  SmartScreen -> More info -> Run anyway
+
+
+K. Quick reference
 ------------------
 New clinic PC:
   build-single-exe.bat
@@ -224,3 +262,36 @@ Verified locally (2026-08-04):
   - Published 1.0.1+2 ZIP to API (HTTP 201)
   - In-app download + SHA-256 + Update.ps1: 1.0.0+1 -> 1.0.1+2
   - Published live test 1.0.2+3 for other-desktop update testing
+
+
+L. Antivirus false positives (e.g. Total Security 365)
+--------------------------------------------------------
+Why AV may block the app or update:
+  - Self-update downloads a ZIP and replaces mobile.exe (looks like malware heuristics)
+  - PowerShell scripts in the updater (Update.ps1)
+  - Unsigned EXE / installer (no Authenticode certificate yet)
+
+What we changed to reduce blocks (2026-08-08):
+  - Updater launches via Update.bat + cmd start (no wscript/VBS)
+  - PowerShell uses RemoteSigned instead of ExecutionPolicy Bypass
+  - Update.ps1 clears Mark-of-the-Web (Unblock-File) on local scripts and copied files
+  - mobile.exe metadata shows publisher "Bestwave Innovation"
+  - Optional Authenticode signing via scripts\sign-windows-release.ps1
+  - Installer VersionInfo + Inno SignTool when MARAN_SIGN_PFX_PATH is set
+
+Clinic PC whitelist (Total Security 365 / similar):
+  Add exclusions / allow Internet access for:
+    %LOCALAPPDATA%\Maran Billing\
+    %LOCALAPPDATA%\Maran Billing\mobile.exe
+    %LOCALAPPDATA%\Maran Billing\Update.bat
+    %LOCALAPPDATA%\Maran Billing\Update.ps1
+  If login shows "Failed host lookup: api-maran.biapps.cloud":
+    1) Confirm internet works in a browser to https://api-maran.biapps.cloud
+    2) Allow Maran Billing / mobile.exe network access in antivirus
+    3) Flush DNS: ipconfig /flushdns
+    4) Retry Sign In
+  Or report a false positive to your AV vendor:
+    Product: Maran Billing
+    Publisher: Bestwave Innovation
+    Website: https://bestwaveinnovation.com
+

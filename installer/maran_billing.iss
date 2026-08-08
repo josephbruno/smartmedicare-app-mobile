@@ -36,6 +36,16 @@ AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
+AppCopyright=Copyright (C) 2026 {#MyAppPublisher}
+VersionInfoVersion={#MyAppVersion}.0
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoCopyright=Copyright (C) 2026 {#MyAppPublisher}
+VersionInfoProductName={#MyAppName}
+VersionInfoProductVersion={#MyAppVersion}
+VersionInfoDescription={#MyAppName} Setup
+VersionInfoOriginalFileName=MaranBilling-Setup-{#MyAppVersion}.exe
+VersionInfoTextVersion={#MyAppVersion}
 ; Per-user install (Local AppData) so auto-update does not need UAC/admin.
 DefaultDirName={localappdata}\{#MyAppName}
 DefaultGroupName={#MyAppName}
@@ -54,6 +64,10 @@ MinVersion=10.0
 CloseApplications=yes
 RestartApplications=no
 UsedUserAreasWarning=no
+#ifdef MaranSignTool
+SignTool=maran
+SignedUninstaller=yes
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

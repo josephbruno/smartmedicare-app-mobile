@@ -8,6 +8,7 @@ Set-Location $Root
 $AppName = 'Maran Billing'
 $BinaryName = 'mobile.exe'
 $SkipBuild = $false
+$RequireSign = $false
 $OutputDir = Join-Path $Root 'dist\windows'
 $ApiBaseUrl = $null
 $IsccPath = $null
@@ -20,6 +21,7 @@ Build the Flutter Windows release bundle and create an Inno Setup installer.
 
 Options:
   -SkipBuild              Skip 'flutter build windows --release' (reuse existing bundle)
+  -RequireSign            Fail if MARAN_SIGN_PFX_PATH is not set (recommended for clinic releases)
   -OutputDir DIR          Output directory for installer (default: dist\windows)
   -ApiBaseUrl URL         Pass --dart-define=API_BASE_URL=URL to flutter build
   -IsccPath PATH          Path to ISCC.exe (auto-detected if omitted)
@@ -30,6 +32,7 @@ Options:
 for ($i = 0; $i -lt $args.Count; $i++) {
   switch -Regex ($args[$i]) {
     '^(?i)-SkipBuild$' { $SkipBuild = $true }
+    '^(?i)-RequireSign$' { $RequireSign = $true }
     '^(?i)-OutputDir$' {
       $i++
       if ($i -ge $args.Count) { throw 'Missing value for -OutputDir' }
@@ -80,11 +83,47 @@ Or pass -IsccPath "C:\Path\To\ISCC.exe"
 "@
 }
 
+function Find-SignTool {
+  if ($env:MARAN_SIGNTOOL_PATH -and (Test-Path -LiteralPath $env:MARAN_SIGNTOOL_PATH)) {
+    return (Resolve-Path -LiteralPath $env:MARAN_SIGNTOOL_PATH).Path
+  }
+  $kits = @(
+    "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe",
+    "${env:ProgramFiles}\Windows Kits\10\bin\*\x64\signtool.exe"
+  )
+  foreach ($pattern in $kits) {
+    $found = Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue |
+      Sort-Object { $_.FullName } -Descending |
+      Select-Object -First 1
+    if ($found) { return $found.FullName }
+  }
+  $cmd = Get-Command signtool.exe -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+  return $null
+}
+
 if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
   throw 'flutter not found in PATH'
 }
 
 $Iscc = Find-Iscc -Explicit $IsccPath
+$SignScript = Join-Path $PSScriptRoot 'sign-windows-release.ps1'
+$HasPfx = [bool]$env:MARAN_SIGN_PFX_PATH
+$MustSign = $RequireSign -or ($env:MARAN_REQUIRE_SIGN -eq '1')
+
+if ($MustSign -and -not $HasPfx) {
+  throw @"
+-RequireSign was set but MARAN_SIGN_PFX_PATH is empty.
+
+Windows SmartScreen shows "Unknown publisher" for unsigned installers.
+Buy an Authenticode code-signing certificate, then:
+
+  setx MARAN_SIGN_PFX_PATH "C:\certs\bestwave.pfx"
+  setx MARAN_SIGN_PFX_PASSWORD "your-pfx-password"
+
+Open a NEW terminal and rebuild.
+"@
+}
 
 $VersionLine = (Select-String -Path (Join-Path $Root 'pubspec.yaml') -Pattern '^version:\s*(.+)$').Matches[0].Groups[1].Value.Trim()
 $Version = ($VersionLine -split '\+')[0]
@@ -115,6 +154,12 @@ Run without -SkipBuild or fix the Flutter build.
 "@
 }
 
+Write-Host '==> Signing release binaries...'
+$signArgs = @('-ReleaseDir', $ReleaseDir)
+if ($MustSign) { $signArgs += '-RequireSign' }
+& $SignScript @signArgs
+if ($LASTEXITCODE -ne 0) { throw 'Code signing failed' }
+
 $UpdaterDir = Join-Path $Root 'updater'
 foreach ($name in @('Update.bat', 'Update.ps1')) {
   $src = Join-Path $UpdaterDir $name
@@ -122,6 +167,7 @@ foreach ($name in @('Update.bat', 'Update.ps1')) {
     throw "Updater script missing: $src"
   }
   Copy-Item -LiteralPath $src -Destination (Join-Path $ReleaseDir $name) -Force
+  try { Unblock-File -LiteralPath (Join-Path $ReleaseDir $name) -ErrorAction SilentlyContinue } catch {}
 }
 
 New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
@@ -131,14 +177,32 @@ $ReleaseDirResolved = (Resolve-Path -LiteralPath $ReleaseDir).Path
 $ReleaseDirInno = $ReleaseDirResolved.Replace('\', '/')
 $OutputDirInno = $OutputDirResolved.Replace('\', '/')
 
+$isccArgs = @(
+  "/DMyAppVersion=$Version"
+  "/DMyAppName=$AppName"
+  "/DMyAppExeName=$BinaryName"
+  "/DFlutterReleaseDir=$ReleaseDirInno"
+  "/DOutputDir=$OutputDirInno"
+)
+
+# Sign setup EXE + uninstaller during Inno compile when a PFX is configured.
+if ($HasPfx) {
+  $signtool = Find-SignTool
+  if (-not $signtool) {
+    throw 'MARAN_SIGN_PFX_PATH is set but signtool.exe was not found. Install Windows SDK or set MARAN_SIGNTOOL_PATH.'
+  }
+  $pfx = $env:MARAN_SIGN_PFX_PATH
+  $pwd = $env:MARAN_SIGN_PFX_PASSWORD
+  $ts = if ($env:MARAN_SIGN_TIMESTAMP_URL) { $env:MARAN_SIGN_TIMESTAMP_URL } else { 'http://timestamp.digicert.com' }
+  $pwdPart = if ($pwd) { " /p `"$pwd`"" } else { '' }
+  $signCmd = "`"$signtool`" sign /fd SHA256 /f `"$pfx`"$pwdPart /tr `"$ts`" /td SHA256 /d `"Maran Billing Setup`" /du `"https://bestwaveinnovation.com`" `$f"
+  $isccArgs += '/DMaranSignTool=1'
+  $isccArgs += "/Smaran=$signCmd"
+  Write-Host '==> Inno Setup will Authenticode-sign the installer (SignTool=maran)'
+}
+
 Write-Host "==> Compiling Inno Setup installer (v$Version+$BuildNum)..."
-& $Iscc `
-  "/DMyAppVersion=$Version" `
-  "/DMyAppName=$AppName" `
-  "/DMyAppExeName=$BinaryName" `
-  "/DFlutterReleaseDir=$ReleaseDirInno" `
-  "/DOutputDir=$OutputDirInno" `
-  $IssPath
+& $Iscc @isccArgs $IssPath
 
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
 
@@ -147,8 +211,26 @@ if (-not (Test-Path -LiteralPath $Installer)) {
   throw "Expected installer not found: $Installer"
 }
 
-Write-Host ""
-Write-Host "Done."
+# Fallback / verify: always sign setup EXE if PFX set (covers cases where Inno SignTool was skipped).
+if ($HasPfx) {
+  Write-Host '==> Ensuring setup EXE is signed...'
+  & $SignScript -FilesOnly -AdditionalFiles @($Installer) -Description 'Maran Billing Setup'
+  if ($LASTEXITCODE -ne 0) { throw 'Installer code signing failed' }
+}
+
+try { Unblock-File -LiteralPath $Installer -ErrorAction SilentlyContinue } catch {}
+
+Write-Host ''
+Write-Host 'Done.'
 Write-Host "  Installer: $Installer"
-Write-Host "  Install:   run the setup EXE as Administrator"
 Write-Host "  App:       $AppName ($BinaryName)"
+if (-not $HasPfx) {
+  Write-Host ''
+  Write-Host 'WARNING: Installer is UNSIGNED.'
+  Write-Host '  Windows SmartScreen will show "Unknown publisher" on clinic PCs.'
+  Write-Host '  Fix: set MARAN_SIGN_PFX_PATH / MARAN_SIGN_PFX_PASSWORD, then rebuild.'
+  Write-Host '  Temporary: More info -> Run anyway'
+} else {
+  Write-Host '  Signed:    yes (Authenticode)'
+  Write-Host '  Verify:    Properties -> Digital Signatures'
+}

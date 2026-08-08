@@ -33,15 +33,22 @@ class TsplLogoBitmap {
       final decoded = img.decodeImage(pngBytes!);
       if (decoded == null) return null;
 
+      // LA (grayscale+alpha) PNGs are 2-channel; resize/filters corrupt them.
+      // Normalize to RGBA before any processing so alpha + luminance stay correct.
+      final rgba = decoded.numChannels == 4
+          ? decoded
+          : decoded.convert(numChannels: 4);
+
       // Nearest resize keeps hard edges (no gray anti-alias for thermal).
       var work = img.copyResize(
-        decoded,
+        rgba,
         width: maxWidthDots,
         interpolation: img.Interpolation.nearest,
       );
       work = img.grayscale(work);
       // Crush mid-tones so ink is solid black vs white paper only.
-      work = img.adjustColor(work, contrast: 180);
+      // (image.adjustColor clamps contrast to 0..2; 2 = max push.)
+      work = img.adjustColor(work, contrast: 2);
 
       final w = work.width;
       final h = work.height;

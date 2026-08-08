@@ -47,3 +47,7 @@ app.*.map.json
 
 # Local icon generation previews
 /windows/runner/resources/_icon_previews/
+
+# Code-signing: certs/ is committed so team builds can sign with the shared PFX.
+# Prefer rotating to a CA-issued Authenticode cert for production SmartScreen trust.
+

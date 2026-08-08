@@ -54,6 +54,16 @@ function Show-UpdateMessage([string]$Title, [string]$Message, [string]$Icon) {
 
 Write-Log "Updater process started pid=$PID showResult=$ShowResult"
 
+# Clear Mark-of-the-Web on local updater scripts (reduces AV false positives).
+foreach ($path in @($PSCommandPath, (Join-Path $InstallDir 'Update.ps1'), (Join-Path $InstallDir 'Update.bat'))) {
+  if ($path -and (Test-Path -LiteralPath $path)) {
+    try { Unblock-File -LiteralPath $path -ErrorAction SilentlyContinue } catch {}
+  }
+}
+if ($ZipPath -and (Test-Path -LiteralPath $ZipPath)) {
+  try { Unblock-File -LiteralPath $ZipPath -ErrorAction SilentlyContinue } catch {}
+}
+
 function Test-PreserveRelativePath([string]$RelativePath) {
   $n = $RelativePath.Replace('\', '/').ToLowerInvariant()
   if ($n -match '\.db$') { return $true }
@@ -89,7 +99,7 @@ if (-not (Test-DirectoryWritable -Dir $InstallDir)) {
 
     $show = if ($ShowResult) { ' -ShowResult' } else { '' }
     # Single argument string — required for paths with spaces (Program Files\...).
-    $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$tempPs1`" -ZipPath `"$ZipPath`" -InstallDir `"$InstallDir`" -ExeName `"$ExeName`" -WaitPid $WaitPid -Version `"$Version`"$show"
+    $arg = "-NoProfile -ExecutionPolicy RemoteSigned -File `"$tempPs1`" -ZipPath `"$ZipPath`" -InstallDir `"$InstallDir`" -ExeName `"$ExeName`" -WaitPid $WaitPid -Version `"$Version`"$show"
     try {
       Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $arg | Out-Null
       exit 0
@@ -191,6 +201,7 @@ try {
     if (-not $copied) {
       throw "Failed to copy: $rel"
     }
+    try { Unblock-File -LiteralPath $dest -ErrorAction SilentlyContinue } catch {}
   }
 
   try { Remove-Item -LiteralPath $extractRoot -Recurse -Force -ErrorAction SilentlyContinue } catch {}
