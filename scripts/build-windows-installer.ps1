@@ -108,16 +108,19 @@ if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
 
 $Iscc = Find-Iscc -Explicit $IsccPath
 $SignScript = Join-Path $PSScriptRoot 'sign-windows-release.ps1'
-$HasPfx = [bool]$env:MARAN_SIGN_PFX_PATH
+$ProjectPfx = Join-Path $Root 'certs\maran-codesign.pfx'
+$ProjectPasswordFile = Join-Path $Root 'certs\maran-codesign.password'
+$HasPfx = [bool]$env:MARAN_SIGN_PFX_PATH -or (Test-Path -LiteralPath $ProjectPfx)
 $MustSign = $RequireSign -or ($env:MARAN_REQUIRE_SIGN -eq '1')
 
 if ($MustSign -and -not $HasPfx) {
   throw @"
--RequireSign was set but MARAN_SIGN_PFX_PATH is empty.
+-RequireSign was set but no signing certificate was found.
 
-Windows SmartScreen shows "Unknown publisher" for unsigned installers.
-Buy an Authenticode code-signing certificate, then:
+Create a local cert:
+  powershell -File scripts\create-dev-codesign-cert.ps1
 
+Or set a CA-issued PFX:
   setx MARAN_SIGN_PFX_PATH "C:\certs\bestwave.pfx"
   setx MARAN_SIGN_PFX_PASSWORD "your-pfx-password"
 
@@ -155,9 +158,9 @@ Run without -SkipBuild or fix the Flutter build.
 }
 
 Write-Host '==> Signing release binaries...'
-$signArgs = @('-ReleaseDir', $ReleaseDir)
-if ($MustSign) { $signArgs += '-RequireSign' }
-& $SignScript @signArgs
+$signParams = @{ ReleaseDir = $ReleaseDir }
+if ($MustSign) { $signParams['RequireSign'] = $true }
+& $SignScript @signParams
 if ($LASTEXITCODE -ne 0) { throw 'Code signing failed' }
 
 $UpdaterDir = Join-Path $Root 'updater'
@@ -185,22 +188,8 @@ $isccArgs = @(
   "/DOutputDir=$OutputDirInno"
 )
 
-# Sign setup EXE + uninstaller during Inno compile when a PFX is configured.
-if ($HasPfx) {
-  $signtool = Find-SignTool
-  if (-not $signtool) {
-    throw 'MARAN_SIGN_PFX_PATH is set but signtool.exe was not found. Install Windows SDK or set MARAN_SIGNTOOL_PATH.'
-  }
-  $pfx = $env:MARAN_SIGN_PFX_PATH
-  $pwd = $env:MARAN_SIGN_PFX_PASSWORD
-  $ts = if ($env:MARAN_SIGN_TIMESTAMP_URL) { $env:MARAN_SIGN_TIMESTAMP_URL } else { 'http://timestamp.digicert.com' }
-  $pwdPart = if ($pwd) { " /p `"$pwd`"" } else { '' }
-  $signCmd = "`"$signtool`" sign /fd SHA256 /f `"$pfx`"$pwdPart /tr `"$ts`" /td SHA256 /d `"Maran Billing Setup`" /du `"https://bestwaveinnovation.com`" `$f"
-  $isccArgs += '/DMaranSignTool=1'
-  $isccArgs += "/Smaran=$signCmd"
-  Write-Host '==> Inno Setup will Authenticode-sign the installer (SignTool=maran)'
-}
-
+# Sign setup EXE after compile when a PFX is available (env or project certs/).
+# (Inno SignTool path is skipped here to avoid fragile quoting; post-sign is reliable.)
 Write-Host "==> Compiling Inno Setup installer (v$Version+$BuildNum)..."
 & $Iscc @isccArgs $IssPath
 
@@ -211,9 +200,8 @@ if (-not (Test-Path -LiteralPath $Installer)) {
   throw "Expected installer not found: $Installer"
 }
 
-# Fallback / verify: always sign setup EXE if PFX set (covers cases where Inno SignTool was skipped).
 if ($HasPfx) {
-  Write-Host '==> Ensuring setup EXE is signed...'
+  Write-Host '==> Signing setup EXE...'
   & $SignScript -FilesOnly -AdditionalFiles @($Installer) -Description 'Maran Billing Setup'
   if ($LASTEXITCODE -ne 0) { throw 'Installer code signing failed' }
 }

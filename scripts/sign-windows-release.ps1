@@ -161,8 +161,9 @@ function Invoke-SignFile {
     }
   }
 
-  & $SignToolExe @signArgs
-  return $LASTEXITCODE
+  # Native stdout must not become the function's return value.
+  & $SignToolExe @signArgs 2>&1 | ForEach-Object { Write-Host $_ }
+  return [int]$LASTEXITCODE
 }
 
 $SignTool = Find-SignTool -Explicit $SignToolPath

@@ -142,6 +142,7 @@ class CashierCurrentSessionResult {
     required this.dayClosed,
     this.branchId,
     this.suggestedOpening,
+    this.openBranchSessions = const [],
   });
 
   final CashierCashSession? session;
@@ -149,10 +150,12 @@ class CashierCurrentSessionResult {
   final bool dayClosed;
   final int? branchId;
   final CashierSuggestedOpening? suggestedOpening;
+  final List<CashierOpenBranchSession> openBranchSessions;
 
   factory CashierCurrentSessionResult.fromJson(Map<String, dynamic> j) {
     final sessionMap = j['session'];
     final suggestedMap = j['suggested_opening'];
+    final openList = j['open_branch_sessions'];
     return CashierCurrentSessionResult(
       session: sessionMap is Map
           ? CashierCashSession.fromJson(Map<String, dynamic>.from(sessionMap))
@@ -163,6 +166,44 @@ class CashierCurrentSessionResult {
       suggestedOpening: suggestedMap is Map
           ? CashierSuggestedOpening.fromJson(Map<String, dynamic>.from(suggestedMap))
           : null,
+      openBranchSessions: openList is List
+          ? openList
+              .whereType<Map>()
+              .map((e) => CashierOpenBranchSession.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+    );
+  }
+}
+
+class CashierOpenBranchSession {
+  CashierOpenBranchSession({
+    required this.id,
+    required this.userId,
+    this.userName,
+    this.startedAt,
+    required this.openingAmount,
+    required this.amountInHand,
+  });
+
+  final int id;
+  final int userId;
+  final String? userName;
+  final String? startedAt;
+  final double openingAmount;
+  final double amountInHand;
+
+  String get displayName =>
+      (userName != null && userName!.trim().isNotEmpty) ? userName!.trim() : 'User #$userId';
+
+  factory CashierOpenBranchSession.fromJson(Map<String, dynamic> j) {
+    return CashierOpenBranchSession(
+      id: (j['id'] as num?)?.toInt() ?? 0,
+      userId: (j['user_id'] as num?)?.toInt() ?? 0,
+      userName: j['user_name']?.toString(),
+      startedAt: j['started_at']?.toString(),
+      openingAmount: (j['opening_amount'] as num?)?.toDouble() ?? 0,
+      amountInHand: (j['amount_in_hand'] as num?)?.toDouble() ?? 0,
     );
   }
 }

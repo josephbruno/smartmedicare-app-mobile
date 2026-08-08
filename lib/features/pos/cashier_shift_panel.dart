@@ -19,6 +19,7 @@ class CashierShiftPanel extends StatelessWidget {
     required this.loading,
     required this.onRefresh,
     this.suggestedOpening,
+    this.openBranchSessions = const [],
     this.compact = false,
   });
 
@@ -28,6 +29,7 @@ class CashierShiftPanel extends StatelessWidget {
   final bool loading;
   final Future<void> Function() onRefresh;
   final CashierSuggestedOpening? suggestedOpening;
+  final List<CashierOpenBranchSession> openBranchSessions;
   final bool compact;
 
   @override
@@ -270,6 +272,50 @@ class CashierShiftPanel extends StatelessWidget {
   }
 
   Future<void> _startShift(BuildContext context) async {
+    final auth = context.read<AuthSession>();
+    final myUserId = auth.user?.id;
+
+    List<CashierOpenBranchSession> openOnBranch = openBranchSessions;
+    try {
+      final current = await context.read<AppServices>().cashierCash.current();
+      openOnBranch = current.openBranchSessions;
+      await onRefresh();
+    } catch (_) {
+      // Fall back to last known openBranchSessions from the panel.
+    }
+    if (!context.mounted) return;
+
+    final blockers = openOnBranch
+        .where((s) => myUserId == null || s.userId != myUserId)
+        .toList();
+    if (blockers.isNotEmpty) {
+      final names = blockers.map((s) => s.displayName).toSet().join(', ');
+      final details = blockers
+          .map(
+            (s) =>
+                '• ${s.displayName} — in hand ₹${s.amountInHand.toStringAsFixed(2)}',
+          )
+          .join('\n');
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cannot start shift'),
+          content: Text(
+            'Only one open shift is allowed on this branch.\n\n'
+            'Please ask $names to close their shift first:\n\n'
+            '$details',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final suggestion = suggestedOpening;
     final prefill = suggestion?.amount;
     final amountCtrl = TextEditingController(

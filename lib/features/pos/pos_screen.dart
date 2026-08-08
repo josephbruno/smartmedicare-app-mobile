@@ -53,6 +53,7 @@ class _PosScreenState extends State<PosScreen> {
   CashierCashSession? _cashSession;
   CashierDayStatus? _dayStatus;
   CashierSuggestedOpening? _suggestedOpening;
+  List<CashierOpenBranchSession> _openBranchSessions = const [];
   bool _dayClosed = false;
   bool _loadingCashSession = false;
 
@@ -173,6 +174,7 @@ class _PosScreenState extends State<PosScreen> {
         _dayClosed = current.dayClosed;
         _dayStatus = day;
         _suggestedOpening = current.suggestedOpening;
+        _openBranchSessions = current.openBranchSessions;
       });
     } catch (_) {
       // Keep POS usable if cash-session API is unavailable.
@@ -900,6 +902,7 @@ class _PosScreenState extends State<PosScreen> {
                       dayStatus: _dayStatus,
                       dayClosed: _dayClosed,
                       suggestedOpening: _suggestedOpening,
+                      openBranchSessions: _openBranchSessions,
                       loading: _loadingCashSession,
                       onRefresh: _refreshCashSession,
                       compact: _desktop,

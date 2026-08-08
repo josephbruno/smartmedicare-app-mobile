@@ -109,11 +109,13 @@ if errorlevel 1 (
 
 echo.
 echo Single EXE ready under dist\windows\
-if "%MARAN_SIGN_PFX_PATH%"=="" (
-  echo.
-  echo WARNING: Unsigned installer — SmartScreen will show "Unknown publisher".
-  echo   setx MARAN_SIGN_PFX_PATH "C:\certs\your.pfx"
-  echo   setx MARAN_SIGN_PFX_PASSWORD "your-password"
-  echo   Then rebuild. Temporary workaround: More info -^> Run anyway
-)
+if exist "certs\maran-codesign.pfx" goto signed_ok
+if not "%MARAN_SIGN_PFX_PATH%"=="" goto signed_ok
+echo.
+echo WARNING: Unsigned installer — SmartScreen will show "Unknown publisher".
+echo   powershell -File scripts\create-dev-codesign-cert.ps1
+echo   Or set MARAN_SIGN_PFX_PATH to a CA-issued PFX, then rebuild.
+exit /b 0
+:signed_ok
+echo Signed with project/CA certificate (self-signed still triggers SmartScreen on other PCs).
 exit /b 0
