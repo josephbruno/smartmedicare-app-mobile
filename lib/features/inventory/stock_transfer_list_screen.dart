@@ -92,6 +92,8 @@ class _StockTransferListScreenState extends State<StockTransferListScreen>
           Expanded(
             child: AppPaginatedTable<StockTransfer>(
               key: ValueKey(_direction),
+              headerFontSize: 9,
+              cellFontSize: 12,
               loadPage: ({required page, required perPage}) =>
                   services.inventory.listTransfersPaginated(
                     page: page,

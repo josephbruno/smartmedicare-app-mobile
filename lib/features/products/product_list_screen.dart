@@ -172,6 +172,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
                       _statusFilter != 'all'
                   ? 'No products match your filters.'
                   : 'No products yet. Click New Product to add your first product.',
+              headerFontSize: 9,
+              cellFontSize: 12,
               loadPage: ({required page, required perPage}) =>
                   services.products.listPaginated(
                     page: page,
@@ -240,7 +242,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       );
 
   static Widget _skuCell(BuildContext context, Product p) =>
-      Text(p.sku ?? '—', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13));
+      Text(p.sku ?? '—', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12));
 
   static Widget _categoryCell(BuildContext context, Product p) =>
       Text(p.categoryName ?? '—', style: const TextStyle(color: AppTheme.textSecondary));

@@ -455,12 +455,16 @@ class _PetSpeciesBreedMasterScreenState extends State<PetSpeciesBreedMasterScree
         final item = _species[i];
         final count = item.breedsCount;
         return ListTile(
-          title: Text(item.name),
+          title: Text(
+            item.name,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
           subtitle: Text(
             [
               'Code: ${item.code}',
               if (count != null) '$count breed${count == 1 ? '' : 's'}',
             ].join(' · '),
+            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -499,8 +503,14 @@ class _PetSpeciesBreedMasterScreenState extends State<PetSpeciesBreedMasterScree
       itemBuilder: (ctx, i) {
         final item = _breeds[i];
         return ListTile(
-          title: Text(item.name),
-          subtitle: Text(item.speciesName ?? 'Species #${item.speciesId}'),
+          title: Text(
+            item.name,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            item.speciesName ?? 'Species #${item.speciesId}',
+            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

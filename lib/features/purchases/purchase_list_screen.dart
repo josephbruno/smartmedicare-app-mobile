@@ -46,6 +46,8 @@ class PurchaseListScreen extends StatelessWidget {
               loadPage: ({required page, required perPage}) =>
                   services.purchases.listPaginated(page: page, perPage: perPage),
               onRowTap: (p) => context.go('/purchases/${p.id}'),
+              headerFontSize: 9,
+              cellFontSize: 12,
               columns: const [
                 TableColumnDef(label: 'Purchase #', flex: 1.2, cellBuilder: _numberCell),
                 TableColumnDef(label: 'Supplier', flex: 1.8, cellBuilder: _supplierCell),
@@ -85,24 +87,29 @@ class PurchaseListScreen extends StatelessWidget {
 
   static Widget _numberCell(BuildContext context, Purchase p) => Text(
         p.purchaseNumber,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
       );
 
-  static Widget _supplierCell(BuildContext context, Purchase p) =>
-      Text(p.supplier?.name ?? '—');
+  static Widget _supplierCell(BuildContext context, Purchase p) => Text(
+        p.supplier?.name ?? '—',
+        style: const TextStyle(fontSize: 12),
+      );
 
   static Widget _branchCell(BuildContext context, Purchase p) => Text(
         p.branchName ?? '—',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: AppTheme.textSecondary),
+        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
       );
 
-  static Widget _dateCell(BuildContext context, Purchase p) => Text(p.dateOnly);
+  static Widget _dateCell(BuildContext context, Purchase p) => Text(
+        p.dateOnly,
+        style: const TextStyle(fontSize: 12),
+      );
 
   static Widget _amountCell(BuildContext context, Purchase p) => Text(
         '₹${p.totalAmount.toStringAsFixed(2)}',
-        style: const TextStyle(fontWeight: FontWeight.w700),
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
       );
 
   static Widget _dueCell(BuildContext context, Purchase p) {
@@ -111,7 +118,7 @@ class PurchaseListScreen extends StatelessWidget {
       return const Text(
         '—',
         textAlign: TextAlign.right,
-        style: TextStyle(color: AppTheme.textSecondary),
+        style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
       );
     }
     return Text(
@@ -120,6 +127,7 @@ class PurchaseListScreen extends StatelessWidget {
       style: const TextStyle(
         color: AppTheme.danger,
         fontWeight: FontWeight.w700,
+        fontSize: 12,
       ),
     );
   }

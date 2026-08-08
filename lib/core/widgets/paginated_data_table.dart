@@ -164,8 +164,8 @@ class AppPaginatedTable<T> extends StatefulWidget {
     this.emptyBuilder,
     this.header,
     this.showPerPageSelector = true,
-    this.headerFontSize = 11,
-    this.cellFontSize,
+    this.headerFontSize = 9,
+    this.cellFontSize = 12,
   });
 
   final PaginatedLoad<T> loadPage;
@@ -181,9 +181,9 @@ class AppPaginatedTable<T> extends StatefulWidget {
   final WidgetBuilder? emptyBuilder;
   final Widget? header;
   final bool showPerPageSelector;
-  /// Header label size (default 11).
+  /// Header label size (default 9 — matches invoice list).
   final double headerFontSize;
-  /// When set, wraps each desktop cell in [DefaultTextStyle] at this size.
+  /// Desktop cell text size via [DefaultTextStyle] (default 12 — matches invoice list).
   final double? cellFontSize;
 
   @override
@@ -449,7 +449,7 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
                       DefaultTextStyle(
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
-                          fontSize: 15,
+                          fontSize: 12,
                           color: AppTheme.textPrimary,
                         ),
                         maxLines: 2,
@@ -474,7 +474,15 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
                                 ),
                               ),
                             ),
-                            Expanded(child: column.cellBuilder(context, item)),
+                            Expanded(
+                              child: DefaultTextStyle.merge(
+                                style: TextStyle(
+                                  fontSize: widget.cellFontSize ?? 12,
+                                  color: AppTheme.textPrimary,
+                                ),
+                                child: column.cellBuilder(context, item),
+                              ),
+                            ),
                           ],
                         ),
                       ),

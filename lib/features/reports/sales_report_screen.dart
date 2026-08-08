@@ -191,7 +191,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
 
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -199,14 +199,24 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         children: [
           const Text(
             'Sales Report',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           AppDropdownButton<String>(
             value: _preset == 'custom' ? null : _preset,
-            hint: Text(_preset == 'custom' ? _range.label : 'Period'),
+            isDense: true,
+            style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+            hint: Text(
+              _preset == 'custom' ? _range.label : 'Period',
+              style: const TextStyle(fontSize: 12),
+            ),
             items: ReportDateRange.presetOptions.entries
-                .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                .map(
+                  (e) => DropdownMenuItem(
+                    value: e.key,
+                    child: Text(e.value, style: const TextStyle(fontSize: 12)),
+                  ),
+                )
                 .toList(),
             onChanged: (v) {
               if (v != null) _applyPreset(v);
@@ -214,22 +224,36 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
           ),
           OutlinedButton.icon(
             onPressed: _pickCustomRange,
-            icon: const Icon(Icons.date_range, size: 18),
-            label: Text('${_range.fromYmd} → ${_range.toYmd}'),
+            icon: const Icon(Icons.date_range, size: 15),
+            label: Text(
+              '${_range.fromYmd} → ${_range.toYmd}',
+              style: const TextStyle(fontSize: 12),
+            ),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
           ),
           AppDropdownButton<int?>(
             value: branchValue,
+            isDense: true,
+            style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
             items: _branchOptions
                 .map(
                   (b) => DropdownMenuItem<int?>(
                     value: b.id,
-                    child: Text(b.name),
+                    child: Text(b.name, style: const TextStyle(fontSize: 12)),
                   ),
                 )
                 .toList(),
             onChanged: (v) => setState(() => _selectedBranchId = v),
           ),
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+          IconButton(
+            onPressed: _load,
+            icon: const Icon(Icons.refresh, size: 20),
+            visualDensity: VisualDensity.compact,
+          ),
         ],
       ),
     );
@@ -319,7 +343,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
               child: Text(
                 'Overall · $_scopeLabel',
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textSecondary,
                 ),
@@ -331,7 +355,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
               child: Text(
                 'Branch · $_scopeLabel',
                 style: const TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textSecondary,
                 ),
@@ -406,7 +430,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             trailing: Text(
               _range.label,
               style: const TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.textSecondary,
               ),
@@ -516,9 +540,11 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                     Expanded(
                       child: TextField(
                         controller: _search,
+                        style: const TextStyle(fontSize: 12),
                         decoration: const InputDecoration(
                           hintText: 'Search invoice, customer, branch...',
-                          prefixIcon: Icon(Icons.search),
+                          hintStyle: TextStyle(fontSize: 12),
+                          prefixIcon: Icon(Icons.search, size: 20),
                           isDense: true,
                         ),
                         onChanged: (_) => setState(() {}),
@@ -526,6 +552,10 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                     ),
                     const SizedBox(width: 8),
                     SegmentedButton<String>(
+                      style: const ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
+                      ),
                       segments: const [
                         ButtonSegment(value: 'all', label: Text('All')),
                         ButtonSegment(value: 'paid', label: Text('Paid')),
@@ -636,20 +666,21 @@ class _BranchSummaryTable extends StatelessWidget {
                     flex: 2,
                     child: Text(
                       row.label,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                     ),
                   ),
                   Expanded(
                     child: Text(
                       formatReportCurrency(row.total),
                       textAlign: TextAlign.right,
+                      style: const TextStyle(fontSize: 12),
                     ),
                   ),
                   Expanded(
                     child: Text(
                       formatReportCurrency(row.paid),
                       textAlign: TextAlign.right,
-                      style: const TextStyle(color: AppTheme.accent),
+                      style: const TextStyle(color: AppTheme.accent, fontSize: 12),
                     ),
                   ),
                   Expanded(
@@ -657,6 +688,7 @@ class _BranchSummaryTable extends StatelessWidget {
                       formatReportCurrency(row.due),
                       textAlign: TextAlign.right,
                       style: TextStyle(
+                        fontSize: 12,
                         color: row.due > 0 ? AppTheme.danger : AppTheme.textSecondary,
                       ),
                     ),
@@ -693,9 +725,10 @@ class _ProductTypeSummaryTable extends StatelessWidget {
                   child: Text(
                     'Type',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: AppTheme.textSecondary,
+                      letterSpacing: 0.4,
                     ),
                   ),
                 ),
@@ -704,9 +737,10 @@ class _ProductTypeSummaryTable extends StatelessWidget {
                     'Sales',
                     textAlign: TextAlign.right,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: AppTheme.textSecondary,
+                      letterSpacing: 0.4,
                     ),
                   ),
                 ),
@@ -715,9 +749,10 @@ class _ProductTypeSummaryTable extends StatelessWidget {
                     'Share',
                     textAlign: TextAlign.right,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: AppTheme.textSecondary,
+                      letterSpacing: 0.4,
                     ),
                   ),
                 ),
@@ -734,13 +769,14 @@ class _ProductTypeSummaryTable extends StatelessWidget {
                     flex: 2,
                     child: Text(
                       productTypeLabel(row.key),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                     ),
                   ),
                   Expanded(
                     child: Text(
                       formatReportCurrency(row.value),
                       textAlign: TextAlign.right,
+                      style: const TextStyle(fontSize: 12),
                     ),
                   ),
                   Expanded(
@@ -749,7 +785,7 @@ class _ProductTypeSummaryTable extends StatelessWidget {
                           ? '—'
                           : formatReportPercent((row.value / total) * 100),
                       textAlign: TextAlign.right,
-                      style: const TextStyle(color: AppTheme.textSecondary),
+                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
                     ),
                   ),
                 ],
@@ -777,9 +813,10 @@ class _BranchSummaryHeader extends StatelessWidget {
             child: Text(
               'Branch',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 9,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textSecondary,
+                letterSpacing: 0.4,
               ),
             ),
           ),
@@ -788,9 +825,10 @@ class _BranchSummaryHeader extends StatelessWidget {
               'Sales',
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 9,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textSecondary,
+                letterSpacing: 0.4,
               ),
             ),
           ),
@@ -799,9 +837,10 @@ class _BranchSummaryHeader extends StatelessWidget {
               'Paid',
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 9,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textSecondary,
+                letterSpacing: 0.4,
               ),
             ),
           ),
@@ -810,9 +849,10 @@ class _BranchSummaryHeader extends StatelessWidget {
               'Due',
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 9,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textSecondary,
+                letterSpacing: 0.4,
               ),
             ),
           ),

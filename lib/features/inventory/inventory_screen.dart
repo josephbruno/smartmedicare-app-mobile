@@ -393,6 +393,8 @@ class _InventoryScreenState extends State<InventoryScreen>
                         emptyMessage: hasStockFilters
                             ? 'No products match your filters.'
                             : 'No inventory items for this branch.',
+                        headerFontSize: 9,
+                        cellFontSize: 12,
                         loadPage: ({required page, required perPage}) =>
                             services.inventory.listPaginated(
                               page: page,
@@ -448,6 +450,8 @@ class _InventoryScreenState extends State<InventoryScreen>
                         emptyMessage: hasLogFilters
                             ? 'No adjustment logs match your filters.'
                             : 'No stock adjustments logged yet.',
+                        headerFontSize: 9,
+                        cellFontSize: 12,
                         loadPage: ({required page, required perPage}) =>
                             services.inventory.movementsPaginated(
                               page: page,

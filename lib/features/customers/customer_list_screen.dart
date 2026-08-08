@@ -107,6 +107,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             emptyMessage: search.length > 2
                 ? 'No customers match your search.'
                 : 'No customers found.',
+            headerFontSize: 9,
+            cellFontSize: 12,
             loadPage: ({required page, required perPage}) =>
                 services.customers.listPaginated(
                   page: page,

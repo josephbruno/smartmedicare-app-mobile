@@ -160,13 +160,17 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
               child: const Icon(Icons.warning_amber_rounded,
                   color: AppTheme.warning),
             ),
-            title: Text(p?.name ?? 'Product #${item.productId}'),
+            title: Text(
+              p?.name ?? 'Product #${item.productId}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
             subtitle: Text(
               'Stock ${item.quantity.toStringAsFixed(0)} ≤ reorder $reorder',
+              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
             trailing: Text(
               p?.sku ?? '',
-              style: const TextStyle(color: AppTheme.textSecondary),
+              style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
             ),
             onTap: () => context.push('/products'),
           );
@@ -237,20 +241,27 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
                           backgroundColor: color.withValues(alpha: 0.15),
                           child: Icon(Icons.event_busy, color: color),
                         ),
-                        title: Text(item.name),
-                        subtitle: Text([
-                          if (poLabel != null) poLabel,
-                          if (item.batchNumber != null &&
-                              item.batchNumber!.isNotEmpty)
-                            'Batch ${item.batchNumber}',
-                          if (item.expiryDate != null)
-                            'Exp ${item.expiryDate}',
-                          if (statusLabel.isNotEmpty) statusLabel,
-                        ].where((e) => e.isNotEmpty).join(' · ')),
+                        title: Text(
+                          item.name,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          [
+                            if (poLabel != null) poLabel,
+                            if (item.batchNumber != null &&
+                                item.batchNumber!.isNotEmpty)
+                              'Batch ${item.batchNumber}',
+                            if (item.expiryDate != null)
+                              'Exp ${item.expiryDate}',
+                            if (statusLabel.isNotEmpty) statusLabel,
+                          ].where((e) => e.isNotEmpty).join(' · '),
+                          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                        ),
                         trailing: Text(
                           'Qty ${item.currentStock.toStringAsFixed(0)}',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
+                            fontSize: 12,
                             color: color,
                           ),
                         ),

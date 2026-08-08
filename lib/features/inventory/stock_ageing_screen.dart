@@ -486,7 +486,7 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
         'Product',
         style: TextStyle(
           fontWeight: FontWeight.w700,
-          fontSize: 11,
+          fontSize: 9,
           color: Color(0xFF6B7A96),
           letterSpacing: 0.3,
         ),
@@ -523,7 +523,7 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
               Text(
                 _fmtDay(date),
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.4,
                   color: today ? _todayBorder : const Color(0xFF6B7A96),
@@ -583,7 +583,7 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
               metaParts.join(' '),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10, color: _metaFg, height: 1.2),
+              style: const TextStyle(fontSize: 12, color: _metaFg, height: 1.2),
             ),
         ],
       ),

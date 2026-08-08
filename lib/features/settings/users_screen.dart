@@ -272,7 +272,7 @@ class _UsersScreenState extends State<UsersScreen> {
             style: TextStyle(
               fontWeight: FontWeight.w700,
               color: _roleColor(u.roles.isNotEmpty ? u.roles.first : ''),
-              fontSize: 14,
+              fontSize: 12,
             ),
           ),
         ),
@@ -283,7 +283,7 @@ class _UsersScreenState extends State<UsersScreen> {
             children: [
               Text(
                 u.name,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                 overflow: TextOverflow.ellipsis,
               ),
               Text(
@@ -300,12 +300,12 @@ class _UsersScreenState extends State<UsersScreen> {
 
   static Widget _phoneCell(BuildContext context, User u) => Text(
         u.phone ?? '—',
-        style: const TextStyle(fontSize: 13),
+        style: const TextStyle(fontSize: 12),
       );
 
   static Widget _branchCell(BuildContext context, User u) => Text(
         u.branch?.name ?? 'All branches',
-        style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
         overflow: TextOverflow.ellipsis,
       );
 

@@ -746,7 +746,7 @@ class _TableHeader extends StatelessWidget {
       label,
       textAlign: alignEnd ? TextAlign.right : TextAlign.left,
       style: const TextStyle(
-        fontSize: 11,
+        fontSize: 9,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.4,
         color: AppTheme.textSecondary,
@@ -787,7 +787,7 @@ class _MovementRow extends StatelessWidget {
                   child: Text(
                     movement.type,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.textPrimary,
                     ),
@@ -802,7 +802,7 @@ class _MovementRow extends StatelessWidget {
             child: Text(
               formatReportCurrency(movement.amount),
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: color,
               ),
@@ -813,7 +813,7 @@ class _MovementRow extends StatelessWidget {
             child: Text(
               by,
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 color: AppTheme.textPrimary,
               ),
               overflow: TextOverflow.ellipsis,

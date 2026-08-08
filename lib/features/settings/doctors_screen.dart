@@ -6,6 +6,8 @@ import '../../app_services.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
+import '../../core/widgets/paginated_data_table.dart';
+import '../../core/widgets/table_column_def.dart';
 import '../../data/models/emr.dart';
 
 class DoctorsScreen extends StatefulWidget {
@@ -17,8 +19,8 @@ class DoctorsScreen extends StatefulWidget {
 
 class _DoctorsScreenState extends State<DoctorsScreen> {
   final _search = TextEditingController();
-  List<Doctor> _doctors = [];
-  bool _loading = false;
+  String _appliedSearch = '';
+  int _reloadToken = 0;
 
   static const _weekDays = [
     'Mon',
@@ -30,32 +32,19 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
     'Sun',
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  void _refresh() => setState(() => _reloadToken++);
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    try {
-      final query = <String, dynamic>{};
-      if (_search.text.trim().isNotEmpty) query['search'] = _search.text.trim();
-      final list = await context.read<AppServices>().doctors.list(query: query);
-      if (mounted) setState(() => _doctors = list);
-    } catch (e) {
-      if (mounted) {
-        AppMessenger.show(context, SnackBar(content: Text('$e')));
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+  void _applySearch() {
+    setState(() {
+      _appliedSearch = _search.text.trim();
+      _reloadToken++;
+    });
   }
 
   Future<void> _toggleAvailability(Doctor d) async {
     try {
       await context.read<AppServices>().doctors.toggleAvailability(d.id);
-      _load();
+      _refresh();
     } catch (e) {
       if (mounted) {
         AppMessenger.show(context, SnackBar(content: Text('$e')));
@@ -77,7 +66,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
     if (ok != true || !mounted) return;
     try {
       await context.read<AppServices>().doctors.delete(d.id);
-      _load();
+      _refresh();
     } catch (e) {
       if (mounted) {
         AppMessenger.show(context, SnackBar(content: Text('$e')));
@@ -102,7 +91,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
       );
     }
 
-    if (saved == true && mounted) _load();
+    if (saved == true && mounted) _refresh();
   }
 
   @override
@@ -114,13 +103,14 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
   @override
   Widget build(BuildContext context) {
     final canManage = context.watch<AuthSession>().hasPermission('doctors.manage');
+    final services = context.read<AppServices>();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -131,13 +121,17 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Doctor Management',
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  )),
+                          Text(
+                            'Doctor Management',
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
                           const SizedBox(height: 4),
-                          const Text('Manage doctors and clinic profiles',
-                              style: TextStyle(color: AppTheme.textSecondary)),
+                          const Text(
+                            'Manage doctors and clinic profiles',
+                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                          ),
                         ],
                       ),
                     ),
@@ -162,135 +156,138 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _search,
+                  style: const TextStyle(fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Search name, email, specialty...',
+                    hintStyle: const TextStyle(fontSize: 13),
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.refresh),
-                      onPressed: _load,
+                      onPressed: _refresh,
                     ),
+                    isDense: true,
                   ),
-                  onSubmitted: (_) => _load(),
+                  onSubmitted: (_) => _applySearch(),
                 ),
               ],
             ),
           ),
-          if (_loading) const LinearProgressIndicator(minHeight: 2),
           Expanded(
-            child: RefreshIndicator(
-              onRefresh: _load,
-              child: _doctors.isEmpty
-                  ? ListView(
-                      children: const [
-                        SizedBox(height: 80),
-                        Center(child: Text('No doctors found')),
-                      ],
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _doctors.length,
-                      itemBuilder: (context, i) {
-                        final d = _doctors[i];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    CircleAvatar(
-                                      child: Text(d.name.isNotEmpty
-                                          ? d.name[0].toUpperCase()
-                                          : '?'),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(d.name,
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 16)),
-                                          if (d.specialty != null)
-                                            Text(d.specialty!,
-                                                style: const TextStyle(
-                                                    color: AppTheme.textSecondary)),
-                                          Text(d.email,
-                                              style: const TextStyle(fontSize: 13)),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 4,
-                                  children: [
-                                    if (d.licenseNumber != null)
-                                      Text('License: ${d.licenseNumber}',
-                                          style: const TextStyle(fontSize: 12)),
-                                    if (d.experienceYears != null)
-                                      Text('${d.experienceYears} yrs exp',
-                                          style: const TextStyle(fontSize: 12)),
-                                    if (d.consultationFee != null)
-                                      Text('₹${d.consultationFee}',
-                                          style: const TextStyle(fontSize: 12)),
-                                  ],
-                                ),
-                                if (d.availableDays.isNotEmpty) ...[
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 4,
-                                    children: d.availableDays
-                                        .map((day) => Chip(
-                                              label: Text(day),
-                                              visualDensity: VisualDensity.compact,
-                                            ))
-                                        .toList(),
-                                  ),
-                                ],
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    ActionChip(
-                                      label: Text(d.isAvailable ? 'Available' : 'Unavailable'),
-                                      onPressed: canManage
-                                          ? () => _toggleAvailability(d)
-                                          : null,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Chip(
-                                      label: Text(d.isActive ? 'Active' : 'Inactive'),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    const Spacer(),
-                                    if (canManage) ...[
-                                      TextButton(
-                                        onPressed: () => _openForm(doctor: d),
-                                        child: const Text('Edit'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () => _confirmDelete(d),
-                                        child: const Text('Remove',
-                                            style: TextStyle(color: AppTheme.danger)),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+            child: AppPaginatedTable<Doctor>(
+              key: ValueKey('$_appliedSearch-$_reloadToken'),
+              emptyMessage: _appliedSearch.isNotEmpty
+                  ? 'No doctors match your search.'
+                  : 'No doctors found.',
+              headerFontSize: 9,
+              cellFontSize: 12,
+              loadPage: ({required page, required perPage}) async {
+                final query = <String, dynamic>{};
+                if (_appliedSearch.isNotEmpty) query['search'] = _appliedSearch;
+                final all = await services.doctors.list(query: query);
+                return paginateList(all, page: page, perPage: perPage);
+              },
+              onRowTap: canManage ? (d) => _openForm(doctor: d) : null,
+              columns: [
+                TableColumnDef(label: 'Name', flex: 1.6, cellBuilder: _nameCell),
+                TableColumnDef(label: 'Email', flex: 1.5, cellBuilder: _emailCell),
+                TableColumnDef(label: 'Phone', flex: 1, cellBuilder: _phoneCell),
+                TableColumnDef(
+                  label: 'Available',
+                  flex: 1,
+                  align: TextAlign.center,
+                  cellBuilder: (context, d) => _availabilityCell(context, d, canManage),
+                ),
+                TableColumnDef(
+                  label: 'Status',
+                  flex: 0.8,
+                  align: TextAlign.center,
+                  cellBuilder: _statusCell,
+                ),
+                if (canManage)
+                  TableColumnDef(
+                    label: 'Actions',
+                    flex: 1,
+                    align: TextAlign.center,
+                    cellBuilder: (context, d) => _actionsCell(context, d),
+                  ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  static Widget _nameCell(BuildContext context, Doctor d) => Text(
+        d.name,
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+
+  static Widget _emailCell(BuildContext context, Doctor d) => Text(
+        d.email,
+        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      );
+
+  static Widget _phoneCell(BuildContext context, Doctor d) => Text(
+        d.phone?.isNotEmpty == true ? d.phone! : '—',
+        style: const TextStyle(fontSize: 12),
+      );
+
+  Widget _availabilityCell(BuildContext context, Doctor d, bool canManage) {
+    final color = d.isAvailable ? AppTheme.accent : AppTheme.warning;
+    final label = d.isAvailable ? 'Available' : 'Unavailable';
+    final text = Text(
+      label,
+      style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
+    );
+    if (!canManage) return text;
+    return TextButton(
+      onPressed: () => _toggleAvailability(d),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: text,
+    );
+  }
+
+  static Widget _statusCell(BuildContext context, Doctor d) => Text(
+        d.isActive ? 'Active' : 'Inactive',
+        style: TextStyle(
+          color: d.isActive ? AppTheme.accent : AppTheme.danger,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      );
+
+  Widget _actionsCell(BuildContext context, Doctor d) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextButton(
+          onPressed: () => _openForm(doctor: d),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text('Edit', style: TextStyle(fontSize: 12)),
+        ),
+        TextButton(
+          onPressed: () => _confirmDelete(d),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: const Text('Remove', style: TextStyle(fontSize: 12, color: AppTheme.danger)),
+        ),
+      ],
     );
   }
 }

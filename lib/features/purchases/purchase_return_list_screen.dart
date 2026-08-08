@@ -47,6 +47,8 @@ class PurchaseReturnListScreen extends StatelessWidget {
               loadPage: ({required page, required perPage}) =>
                   services.purchaseReturns.listPaginated(page: page, perPage: perPage),
               onRowTap: (r) => context.go('/purchase-returns/${r.id}'),
+              headerFontSize: 9,
+              cellFontSize: 12,
               columns: const [
                 TableColumnDef(label: 'Return #', flex: 1.2, cellBuilder: _numberCell),
                 TableColumnDef(label: 'Supplier', flex: 1.8, cellBuilder: _supplierCell),
@@ -75,20 +77,25 @@ class PurchaseReturnListScreen extends StatelessWidget {
 
   static Widget _numberCell(BuildContext context, PurchaseReturn r) => Text(
         r.returnNumber,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
       );
 
-  static Widget _supplierCell(BuildContext context, PurchaseReturn r) =>
-      Text(r.supplier?.name ?? '—');
+  static Widget _supplierCell(BuildContext context, PurchaseReturn r) => Text(
+        r.supplier?.name ?? '—',
+        style: const TextStyle(fontSize: 12),
+      );
 
   static Widget _branchCell(BuildContext context, PurchaseReturn r) => Text(
         r.branchName ?? '—',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: AppTheme.textSecondary),
+        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
       );
 
-  static Widget _dateCell(BuildContext context, PurchaseReturn r) => Text(r.dateOnly);
+  static Widget _dateCell(BuildContext context, PurchaseReturn r) => Text(
+        r.dateOnly,
+        style: const TextStyle(fontSize: 12),
+      );
 
   static Widget _reasonCell(BuildContext context, PurchaseReturn r) {
     final color = switch (r.reason.toLowerCase()) {
@@ -104,7 +111,7 @@ class PurchaseReturnListScreen extends StatelessWidget {
 
   static Widget _amountCell(BuildContext context, PurchaseReturn r) => Text(
         '₹${r.totalAmount.toStringAsFixed(2)}',
-        style: const TextStyle(fontWeight: FontWeight.w700),
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
       );
 
   static Widget _statusCell(BuildContext context, PurchaseReturn r) => Text(

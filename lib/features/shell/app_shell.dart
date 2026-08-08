@@ -510,7 +510,7 @@ class _DesktopShellState extends State<_DesktopShell> {
     final bool desktop = AppConfig.usesLargeUiScale;
     double ic(double base) => desktop ? base * AppConfig.desktopIconScale : base;
     // Wider sidebar on desktop to fit larger fonts/icons.
-    final sidebarWidth = _collapsed ? (desktop ? 84.0 : 72.0) : (desktop ? 300.0 : 260.0);
+    final sidebarWidth = _collapsed ? (desktop ? 80.0 : 68.0) : (desktop ? 296.0 : 256.0);
 
     final width = MediaQuery.of(context).size.width;
     final subtitle = widget.location.startsWith('/dashboard')
@@ -539,8 +539,8 @@ class _DesktopShellState extends State<_DesktopShell> {
               children: [
                 Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: _collapsed ? 8 : 20,
-                    vertical: 16,
+                    horizontal: _collapsed ? 8 : 16,
+                    vertical: 12,
                   ),
                   child: _collapsed
                       ? Column(
@@ -566,7 +566,7 @@ class _DesktopShellState extends State<_DesktopShell> {
                             const SizedBox(width: 12),
                             const Expanded(
                               child: Text(
-                                'Maran Billing',
+                                'BI Billing',
                                 style: TextStyle(
                                   fontSize: 17,
                                   fontWeight: FontWeight.w800,
@@ -600,7 +600,7 @@ class _DesktopShellState extends State<_DesktopShell> {
                           child: Text(
                             m.label,
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.6,
                               color: Color(0xFF94A3B8),
@@ -654,7 +654,7 @@ class _DesktopShellState extends State<_DesktopShell> {
                             title: Text(
                                     m.label,
                                     style: TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 13,
                                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                                       color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
                                     ),
@@ -1429,7 +1429,7 @@ class _MobileShellState extends State<_MobileShell> {
                       child: Text(
                         m.label,
                         style: const TextStyle(
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.6,
                           color: Color(0xFF94A3B8),
@@ -1452,7 +1452,7 @@ class _MobileShellState extends State<_MobileShell> {
                       title: Text(
                         m.label,
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                           color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
                         ),

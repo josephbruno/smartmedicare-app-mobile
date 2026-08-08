@@ -150,6 +150,8 @@ class _ExpensesTab extends StatelessWidget {
             key: ValueKey('expenses-$reloadToken'),
             loadPage: ({required page, required perPage}) =>
                 services.expenses.listPaginated(page: page, perPage: perPage),
+            headerFontSize: 9,
+            cellFontSize: 12,
             columns: const [
               TableColumnDef(label: 'Expense #', flex: 1.2, cellBuilder: _numberCell),
               TableColumnDef(label: 'Category', flex: 1.5, cellBuilder: _categoryCell),
@@ -170,23 +172,29 @@ class _ExpensesTab extends StatelessWidget {
 
   static Widget _numberCell(BuildContext context, Expense e) => Text(
         e.expenseNumber,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
       );
 
-  static Widget _categoryCell(BuildContext context, Expense e) =>
-      Text(e.category?.name ?? '—');
+  static Widget _categoryCell(BuildContext context, Expense e) => Text(
+        e.category?.name ?? '—',
+        style: const TextStyle(fontSize: 12),
+      );
 
-  static Widget _dateCell(BuildContext context, Expense e) => Text(e.expenseDate);
+  static Widget _dateCell(BuildContext context, Expense e) => Text(
+        e.expenseDate,
+        style: const TextStyle(fontSize: 12),
+      );
 
   static Widget _descCell(BuildContext context, Expense e) => Text(
         e.description ?? '—',
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 12),
       );
 
   static Widget _amountCell(BuildContext context, Expense e) => Text(
         '₹${e.amount.toStringAsFixed(2)}',
-        style: const TextStyle(fontWeight: FontWeight.w700),
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
       );
 }
 
@@ -408,7 +416,10 @@ class _ExpenseCategoriesTabState extends State<ExpenseCategoriesTab> {
                     itemBuilder: (context, i) {
                       final c = _categories[i];
                       return ListTile(
-                        title: Text(c.name),
+                        title: Text(
+                          c.name,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
                         subtitle: Text(
                           c.expensesCount == 1
                               ? '1 expense'

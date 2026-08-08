@@ -59,7 +59,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     return _dateFmt.format(parsed);
   }
 
-  String _headerDateTime(Invoice inv) {
+  /// Invoice date with time from created_at when available.
+  String _invoiceDateWithTime(Invoice inv) {
     final created = inv.createdAt;
     if (created != null && created.isNotEmpty) {
       final parsed = DateTime.tryParse(created)?.toLocal();
@@ -85,16 +86,6 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     final payments = inv.payments;
     if (payments == null || payments.isEmpty) return null;
     return payments.first;
-  }
-
-  String _customerAddress(Customer? c) {
-    if (c == null) return '';
-    return [
-      if (c.address != null && c.address!.isNotEmpty) c.address!,
-      if (c.city != null && c.city!.isNotEmpty) c.city!,
-      if (c.state != null && c.state!.isNotEmpty) c.state!,
-      if (c.pincode != null && c.pincode!.isNotEmpty) c.pincode!,
-    ].join(', ');
   }
 
   double _taxableAmount(Invoice inv) {
@@ -321,8 +312,6 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               const SizedBox(height: 14),
               _buildSummaryCard(inv),
               const SizedBox(height: 14),
-              _buildCustomerCard(inv),
-              const SizedBox(height: 14),
               _buildItemsCard(items),
               const SizedBox(height: 14),
               _buildNotesAndTotals(inv),
@@ -407,8 +396,12 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     final payment = _primaryPayment(inv);
     final statusColor = _statusColor(inv.status);
     final statusLabel = _statusLabel(inv.status);
+    final customer = inv.customer;
+    final customerName =
+        customer?.name.isNotEmpty == true ? customer!.name : 'Walk-in';
+    final canViewCustomer = customer != null && customer.id > 0;
 
-    final meta = <(String, Widget)>[
+    final leftMeta = <(String, Widget)>[
       ('Invoice No.', Text(inv.displayInvoiceNumber, style: _metaValueStyle)),
       if (inv.isReturnInvoice || inv.againstInvoiceNumber != null)
         (
@@ -426,30 +419,43 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                 )
               : Text(inv.againstInvoiceNumber ?? '—', style: _metaValueStyle),
         ),
-      ('Invoice Date', Text(_prettyDate(inv.invoiceDate), style: _metaValueStyle)),
+      ('Invoice Date', Text(_invoiceDateWithTime(inv), style: _metaValueStyle)),
       if (inv.dueDate != null && inv.dueDate!.isNotEmpty)
         ('Due Date', Text(_prettyDate(inv.dueDate!), style: _metaValueStyle)),
       (
         'Status',
         _statusBadge(statusLabel, statusColor, compact: true),
       ),
-      if (inv.type.isNotEmpty)
-        (
-          'Type',
-          Text(
-            inv.isReturnInvoice ? 'Sale Return' : inv.type.replaceAll('_', ' '),
-            style: _metaValueStyle,
-          ),
+      (
+        'Customer',
+        Row(
+          children: [
+            Flexible(
+              child: Text(
+                customerName,
+                style: _metaValueStyle,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (canViewCustomer) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: 'View customer',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                icon: const Icon(
+                  Icons.visibility_outlined,
+                  size: 18,
+                  color: Color(0xFF2563EB),
+                ),
+                onPressed: () => context.push('/customers/${customer.id}'),
+              ),
+            ],
+          ],
         ),
-      if (inv.hasPayments) ...[
-        (
-          'Payments',
-          Text(
-            inv.paymentBreakdownSummary(modeLabel: paymentModeLabel),
-            style: _metaValueStyle,
-          ),
-        ),
-      ] else if (payment != null) ...[
+      ),
+      if (!inv.hasPayments && payment != null) ...[
         (
           'Payment Method',
           Text(paymentModeLabel(payment.paymentMode), style: _metaValueStyle),
@@ -460,8 +466,19 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
             Text(payment.referenceNumber!, style: _metaValueStyle),
           ),
       ],
+    ];
+
+    final rightMeta = <(String, Widget)>[
       if (inv.branchName.isNotEmpty && inv.branchName != '—')
         ('Branch', Text(inv.branchName, style: _metaValueStyle)),
+      if (inv.hasPayments)
+        (
+          'Payments',
+          Text(
+            inv.paymentBreakdownSummary(modeLabel: paymentModeLabel),
+            style: _metaValueStyle,
+          ),
+        ),
       if (inv.creatorName != '—')
         ('Created by', Text(inv.creatorName, style: _metaValueStyle)),
     ];
@@ -471,171 +488,32 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       decoration: _cardDecoration(),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 720;
-          final left = Row(
+          final twoCol = constraints.maxWidth >= 640 && rightMeta.isNotEmpty;
+          if (!twoCol) {
+            return _metaGrid([...leftMeta, ...rightMeta], columns: 1);
+          }
+          return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFEFF6FF),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.receipt_long_rounded,
-                  color: Color(0xFF2563EB),
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      inv.displayInvoiceNumber,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _headerDateTime(inv),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _statusBadge(statusLabel, statusColor),
-                  ],
-                ),
-              ),
-            ],
-          );
-
-          final right = _metaGrid(meta, columns: wide ? 2 : 1);
-
-          if (wide) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(flex: 5, child: left),
-                const SizedBox(width: 24),
-                Expanded(flex: 6, child: right),
-              ],
-            );
-          }
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              left,
-              const SizedBox(height: 16),
-              const Divider(height: 1, color: Color(0xFFE2E8F0)),
-              const SizedBox(height: 12),
-              right,
+              Expanded(child: _metaGrid(leftMeta, columns: 1)),
+              const SizedBox(width: 24),
+              Expanded(child: _metaGrid(rightMeta, columns: 1)),
             ],
           );
         },
       ),
     );
   }
-
-  Widget _buildCustomerCard(Invoice inv) {
-    final customer = inv.customer;
-    final name = customer?.name.isNotEmpty == true ? customer!.name : 'Walk-in';
-    final phone = customer?.phone;
-    final email = customer?.email;
-    final address = _customerAddress(customer);
-    final canView = customer != null && customer.id > 0;
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: _cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _sectionTitle(Icons.person_outline_rounded, 'Customer Details'),
-          const SizedBox(height: 14),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final stack = constraints.maxWidth < 560;
-              final info = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  if (phone != null && phone.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    _iconText(Icons.phone_outlined, phone),
-                  ],
-                  if (email != null && email.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    _iconText(Icons.mail_outline_rounded, email),
-                  ],
-                  if (address.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    _iconText(Icons.location_on_outlined, address),
-                  ],
-                ],
-              );
-
-              final button = OutlinedButton.icon(
-                onPressed: canView ? () => context.push('/customers/${customer.id}') : null,
-                icon: const Icon(Icons.person_outline_rounded, size: 18),
-                label: const Text('View Customer'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF2563EB),
-                  side: const BorderSide(color: Color(0xFFBFDBFE)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                ),
-              );
-
-              if (stack) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    info,
-                    const SizedBox(height: 14),
-                    Align(alignment: Alignment.centerLeft, child: button),
-                  ],
-                );
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: info),
-                  const SizedBox(width: 16),
-                  button,
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildItemsCard(List<InvoiceItem> items) {
     const headerStyle = TextStyle(
       fontWeight: FontWeight.w700,
-      fontSize: 13,
+      fontSize: 9,
       color: AppTheme.textSecondary,
+      letterSpacing: 0.4,
     );
-    const cellStyle = TextStyle(fontSize: 13.5, color: AppTheme.textPrimary);
+    const cellStyle = TextStyle(fontSize: 12, color: AppTheme.textPrimary);
     const productStyle = TextStyle(
-      fontSize: 13.5,
+      fontSize: 12,
       fontWeight: FontWeight.w600,
       color: AppTheme.textPrimary,
     );
@@ -1285,22 +1163,6 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         Expanded(child: col(left)),
         const SizedBox(width: 16),
         Expanded(child: col(right)),
-      ],
-    );
-  }
-
-  Widget _iconText(IconData icon, String text) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 16, color: AppTheme.textSecondary),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(fontSize: 13.5, color: AppTheme.textPrimary, height: 1.35),
-          ),
-        ),
       ],
     );
   }

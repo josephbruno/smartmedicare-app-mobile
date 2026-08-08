@@ -326,8 +326,16 @@ class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen>
     required VoidCallback onDelete,
   }) {
     return ListTile(
-      title: Text(title),
-      subtitle: (subtitle != null && subtitle.isNotEmpty) ? Text(subtitle) : null,
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+      subtitle: (subtitle != null && subtitle.isNotEmpty)
+          ? Text(
+              subtitle,
+              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+            )
+          : null,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

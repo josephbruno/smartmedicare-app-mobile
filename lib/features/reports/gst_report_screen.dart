@@ -391,7 +391,7 @@ class _GstReportScreenState extends State<GstReportScreen> with SingleTickerProv
                             if ((inv.customer?.gstin ?? '').isNotEmpty)
                               Text(
                                 inv.customer!.gstin!,
-                                style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                               ),
                           ],
                         ),

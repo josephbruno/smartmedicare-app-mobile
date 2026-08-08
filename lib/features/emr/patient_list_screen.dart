@@ -173,6 +173,8 @@ class _PatientListScreenState extends State<PatientListScreen> {
                       _statusFilter != 'all'
                   ? 'No patients match your filters.'
                   : 'No patients found.',
+              headerFontSize: 9,
+              cellFontSize: 12,
               loadPage: ({required page, required perPage}) =>
                   services.emr.listPetsPaginated(
                     page: page,

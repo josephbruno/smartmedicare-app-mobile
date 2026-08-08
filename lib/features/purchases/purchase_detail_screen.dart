@@ -677,18 +677,18 @@ class _PurchaseDetailScreenState extends State<PurchaseDetailScreen> {
 
   Widget _buildItemsTable(List<PurchaseItem> items) {
     const headerStyle = TextStyle(
-      fontSize: 12,
+      fontSize: 9,
       fontWeight: FontWeight.w800,
       color: AppTheme.textSecondary,
-      letterSpacing: 0.2,
+      letterSpacing: 0.4,
     );
     const cellStyle = TextStyle(
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: FontWeight.w500,
       color: AppTheme.textPrimary,
     );
     const productStyle = TextStyle(
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: FontWeight.w700,
       color: AppTheme.textPrimary,
     );

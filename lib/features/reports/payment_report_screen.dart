@@ -186,124 +186,135 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
 
   Widget _buildToolbar() {
     final isSuperAdmin = context.watch<AuthSession>().isSuperAdmin;
+    final branchValue = _selectedBranchId != null &&
+            _branches.any((b) => b.id == _selectedBranchId)
+        ? _selectedBranchId
+        : null;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 12, 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    for (final key in const ['today', 'yesterday', 'week', 'month'])
-                      _PeriodChip(
-                        label: ReportDateRange.preset(key).label,
-                        selected: _preset == key,
-                        onTap: () => _applyPreset(key),
-                      ),
-                    _PeriodChip(
-                      label: _preset == 'custom' ? 'Custom' : 'Custom dates',
-                      selected: _preset == 'custom',
-                      icon: Icons.calendar_month_outlined,
-                      onTap: _pickCustomRange,
-                    ),
-                    if (isSuperAdmin && _branches.isNotEmpty)
-                      SizedBox(
-                        width: 190,
-                        child: AppDropdownButtonFormField<int?>(
-                          value: _selectedBranchId,
-                          isDense: true,
-                          decoration: InputDecoration(
-                            labelText: 'Branch',
-                            isDense: true,
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                            ),
-                          ),
-                          items: [
-                            const DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text('All branches'),
-                            ),
-                            ..._branches.map(
-                              (b) => DropdownMenuItem<int?>(
-                                value: b.id,
-                                child: Text(b.name, overflow: TextOverflow.ellipsis),
-                              ),
-                            ),
-                          ],
-                          onChanged: (v) {
-                            setState(() => _selectedBranchId = v);
-                            _load();
-                          },
-                        ),
-                      ),
-                  ],
+          SizedBox(
+            width: 180,
+            child: AppDropdownButtonFormField<String>(
+              value: _preset == 'custom' ? null : _preset,
+              isDense: true,
+              decoration: _filterDecoration('Period'),
+              hint: Text(_preset == 'custom' ? 'Custom dates' : 'Period'),
+              items: [
+                ...ReportDateRange.presetOptions.entries.map(
+                  (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: _loading ? null : _load,
-                icon: _loading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh),
-              ),
-            ],
+                const DropdownMenuItem(
+                  value: 'custom',
+                  child: Text('Custom dates'),
+                ),
+              ],
+              onChanged: (v) {
+                if (v == null) return;
+                if (v == 'custom') {
+                  _pickCustomRange();
+                } else {
+                  _applyPreset(v);
+                }
+              },
+            ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFBFDBFE)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.schedule, size: 14, color: Color(0xFF2563EB)),
-                    const SizedBox(width: 6),
-                    Text(
-                      _range.label,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF2563EB),
-                      ),
+          if (_preset == 'custom') ...[
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: _pickCustomRange,
+              icon: const Icon(Icons.date_range, size: 18),
+              label: Text('${_range.fromYmd} → ${_range.toYmd}'),
+            ),
+          ],
+          if (isSuperAdmin && _branches.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 200,
+              child: AppDropdownButtonFormField<int?>(
+                value: branchValue,
+                isDense: true,
+                decoration: _filterDecoration('Branch'),
+                items: [
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('All branches'),
+                  ),
+                  ..._branches.map(
+                    (b) => DropdownMenuItem<int?>(
+                      value: b.id,
+                      child: Text(b.name, overflow: TextOverflow.ellipsis),
                     ),
-                  ],
-                ),
+                  ),
+                ],
+                onChanged: (v) {
+                  setState(() => _selectedBranchId = v);
+                  _load();
+                },
               ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  _rangeLabel,
-                  style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                  overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFBFDBFE)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.schedule, size: 14, color: Color(0xFF2563EB)),
+                const SizedBox(width: 6),
+                Text(
+                  _range.label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF2563EB),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            _rangeLabel,
+            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _loading ? null : _load,
+            icon: _loading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
           ),
         ],
+      ),
+    );
+  }
+
+  InputDecoration _filterDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
     );
   }
@@ -526,61 +537,6 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
                 ],
               ],
             ),
-    );
-  }
-}
-
-class _PeriodChip extends StatelessWidget {
-  const _PeriodChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.icon,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected ? const Color(0xFF93C5FD) : const Color(0xFFE2E8F0),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (selected) ...[
-                const Icon(Icons.check, size: 14, color: Color(0xFF2563EB)),
-                const SizedBox(width: 4),
-              ] else if (icon != null) ...[
-                Icon(icon, size: 14, color: AppTheme.textSecondary),
-                const SizedBox(width: 4),
-              ],
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected ? const Color(0xFF1D4ED8) : AppTheme.textPrimary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

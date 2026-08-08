@@ -179,6 +179,8 @@ class _VisitListScreenState extends State<VisitListScreen> {
                 onQuickVisit: () => showQuickVisitSheet(context),
                 onNewVisit: () => context.push('/emr/visits/new'),
               ),
+              headerFontSize: 9,
+              cellFontSize: 12,
               loadPage: ({required page, required perPage}) =>
                   services.emr.listVisitsPaginated(
                     page: page,
