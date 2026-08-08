@@ -5,17 +5,10 @@ import 'package:provider/provider.dart';
 
 import '../../../app_services.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/app_dropdown.dart';
 import '../../../core/widgets/app_form_dialog.dart';
 import '../../../data/models/customer.dart';
-
-const _speciesOptions = <({String value, String label})>[
-  (value: 'dog', label: 'Dog'),
-  (value: 'cat', label: 'Cat'),
-  (value: 'bird', label: 'Bird'),
-  (value: 'fish', label: 'Fish'),
-  (value: 'rabbit', label: 'Rabbit'),
-  (value: 'other', label: 'Other'),
-];
+import '../../../data/services/customer_service.dart';
 
 /// Shows Add/Edit Pet dialog (desktop/web) or bottom sheet (mobile).
 /// Returns `true` when saved successfully.
@@ -48,13 +41,13 @@ Future<bool> showPetFormSheet(
 class _PetFormController {
   _PetFormController({Pet? pet}) {
     name = TextEditingController(text: pet?.name ?? '');
-    breed = TextEditingController(text: pet?.breed ?? '');
     weight = TextEditingController(
       text: pet?.weight != null ? _formatWeight(pet!.weight!) : '',
     );
     color = TextEditingController(text: pet?.color ?? '');
-    final species = pet?.species;
-    this.species = _speciesOptions.any((o) => o.value == species) ? species : null;
+    final species = pet?.species?.trim();
+    this.species = (species != null && species.isNotEmpty) ? species : null;
+    breed = pet?.breed?.trim().isNotEmpty == true ? pet!.breed!.trim() : null;
     gender = (pet?.gender.isNotEmpty == true) ? pet!.gender : 'male';
     if (pet?.dob != null && pet!.dob!.isNotEmpty) {
       dob = DateTime.tryParse(pet.dob!);
@@ -62,22 +55,95 @@ class _PetFormController {
   }
 
   late final TextEditingController name;
-  late final TextEditingController breed;
   late final TextEditingController weight;
   late final TextEditingController color;
   String? species;
+  String? breed;
   late String gender;
   DateTime? dob;
 
+  List<PetSpecies> speciesOptions = const [];
+  List<PetBreed> breedOptions = const [];
+  bool loadingSpecies = false;
+  bool loadingBreeds = false;
+  String? speciesError;
+  String? breedError;
+
   void dispose() {
     name.dispose();
-    breed.dispose();
     weight.dispose();
     color.dispose();
   }
 
   static String _formatWeight(double w) {
     return w == w.roundToDouble() ? w.toInt().toString() : w.toString();
+  }
+
+  Future<void> loadSpecies(CustomerService customers) async {
+    loadingSpecies = true;
+    speciesError = null;
+    try {
+      final items = await customers.listPetSpecies();
+      speciesOptions = items;
+      if (species != null &&
+          species!.isNotEmpty &&
+          !speciesOptions.any((s) => s.code == species)) {
+        speciesOptions = [
+          ...speciesOptions,
+          PetSpecies(id: -1, code: species!, name: _titleCase(species!)),
+        ];
+      }
+    } catch (e) {
+      speciesError = '$e';
+      speciesOptions = const [];
+    } finally {
+      loadingSpecies = false;
+    }
+  }
+
+  Future<void> loadBreeds(
+    CustomerService customers, {
+    bool clearBreedIfMissing = true,
+  }) async {
+    final selected = species;
+    if (selected == null || selected.isEmpty) {
+      breedOptions = const [];
+      breed = null;
+      loadingBreeds = false;
+      breedError = null;
+      return;
+    }
+
+    loadingBreeds = true;
+    breedError = null;
+    try {
+      final items = await customers.listPetBreeds(species: selected);
+      breedOptions = items;
+      final currentBreed = breed;
+      if (currentBreed != null && currentBreed.isNotEmpty) {
+        final exists = breedOptions.any((b) => b.name == currentBreed);
+        if (!exists) {
+          if (clearBreedIfMissing) {
+            breed = null;
+          } else {
+            breedOptions = [
+              ...breedOptions,
+              PetBreed(id: -1, speciesId: 0, name: currentBreed),
+            ];
+          }
+        }
+      }
+    } catch (e) {
+      breedError = '$e';
+      breedOptions = const [];
+    } finally {
+      loadingBreeds = false;
+    }
+  }
+
+  static String _titleCase(String value) {
+    if (value.isEmpty) return value;
+    return value[0].toUpperCase() + value.substring(1);
   }
 
   Map<String, dynamic>? buildPayload(BuildContext context) {
@@ -100,7 +166,7 @@ class _PetFormController {
     return {
       'name': trimmedName,
       'species': species,
-      'breed': breed.text.trim().isEmpty ? null : breed.text.trim(),
+      'breed': breed?.trim().isEmpty == true ? null : breed?.trim(),
       'gender': gender,
       'dob': dob?.toIso8601String().substring(0, 10),
       'weight': weightValue,
@@ -129,11 +195,13 @@ class _PetFormFields extends StatelessWidget {
   const _PetFormFields({
     required this.controller,
     required this.onChanged,
+    required this.onSpeciesChanged,
     this.twoColumn = false,
   });
 
   final _PetFormController controller;
   final VoidCallback onChanged;
+  final ValueChanged<String?> onSpeciesChanged;
   final bool twoColumn;
 
   Future<void> _pickDob(BuildContext context) async {
@@ -160,53 +228,85 @@ class _PetFormFields extends StatelessWidget {
       decoration: _fieldDecoration('Name *', hint: 'Pet name'),
     );
 
-    final speciesLabel = _speciesOptions
-        .where((o) => o.value == controller.species)
-        .map((o) => o.label)
-        .firstOrNull;
+    final speciesValue = controller.speciesOptions.any((s) => s.code == controller.species)
+        ? controller.species
+        : null;
 
-    final speciesField = SizedBox(
-      width: double.infinity,
-      child: PopupMenuButton<String>(
-        tooltip: 'Select species',
-        offset: const Offset(0, 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        onSelected: (v) {
-          controller.species = v;
-          onChanged();
-        },
-        itemBuilder: (ctx) => [
-          for (final o in _speciesOptions)
-            CheckedPopupMenuItem(
-              value: o.value,
-              checked: controller.species == o.value,
-              child: Text(o.label),
-            ),
-        ],
-        child: InputDecorator(
-          decoration: _fieldDecoration(
-            'Species',
-            hint: 'Select species',
-            suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded),
-          ),
-          child: Text(
-            speciesLabel ?? 'Select species',
-            style: TextStyle(
-              color: speciesLabel != null
-                  ? AppTheme.textPrimary
-                  : AppTheme.textSecondary,
-              fontSize: 14,
-            ),
-          ),
-        ),
+    final speciesField = AppDropdownButtonFormField<String>(
+      value: speciesValue,
+      hint: Text(
+        controller.loadingSpecies ? 'Loading species...' : 'Select species',
       ),
+      decoration: _fieldDecoration(
+        'Species',
+        hint: 'Select species',
+        suffixIcon: controller.loadingSpecies
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : null,
+      ),
+      items: [
+        for (final s in controller.speciesOptions)
+          DropdownMenuItem<String>(
+            value: s.code,
+            child: Text(s.name),
+          ),
+      ],
+      onChanged: controller.loadingSpecies
+          ? null
+          : (v) {
+              onSpeciesChanged(v);
+            },
     );
 
-    final breedField = TextField(
-      controller: controller.breed,
-      textCapitalization: TextCapitalization.words,
-      textInputAction: TextInputAction.next,
-      decoration: _fieldDecoration('Breed', hint: 'e.g. Labrador'),
+    final breedValue = controller.breedOptions.any((b) => b.name == controller.breed)
+        ? controller.breed
+        : null;
+    final breedEnabled =
+        controller.species != null && !controller.loadingBreeds && !controller.loadingSpecies;
+
+    final breedField = AppDropdownButtonFormField<String>(
+      value: breedValue,
+      hint: Text(
+        controller.species == null
+            ? 'Select species first'
+            : controller.loadingBreeds
+                ? 'Loading breeds...'
+                : 'Select breed',
+      ),
+      decoration: _fieldDecoration(
+        'Breed',
+        hint: 'Select breed',
+        suffixIcon: controller.loadingBreeds
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : null,
+      ),
+      items: [
+        for (final b in controller.breedOptions)
+          DropdownMenuItem<String>(
+            value: b.name,
+            child: Text(b.name),
+          ),
+      ],
+      onChanged: breedEnabled
+          ? (v) {
+              controller.breed = v;
+              onChanged();
+            }
+          : null,
     );
 
     final genderField = Column(
@@ -308,10 +408,22 @@ class _PetFormFields extends StatelessWidget {
       decoration: _fieldDecoration('Color', hint: 'e.g. Brown'),
     );
 
+    final lookupError = controller.speciesError ?? controller.breedError;
+    final errorBanner = lookupError == null
+        ? const SizedBox.shrink()
+        : Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              lookupError,
+              style: const TextStyle(color: AppTheme.danger, fontSize: 12),
+            ),
+          );
+
     if (!twoColumn) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          errorBanner,
           nameField,
           const SizedBox(height: 16),
           speciesField,
@@ -332,6 +444,7 @@ class _PetFormFields extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        errorBanner,
         nameField,
         const SizedBox(height: 16),
         Row(
@@ -497,6 +610,36 @@ class _PetFormFooter extends StatelessWidget {
   }
 }
 
+mixin _PetFormLookupMixin<T extends StatefulWidget> on State<T> {
+  late final _PetFormController form;
+
+  Future<void> loadLookups({bool preserveBreed = true}) async {
+    final customers = context.read<AppServices>().customers;
+    setState(() => form.loadingSpecies = true);
+    await form.loadSpecies(customers);
+    if (!mounted) return;
+    setState(() {});
+    if (form.species != null) {
+      await form.loadBreeds(
+        customers,
+        clearBreedIfMissing: !preserveBreed,
+      );
+      if (!mounted) return;
+      setState(() {});
+    }
+  }
+
+  Future<void> onSpeciesChanged(String? code) async {
+    form.species = code;
+    form.breed = null;
+    setState(() {});
+    final customers = context.read<AppServices>().customers;
+    await form.loadBreeds(customers, clearBreedIfMissing: true);
+    if (!mounted) return;
+    setState(() {});
+  }
+}
+
 // ─── Desktop / web dialog ───────────────────────────────────────────────────
 
 class _PetFormDialog extends StatefulWidget {
@@ -509,8 +652,8 @@ class _PetFormDialog extends StatefulWidget {
   State<_PetFormDialog> createState() => _PetFormDialogState();
 }
 
-class _PetFormDialogState extends State<_PetFormDialog> {
-  late final _PetFormController _form;
+class _PetFormDialogState extends State<_PetFormDialog>
+    with _PetFormLookupMixin<_PetFormDialog> {
   bool _saving = false;
 
   bool get _isEdit => widget.pet != null;
@@ -518,17 +661,20 @@ class _PetFormDialogState extends State<_PetFormDialog> {
   @override
   void initState() {
     super.initState();
-    _form = _PetFormController(pet: widget.pet);
+    form = _PetFormController(pet: widget.pet);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      loadLookups(preserveBreed: _isEdit);
+    });
   }
 
   @override
   void dispose() {
-    _form.dispose();
+    form.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    final payload = _form.buildPayload(context);
+    final payload = form.buildPayload(context);
     if (payload == null) return;
 
     setState(() => _saving = true);
@@ -581,9 +727,10 @@ class _PetFormDialogState extends State<_PetFormDialog> {
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                   child: _PetFormFields(
-                    controller: _form,
+                    controller: form,
                     twoColumn: true,
                     onChanged: () => setState(() {}),
+                    onSpeciesChanged: onSpeciesChanged,
                   ),
                 ),
               ),
@@ -613,8 +760,8 @@ class _PetFormBottomSheet extends StatefulWidget {
   State<_PetFormBottomSheet> createState() => _PetFormBottomSheetState();
 }
 
-class _PetFormBottomSheetState extends State<_PetFormBottomSheet> {
-  late final _PetFormController _form;
+class _PetFormBottomSheetState extends State<_PetFormBottomSheet>
+    with _PetFormLookupMixin<_PetFormBottomSheet> {
   bool _saving = false;
 
   bool get _isEdit => widget.pet != null;
@@ -622,17 +769,20 @@ class _PetFormBottomSheetState extends State<_PetFormBottomSheet> {
   @override
   void initState() {
     super.initState();
-    _form = _PetFormController(pet: widget.pet);
+    form = _PetFormController(pet: widget.pet);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      loadLookups(preserveBreed: _isEdit);
+    });
   }
 
   @override
   void dispose() {
-    _form.dispose();
+    form.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    final payload = _form.buildPayload(context);
+    final payload = form.buildPayload(context);
     if (payload == null) return;
 
     setState(() => _saving = true);
@@ -686,8 +836,9 @@ class _PetFormBottomSheetState extends State<_PetFormBottomSheet> {
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                       child: _PetFormFields(
-                        controller: _form,
+                        controller: form,
                         onChanged: () => setState(() {}),
+                        onSpeciesChanged: onSpeciesChanged,
                       ),
                     ),
                   ),

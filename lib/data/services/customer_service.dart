@@ -107,6 +107,40 @@ class CustomerService {
     }
   }
 
+  Future<List<PetSpecies>> listPetSpecies({String? search}) async {
+    try {
+      final res = await _client.get('/pet-species', queryParameters: {
+        if (search != null && search.isNotEmpty) 'search': search,
+      });
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, PetSpecies.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<PetBreed>> listPetBreeds({
+    int? speciesId,
+    String? species,
+    String? search,
+  }) async {
+    try {
+      final res = await _client.get('/pet-breeds', queryParameters: {
+        if (speciesId != null) 'species_id': speciesId,
+        if (species != null && species.isNotEmpty) 'species': species,
+        if (search != null && search.isNotEmpty) 'search': search,
+      });
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, PetBreed.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
   Future<({List<AdvanceTransaction> items, double advanceBalance})>
       listAdvances(int customerId, {int page = 1}) async {
     try {

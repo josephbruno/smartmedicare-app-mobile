@@ -39,6 +39,42 @@ class Pet {
       );
 }
 
+class PetSpecies {
+  PetSpecies({
+    required this.id,
+    required this.code,
+    required this.name,
+  });
+
+  final int id;
+  final String code;
+  final String name;
+
+  factory PetSpecies.fromJson(Map<String, dynamic> j) => PetSpecies(
+        id: intOrNull(j['id']) ?? 0,
+        code: j['code']?.toString() ?? '',
+        name: j['name']?.toString() ?? '',
+      );
+}
+
+class PetBreed {
+  PetBreed({
+    required this.id,
+    required this.speciesId,
+    required this.name,
+  });
+
+  final int id;
+  final int speciesId;
+  final String name;
+
+  factory PetBreed.fromJson(Map<String, dynamic> j) => PetBreed(
+        id: intOrNull(j['id']) ?? 0,
+        speciesId: intOrNull(j['species_id']) ?? 0,
+        name: j['name']?.toString() ?? '',
+      );
+}
+
 class Customer {
   Customer({
     required this.id,
