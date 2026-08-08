@@ -462,6 +462,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       ],
       if (inv.branchName.isNotEmpty && inv.branchName != '—')
         ('Branch', Text(inv.branchName, style: _metaValueStyle)),
+      if (inv.creatorName != '—')
+        ('Created by', Text(inv.creatorName, style: _metaValueStyle)),
     ];
 
     return Container(

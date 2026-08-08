@@ -78,7 +78,7 @@ class DayCloseReportPdf {
               if (branchName != null && branchName.isNotEmpty) 'Branch: $branchName',
               report.isClosed ? 'Status: CLOSED' : 'Status: OPEN / IN PROGRESS',
               if (closedBy != null) 'Closed by: $closedBy',
-              if (closedAt != null) 'Closed at: $closedAt',
+              if (closedAt != null) 'Closed at: ${formatReportDateTime(closedAt)}',
             ].join('  ·  '),
             style: const pw.TextStyle(fontSize: 10, color: _muted),
           ),
@@ -216,7 +216,7 @@ class DayCloseReportPdf {
       data: movements
           .map(
             (m) => [
-              m.createdAt ?? '—',
+              formatReportDateTime(m.createdAt),
               m.userName ?? 'User #${m.userId}',
               m.type,
               formatReportCurrency(m.amount),

@@ -301,6 +301,8 @@ class Invoice {
     this.items,
     this.payments,
     this.createdAt,
+    this.createdById,
+    this.createdByName,
     this.returnOfInvoiceId,
     this.originalInvoice,
     this.returns = const [],
@@ -335,6 +337,8 @@ class Invoice {
   final List<InvoiceItem>? items;
   final List<InvoicePayment>? payments;
   final String? createdAt;
+  final int? createdById;
+  final String? createdByName;
   final int? returnOfInvoiceId;
   final InvoiceReturnSummary? originalInvoice;
   final List<InvoiceReturnSummary> returns;
@@ -371,6 +375,13 @@ class Invoice {
   }
 
   String get branchName => branch?.name ?? '—';
+
+  String get creatorName {
+    final name = createdByName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    if (createdById != null && createdById! > 0) return 'User #$createdById';
+    return '—';
+  }
 
   bool get isPaid => status == 'paid';
   bool get isUnpaid => status == 'partial' || status == 'confirmed' || status == 'draft';
@@ -543,6 +554,10 @@ class Invoice {
       items: items,
       payments: payments,
       createdAt: j['created_at']?.toString(),
+      createdById: intOrNull(j['created_by']) ??
+          intOrNull(mapOrNull(j['created_by_user'])?['id']),
+      createdByName: j['created_by_name']?.toString() ??
+          mapOrNull(j['created_by_user'])?['name']?.toString(),
       returnOfInvoiceId: intOrNull(j['return_of_invoice_id']) ?? originalInvoice?.id,
       originalInvoice: originalInvoice,
       returns: returns,
