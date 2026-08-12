@@ -86,6 +86,7 @@ class ProductDatasheetRow {
     this.purchasePrice,
     this.sellingPrice,
     this.mrp,
+    this.stockQty,
     this.gstRate,
     this.gstType,
     this.reorderLevel,
@@ -121,6 +122,7 @@ class ProductDatasheetRow {
   double? purchasePrice;
   double? sellingPrice;
   double? mrp;
+  double? stockQty;
   double? gstRate;
   String? gstType;
   double? reorderLevel;
@@ -163,6 +165,7 @@ class ProductDatasheetRow {
       purchasePrice: numOrNull(j['purchase_price'])?.toDouble(),
       sellingPrice: numOrNull(j['selling_price'])?.toDouble(),
       mrp: numOrNull(j['mrp'])?.toDouble(),
+      stockQty: numOrNull(j['stock_qty'])?.toDouble(),
       gstRate: numOrNull(j['gst_rate'])?.toDouble(),
       gstType: j['gst_type']?.toString(),
       reorderLevel: numOrNull(j['reorder_level'])?.toDouble(),
@@ -197,6 +200,7 @@ class ProductDatasheetRow {
     purchasePrice = other.purchasePrice;
     sellingPrice = other.sellingPrice;
     mrp = other.mrp;
+    stockQty = other.stockQty;
     gstRate = other.gstRate;
     gstType = other.gstType;
     reorderLevel = other.reorderLevel;
@@ -231,6 +235,7 @@ class ProductDatasheetRow {
       'purchase_price': purchasePrice,
       'selling_price': sellingPrice,
       'mrp': mrp,
+      'stock_qty': stockQty,
       'gst_rate': gstRate,
       'gst_type': gstType,
       'reorder_level': reorderLevel,
