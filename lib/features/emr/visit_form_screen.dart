@@ -10,10 +10,12 @@ import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/models/emr.dart';
-import '../../data/models/product.dart';
 import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/app_form_dialog.dart';
+import '../../data/models/emr.dart';
+import '../../data/models/product.dart';
+import '../../data/services/emr_master_data_service.dart';
+
 class VisitFormScreen extends StatefulWidget {
   const VisitFormScreen({super.key, this.visitId, this.appointmentId, this.petId});
 
@@ -76,6 +78,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   PetSummary? _petSummary;
   int? _serviceChargeProductId;
   String? _serviceChargeProductName;
+  Timer? _complaintLearnDebounce;
+  Timer? _observationLearnDebounce;
+  Timer? _investigationLearnDebounce;
+  Timer? _diagnosisLearnDebounce;
+
+  static const int _emrLearnMinChars = 6;
+  static const Duration _emrLearnDebounce = Duration(milliseconds: 450);
 
   String _visitType = 'consultation';
   DateTime _visitDate = DateTime.now();
@@ -325,6 +334,106 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           );
       _rememberDiagnosis(name);
     } catch (_) {}
+  }
+
+  /// Typing: learn only when term is longer than [_emrLearnMinChars].
+  /// Enter (`force: true`): learn any unknown non-empty term.
+  void _scheduleLearnComplaint(String raw, {required bool force}) {
+    final term = raw.trim();
+    if (term.isEmpty || _isKnownComplaint(term)) return;
+    if (!force && term.length <= _emrLearnMinChars) return;
+
+    _complaintLearnDebounce?.cancel();
+    if (force) {
+      _rememberComplaint(term);
+      unawaited(_persistNewComplaint(term));
+      return;
+    }
+    _complaintLearnDebounce = Timer(_emrLearnDebounce, () {
+      if (!mounted) return;
+      final current = _complaintSearchTerm(_complaint.text).trim();
+      if (current != term) return;
+      if (_isKnownComplaint(term) || term.length <= _emrLearnMinChars) return;
+      unawaited(_persistNewComplaint(term));
+    });
+  }
+
+  void _scheduleLearnObservation(String raw, {required bool force}) {
+    final term = raw.trim();
+    if (term.isEmpty || _isKnownObservation(term)) return;
+    if (!force && term.length <= _emrLearnMinChars) return;
+
+    _observationLearnDebounce?.cancel();
+    if (force) {
+      unawaited(_persistNewObservation(term));
+      return;
+    }
+    _observationLearnDebounce = Timer(_emrLearnDebounce, () {
+      if (!mounted) return;
+      final current = _observationInput.text.trim();
+      if (current != term) return;
+      if (_isKnownObservation(term) || term.length <= _emrLearnMinChars) return;
+      unawaited(_persistNewObservation(term));
+    });
+  }
+
+  void _scheduleLearnInvestigation(String raw, {required bool force}) {
+    final term = raw.trim();
+    if (term.isEmpty || _isKnownInvestigation(term)) return;
+    if (!force && term.length <= _emrLearnMinChars) return;
+
+    _investigationLearnDebounce?.cancel();
+    if (force) {
+      unawaited(_persistNewInvestigation(term));
+      return;
+    }
+    _investigationLearnDebounce = Timer(_emrLearnDebounce, () {
+      if (!mounted) return;
+      final current = _investigationInput.text.trim();
+      if (current != term) return;
+      if (_isKnownInvestigation(term) || term.length <= _emrLearnMinChars) return;
+      unawaited(_persistNewInvestigation(term));
+    });
+  }
+
+  void _scheduleLearnDiagnosis(String raw, {required bool force}) {
+    final term = raw.trim();
+    if (term.isEmpty || _isKnownDiagnosis(term)) return;
+    if (!force && term.length <= _emrLearnMinChars) return;
+
+    _diagnosisLearnDebounce?.cancel();
+    if (force) {
+      unawaited(_persistNewDiagnosis(term));
+      return;
+    }
+    _diagnosisLearnDebounce = Timer(_emrLearnDebounce, () {
+      if (!mounted) return;
+      final current = _diagnosisInput.text.trim();
+      if (current != term) return;
+      if (_isKnownDiagnosis(term) || term.length <= _emrLearnMinChars) return;
+      unawaited(_persistNewDiagnosis(term));
+    });
+  }
+
+  void _onComplaintChanged(String text) {
+    _searchComplaints(text);
+    _scheduleLearnComplaint(_complaintSearchTerm(text), force: false);
+  }
+
+  void _onObservationChanged(String text) {
+    _searchObservations(text);
+    _scheduleLearnObservation(text, force: false);
+  }
+
+  void _onInvestigationChanged(String text) {
+    _searchInvestigations(text);
+    _scheduleLearnInvestigation(text, force: false);
+  }
+
+  void _onDiagnosisChanged(String text) {
+    setState(() {});
+    _searchDiagnoses(text);
+    _scheduleLearnDiagnosis(text, force: false);
   }
 
   /// Persist any free-typed terms from the current form into EMR templates.
@@ -871,10 +980,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ? q
           : '${text.substring(0, lastComma + 1).trimRight()} $q';
       _setComplaintText('$committed, ');
-      if (!_isKnownComplaint(q)) {
-        _rememberComplaint(q);
-        unawaited(_persistNewComplaint(q));
-      }
+      // Enter: always check and save unknown terms (any length).
+      _scheduleLearnComplaint(q, force: true);
     }
     setState(() {});
     _searchComplaints('');
@@ -975,7 +1082,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (isNew) _rememberObservation(trimmed);
       _observationSuggestions = List.of(_defaultObservationSuggestions);
     });
-    if (isNew) _persistNewObservation(trimmed);
+    // Enter: always check and save unknown terms.
+    if (isNew) _scheduleLearnObservation(trimmed, force: true);
     if (keepFocus) _observationFocus.requestFocus();
   }
 
@@ -1019,7 +1127,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (isNew) _rememberInvestigation(trimmed);
       _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
     });
-    if (isNew) _persistNewInvestigation(trimmed);
+    if (isNew) _scheduleLearnInvestigation(trimmed, force: true);
     if (keepFocus) _investigationFocus.requestFocus();
   }
 
@@ -1087,7 +1195,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (isNew) _rememberDiagnosis(trimmed);
       _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions);
     });
-    if (isNew) _persistNewDiagnosis(trimmed);
+    if (isNew) _scheduleLearnDiagnosis(trimmed, force: true);
     if (keepFocus) _diagnosisFocus.requestFocus();
   }
 
@@ -1280,6 +1388,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   @override
   void dispose() {
+    _complaintLearnDebounce?.cancel();
+    _observationLearnDebounce?.cancel();
+    _investigationLearnDebounce?.cancel();
+    _diagnosisLearnDebounce?.cancel();
     _complaint.dispose();
     _clinicalNotes.dispose();
     _observationInput.dispose();
@@ -1553,7 +1665,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               decoration: const InputDecoration(
                 hintText: 'Type to search or add complaints...',
               ),
-              onChanged: _searchComplaints,
+              onChanged: _onComplaintChanged,
               onSubmitted: _commitComplaintTerm,
             ),
           ),
@@ -1798,7 +1910,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 input: _observationInput,
                 focus: _observationFocus,
                 suggestions: _observationSuggestions,
-                onChanged: _searchObservations,
+                onChanged: _onObservationChanged,
                 onSubmitted: _addObservation,
                 onSuggestionTap: _selectObservationSuggestion,
                 onDelete: (item) => setState(() => _observations.remove(item)),
@@ -1812,7 +1924,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 input: _investigationInput,
                 focus: _investigationFocus,
                 suggestions: _investigationSuggestions,
-                onChanged: _searchInvestigations,
+                onChanged: _onInvestigationChanged,
                 onSubmitted: _addInvestigation,
                 onSuggestionTap: _selectInvestigationSuggestion,
                 onDelete: (item) => setState(() => _investigations.remove(item)),
@@ -1891,10 +2003,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                               ),
                               hintText: _diagnoses.isEmpty ? null : 'Add another…',
                             ),
-                            onChanged: (v) {
-                              setState(() {});
-                              _searchDiagnoses(v);
-                            },
+                            onChanged: _onDiagnosisChanged,
                             onSubmitted: _addDiagnosis,
                           ),
                         ],

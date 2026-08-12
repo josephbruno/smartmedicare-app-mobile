@@ -3,10 +3,11 @@ import 'package:dio/dio.dart';
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
 import '../models/api_response.dart';
+import '../models/dashboard_data.dart';
 import '../models/payment_report.dart';
 import '../models/report_data.dart';
-import '../models/dashboard_data.dart';
 import '../models/stock_transfer.dart';
+import '../models/visit_report.dart';
 
 class StockTransferReportSummary {
   StockTransferReportSummary({
@@ -149,6 +150,39 @@ class ReportsService {
         meta: map['meta'] is Map
             ? PaginationMeta.fromJson(Map<String, dynamic>.from(map['meta'] as Map))
             : null,
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  /// Super Admin only — doctor visit & treatment report (visit records).
+  Future<VisitReportData> visits({
+    required String dateFrom,
+    required String dateTo,
+    int? branchId,
+    int? doctorId,
+    String? status,
+    String? visitType,
+    String groupBy = 'day',
+  }) async {
+    try {
+      final res = await _client.get(
+        '/reports/visits',
+        queryParameters: {
+          'date_from': dateFrom,
+          'date_to': dateTo,
+          'group_by': groupBy,
+          if (branchId != null) 'branch_id': branchId,
+          if (doctorId != null) 'doctor_id': doctorId,
+          if (status != null && status.isNotEmpty && status != 'all') 'status': status,
+          if (visitType != null && visitType.isNotEmpty && visitType != 'all')
+            'visit_type': visitType,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => VisitReportData.fromJson(Map<String, dynamic>.from(data as Map)),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);

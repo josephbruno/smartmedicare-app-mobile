@@ -59,6 +59,7 @@ import '../../features/reports/day_close_report_screen.dart';
 import '../../features/reports/payment_report_screen.dart';
 import '../../features/reports/sales_report_screen.dart';
 import '../../features/reports/stock_transfer_report_screen.dart';
+import '../../features/reports/visit_report_screen.dart';
 import '../../features/settings/account_security_screen.dart';
 import '../../features/settings/branches_screen.dart';
 import '../../features/settings/catalog_master_data_screen.dart';
@@ -615,6 +616,15 @@ GoRouter createAppRouter({
               permission: AppPermissions.reportsView,
               additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
               child: const StockTransferReportScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/reports/visits',
+            name: 'VisitReport',
+            builder: (c, s) => PermissionGuard(
+              permission: AppPermissions.reportsView,
+              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
+              child: const VisitReportScreen(),
             ),
           ),
           GoRoute(

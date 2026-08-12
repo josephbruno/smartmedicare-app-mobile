@@ -1049,8 +1049,10 @@ List<_MenuItem> _menuItems(AuthSession auth) {
       _MenuItem(label: 'Payment Report', icon: Icons.account_balance_wallet_outlined, path: '/reports/payments'),
       _MenuItem(label: 'Sales Report', icon: Icons.bar_chart_outlined, path: '/reports/sales'),
     ],
-    if (auth.isSuperAdmin && can('reports.view'))
+    if (auth.isSuperAdmin && can('reports.view')) ...[
       _MenuItem(label: 'Stock Transfer Report', icon: Icons.swap_horiz_outlined, path: '/reports/stock-transfers'),
+      _MenuItem(label: 'Visit Report', icon: Icons.medical_services_outlined, path: '/reports/visits'),
+    ],
     if (can('cashier.day_close'))
       _MenuItem(label: 'Day Close Report', icon: Icons.summarize_outlined, path: '/reports/day-close'),
   ]);
@@ -1109,6 +1111,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/reports/sales')) return 'Sales Report';
   if (path.startsWith('/reports/gst')) return 'GST Report';
   if (path.startsWith('/reports/stock-transfers')) return 'Stock Transfer Report';
+  if (path.startsWith('/reports/visits')) return 'Visit Report';
   if (path.startsWith('/reports/day-close')) return 'Day Close Report';
   if (path.startsWith('/settings/doctors')) return 'Doctors';
   if (path.startsWith('/settings/catalog')) return 'Catalog';
