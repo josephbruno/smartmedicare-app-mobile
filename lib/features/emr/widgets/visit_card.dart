@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/emr.dart';
+
+final _visitCardDateFormat = DateFormat('dd-MM-yyyy');
+
+String _formatVisitCardDate(String raw) {
+  if (raw.isEmpty) return '—';
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) return raw;
+  return _visitCardDateFormat.format(parsed);
+}
 
 class VisitRecordCard extends StatelessWidget {
   const VisitRecordCard({
@@ -124,7 +134,7 @@ class VisitRecordCard extends StatelessWidget {
                                   _DetailField(
                                     icon: Icons.calendar_today_outlined,
                                     label: 'Date',
-                                    value: visit.visitDate,
+                                    value: _formatVisitCardDate(visit.visitDate),
                                   ),
                                 ],
                               ),

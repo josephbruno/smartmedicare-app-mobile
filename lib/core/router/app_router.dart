@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../session/auth_session.dart';
 import '../services/permission_service.dart';
+import '../update/windows_update_gate.dart';
 import '../widgets/permission_guard.dart';
 import '../app_config.dart';
 import '../../features/auth/cashier_desktop_only_screen.dart';
@@ -221,15 +222,22 @@ GoRouter createAppRouter({
     '/cashier-desktop-only',
   };
 
+  final updateGate = WindowsUpdateGate.instance;
+
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    refreshListenable: auth,
+    refreshListenable: Listenable.merge([auth, updateGate]),
     initialLocation: '/splash',
     errorBuilder: (context, state) => const NotFoundScreen(),
     redirect: (context, state) {
       final loc = state.matchedLocation;
       final session = auth.hasStoredSession;
       final unlocked = auth.isUnlocked;
+
+      // Hold on splash while update prompt/download is active.
+      if (updateGate.holdsSplash && loc != '/splash') {
+        return '/splash';
+      }
 
       // Keep the branded splash visible for its full duration.
       if (loc == '/splash') return null;

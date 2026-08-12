@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/update/windows_update_gate.dart';
+
 /// Full-screen branded video shown once at cold start, before login / PIN.
 class VideoSplashScreen extends StatefulWidget {
   const VideoSplashScreen({super.key});
@@ -43,18 +45,26 @@ class _VideoSplashScreenState extends State<VideoSplashScreen> {
       setState(() => _ready = true);
     } catch (e, st) {
       debugPrint('Splash video failed: $e\n$st');
-      _finish();
+      unawaited(_finish());
       return;
     }
 
-    _timer = Timer(VideoSplashScreen.displayDuration, _finish);
+    _timer = Timer(VideoSplashScreen.displayDuration, () {
+      unawaited(_finish());
+    });
   }
 
-  void _finish() {
+  Future<void> _finish() async {
     if (_finished || !mounted) return;
     _finished = true;
     _timer?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+    // Stay on splash while an update alert/download is active so navigation
+    // does not dismiss the dialog and skip the download.
+    await WindowsUpdateGate.instance.waitIfHeld();
+    if (!mounted) return;
+
     // Hand off to `/` so existing auth redirect picks landing vs PIN.
     context.go('/');
   }

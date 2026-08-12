@@ -89,10 +89,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               ),
               if (canCreate) ...[
                 const SizedBox(width: 12),
-                FilledButton.icon(
+                FilledButton(
                   onPressed: _openCreateCustomer,
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Add Customer'),
+                  child: const Text('Add Customer'),
                 ),
               ],
             ],

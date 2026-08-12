@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
@@ -12,6 +13,15 @@ import '../../core/widgets/table_column_def.dart';
 import '../../data/models/emr.dart';
 import 'quick_visit_sheet.dart';
 import 'widgets/visit_card.dart';
+
+final _visitDateDisplay = DateFormat('dd-MM-yyyy');
+
+String _formatVisitDate(String raw) {
+  if (raw.isEmpty) return '—';
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) return raw;
+  return _visitDateDisplay.format(parsed);
+}
 
 class VisitListScreen extends StatefulWidget {
   const VisitListScreen({super.key});
@@ -154,11 +164,10 @@ class _VisitListScreenState extends State<VisitListScreen> {
                         ),
                       ],
                       const SizedBox(width: 8),
-                      FilledButton.icon(
+                      FilledButton(
                         onPressed: () => context.push('/emr/visits/new'),
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('New visit'),
                         style: _visitFilledButtonStyle,
+                        child: const Text('New visit'),
                       ),
                     ],
                   ],
@@ -218,7 +227,7 @@ class _VisitListScreenState extends State<VisitListScreen> {
                 TableColumnDef(
                   label: 'Date',
                   flex: 1,
-                  cellBuilder: (c, v) => Text(v.visitDate),
+                  cellBuilder: (c, v) => Text(_formatVisitDate(v.visitDate)),
                 ),
                 TableColumnDef(
                   label: 'Type',
@@ -327,11 +336,10 @@ class _VisitEmptyState extends StatelessWidget {
                   label: const Text('Quick visit'),
                   style: _visitOutlinedButtonStyle,
                 ),
-                FilledButton.icon(
+                FilledButton(
                   onPressed: onNewVisit,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('New visit'),
                   style: _visitFilledButtonStyle,
+                  child: const Text('New visit'),
                 ),
               ],
             ),

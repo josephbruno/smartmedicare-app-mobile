@@ -39,9 +39,11 @@ class EmrService {
     }
   }
 
-  Future<List<DoctorLite>> listDoctors() async {
+  Future<List<DoctorLite>> listDoctors({bool? available}) async {
     try {
-      final res = await _client.get('/doctors', queryParameters: {'available': true});
+      final query = <String, dynamic>{};
+      if (available != null) query['available'] = available;
+      final res = await _client.get('/doctors', queryParameters: query);
       return parseEnvelopeData(res, (data) => listFromData(data, DoctorLite.fromJson));
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);

@@ -16,6 +16,7 @@ import 'core/notifications/push_notification_service.dart';
 import 'core/notifications/visit_billing_poll_service.dart';
 import 'core/connectivity/offline_sync_listener.dart';
 import 'core/update/update_flow.dart';
+import 'core/update/windows_update_gate.dart';
 import 'data/local/customer_local_dao.dart';
 import 'data/local/customer_sync_service.dart';
 import 'data/local/offline_billing_coordinator.dart';
@@ -182,10 +183,17 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
         builder: (context, child) {
           if (!_windowsUpdateStarted) {
             _windowsUpdateStarted = true;
+            // Hold splash immediately so a fast splash finish cannot race
+            // ahead of the post-frame update check.
+            if (shouldRunWindowsUpdateFlow()) {
+              WindowsUpdateGate.instance.acquire();
+            }
             WidgetsBinding.instance.addPostFrameCallback((_) {
               final navCtx = _rootKey.currentContext;
               if (navCtx != null) {
                 unawaited(runWindowsUpdateFlow(navCtx));
+              } else {
+                WindowsUpdateGate.instance.release();
               }
             });
           }

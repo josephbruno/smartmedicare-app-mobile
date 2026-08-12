@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
@@ -27,11 +29,20 @@ class _PatientListScreenState extends State<PatientListScreen> {
   String? _genderFilter;
   String _statusFilter = 'all';
   int _reloadToken = 0;
+  Timer? _searchDebounce;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _search.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String _) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() {});
+    });
   }
 
   bool? get _isActiveFilter {
@@ -86,10 +97,7 @@ class _PatientListScreenState extends State<PatientListScreen> {
                       isDense: true,
                     ),
                     textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => setState(() {}),
-                    onChanged: (_) {
-                      if (_search.text.trim().isEmpty) setState(() {});
-                    },
+                    onChanged: _onSearchChanged,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -145,17 +153,11 @@ class _PatientListScreenState extends State<PatientListScreen> {
                     },
                   ),
                 ),
-                const SizedBox(width: 10),
-                FilledButton(
-                  onPressed: () => setState(() {}),
-                  child: const Text('Search'),
-                ),
                 if (canCreate) ...[
                   const SizedBox(width: 10),
-                  FilledButton.icon(
+                  FilledButton(
                     onPressed: _addPatient,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('New Patient'),
+                    child: const Text('New Patient'),
                   ),
                 ],
               ],

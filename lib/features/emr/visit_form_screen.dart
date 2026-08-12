@@ -97,7 +97,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   // UI uses °F; API stores °C (30–45). Convert on load/save.
   static final List<double> _temperatureOptions = [
-    for (var t = 860; t <= 1130; t++) t / 10.0, // 86.0–113.0 °F
+    for (var t = 990; t <= 1060; t += 5) t / 10.0, // 99.0–106.0 °F by 0.5
   ];
 
   static double _fahrenheitToCelsius(double f) =>
@@ -115,7 +115,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   ];
 
   static final List<int> _respiratoryRateOptions = [
-    for (var r = 8; r <= 80; r++) r,
+    for (var r = 20; r <= 80; r++) r,
   ];
 
   double _nearestDouble(double value, List<double> options) {
@@ -317,6 +317,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     final auth = context.read<AuthSession>();
 
     try {
+      // Include unavailable doctors so the logged-in doctor still appears.
       _doctors = _uniqueDoctors(await emr.listDoctors());
       _complaintSuggestions = await emr.getComplaints();
       _defaultObservationSuggestions = await emr.getObservations();
@@ -329,12 +330,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       _defaultMedicineSuggestions = await emr.getMedicineSuggestions();
       _frequencySuggestions = await emr.getFrequencySuggestions();
 
-      if (auth.hasRole('doctor') && auth.user != null) {
-        final me = _doctors.where((d) => d.id == auth.user!.id).firstOrNull ??
-            DoctorLite(id: auth.user!.id, name: auth.user!.name);
-        _setSelectedDoctor(me);
-      }
-
       if (_isEdit) {
         final visit = await emr.getVisit(widget.visitId!);
         _applyVisit(visit);
@@ -345,8 +340,16 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         await _prefillFromPetId(widget.petId!);
       }
 
-      if (!_isEdit) {
-        _applyDoctorServiceChargeDefaults();
+      // Doctor account: always use that login's name (not other doctors).
+      // Admin / branch manager: hide Doctor field entirely.
+      if (_isAdminSession(auth)) {
+        _doctors = [];
+        _selectedDoctor = null;
+      } else {
+        _lockDoctorToLoggedInUser(auth);
+        if (!_isEdit) {
+          _applyDoctorServiceChargeDefaults();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -450,6 +453,42 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void _setSelectedDoctor(DoctorLite? doctor) {
     _selectedDoctor = doctor;
     if (doctor != null) _ensureDoctorInList(doctor);
+  }
+
+  /// Doctor logins: Doctor field is that user only (not the full doctor list).
+  void _lockDoctorToLoggedInUser(AuthSession auth) {
+    final user = auth.user;
+    if (user == null || !auth.hasRole(AppRoles.doctor)) return;
+    if (_isAdminSession(auth)) return;
+
+    final fromList = _doctors.where((d) => d.id == user.id).firstOrNull;
+    final doctor = fromList ??
+        DoctorLite(
+          id: user.id,
+          name: user.name.trim().isNotEmpty ? user.name : 'Doctor #${user.id}',
+        );
+    _doctors = [doctor];
+    _selectedDoctor = doctor;
+  }
+
+  bool _isAdminSession(AuthSession auth) =>
+      auth.hasRole(AppRoles.superAdmin) || auth.hasRole(AppRoles.branchManager);
+
+  /// Hide Doctor for admin; doctor logins see only their own name; staff get the list.
+  bool get _showDoctorField {
+    final auth = context.read<AuthSession>();
+    if (_isAdminSession(auth)) return false;
+    return _doctors.isNotEmpty || _selectedDoctor != null;
+  }
+
+  bool get _doctorLockedToLogin {
+    final auth = context.read<AuthSession>();
+    final user = auth.user;
+    if (_isAdminSession(auth)) return false;
+    return auth.hasRole(AppRoles.doctor) &&
+        user != null &&
+        _selectedDoctor?.id == user.id &&
+        _doctors.length == 1;
   }
 
   /// Dropdown requires exactly one matching item; fall back to null otherwise.
@@ -1301,21 +1340,29 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 decoration: InputDecoration(
                   labelText: 'Service charge (₹)',
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.inventory_2_outlined, size: 22),
-                    tooltip: 'Link service product (for GST)',
+                    icon: Icon(
+                      Icons.inventory_2_outlined,
+                      size: 22,
+                      color: _serviceChargeProductId != null
+                          ? AppTheme.accent
+                          : null,
+                    ),
+                    tooltip: _serviceChargeProductId != null
+                        ? 'Change service product'
+                        : 'Link service product (for GST)',
                     onPressed: () async {
                       final p = await _pickProduct(
                         type: 'service',
                         allowCreateService: true,
-                        initial: _serviceChargeProductName ?? 'consultation',
                       );
                       if (p != null) {
                         setState(() {
                           _serviceChargeProductId = p.id;
                           _serviceChargeProductName = p.name;
-                          if (_serviceCharge.text.trim().isEmpty) {
-                            _serviceCharge.text = p.sellingPrice.toString();
-                          }
+                          _serviceCharge.text = p.sellingPrice ==
+                                  p.sellingPrice.roundToDouble()
+                              ? p.sellingPrice.toInt().toString()
+                              : p.sellingPrice.toString();
                         });
                       }
                     },
@@ -1424,42 +1471,58 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               ),
             ),
           ],
-          if (_doctors.isNotEmpty) ...[
+          if (_showDoctorField) ...[
             const SizedBox(height: 12),
-            AppDropdownButtonFormField<int?>(
-              value: _doctorDropdownValue,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Doctor'),
-              selectedItemBuilder: (context) => [
-                const Text('— None —', overflow: TextOverflow.ellipsis, maxLines: 1),
-                ..._doctors.map(
-                  (d) => Text(
-                    d.displayLabel,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
+            if (_doctorLockedToLogin)
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Doctor',
+                  suffixIcon: Icon(Icons.lock_outline, size: 18),
+                ),
+                child: Text(
+                  _selectedDoctor?.name ?? '',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
-              ],
-              items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('— None —')),
-                ..._doctors.map(
-                  (d) => DropdownMenuItem<int?>(
-                    value: d.id,
-                    child: Text(
+              )
+            else
+              AppDropdownButtonFormField<int?>(
+                value: _doctorDropdownValue,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Doctor'),
+                selectedItemBuilder: (context) => [
+                  const Text('— None —', overflow: TextOverflow.ellipsis, maxLines: 1),
+                  ..._doctors.map(
+                    (d) => Text(
                       d.displayLabel,
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                     ),
                   ),
-                ),
-              ],
-              onChanged: (id) => setState(() {
-                _selectedDoctor = id == null
-                    ? null
-                    : _doctors.where((d) => d.id == id).firstOrNull;
-                _applyDoctorServiceChargeDefaults();
-              }),
-            ),
+                ],
+                items: [
+                  const DropdownMenuItem<int?>(value: null, child: Text('— None —')),
+                  ..._doctors.map(
+                    (d) => DropdownMenuItem<int?>(
+                      value: d.id,
+                      child: Text(
+                        d.displayLabel,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: (id) => setState(() {
+                  _selectedDoctor = id == null
+                      ? null
+                      : _doctors.where((d) => d.id == id).firstOrNull;
+                  _applyDoctorServiceChargeDefaults();
+                }),
+              ),
           ],
           const SizedBox(height: 16),
           Text('Chief complaint',
@@ -1992,7 +2055,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                               : 'Link / add service product',
                           onPressed: () async {
                             final p = await _pickProduct(
-                              initial: t.nameCtrl.text,
                               type: 'service',
                               allowCreateService: true,
                             );

@@ -10,6 +10,65 @@ import '../../../core/widgets/app_form_dialog.dart';
 import '../../../data/models/customer.dart';
 import '../../../data/services/customer_service.dart';
 
+/// Fallback breed lists when the API catalog is empty / not yet seeded.
+const Map<String, List<String>> _fallbackBreedsBySpecies = {
+  'dog': [
+    'German Shepherd',
+    'Beagle',
+    'Indie',
+    'Spitz',
+    'Labrador Retriever',
+    'Shih Tzu',
+    'Lhasa Apso',
+    'Golden Retriever',
+    'Dachshund',
+    'Pug',
+    'Rottweiler',
+    'Doberman',
+  ],
+  'cat': [
+    'Persian',
+    'Siamese',
+    'Maine Coon',
+    'British Shorthair',
+    'Indie',
+    'Bengal',
+    'Ragdoll',
+    'Sphynx',
+    'Scottish Fold',
+    'American Shorthair',
+    'Other',
+  ],
+  'bird': [
+    'Budgerigar',
+    'Cockatiel',
+    'Lovebird',
+    'African Grey',
+    'Macaw',
+    'Canary',
+    'Parrot',
+    'Finch',
+    'Other',
+  ],
+  'fish': [
+    'Goldfish',
+    'Betta',
+    'Guppy',
+    'Molly',
+    'Angelfish',
+    'Other',
+  ],
+  'rabbit': [
+    'Dutch',
+    'Holland Lop',
+    'Netherland Dwarf',
+    'Rex',
+    'Angora',
+    'Other',
+  ],
+  'other': ['Other'],
+};
+
 /// Shows Add/Edit Pet dialog (desktop/web) or bottom sheet (mobile).
 /// Returns `true` when saved successfully.
 Future<bool> showPetFormSheet(
@@ -117,7 +176,16 @@ class _PetFormController {
     loadingBreeds = true;
     breedError = null;
     try {
-      final items = await customers.listPetBreeds(species: selected);
+      final fallback = _fallbackBreedsBySpecies[selected];
+      List<PetBreed> items;
+      if (fallback != null) {
+        items = [
+          for (var i = 0; i < fallback.length; i++)
+            PetBreed(id: -(i + 1), speciesId: 0, name: fallback[i]),
+        ];
+      } else {
+        items = await customers.listPetBreeds(species: selected);
+      }
       breedOptions = items;
       final currentBreed = breed;
       if (currentBreed != null && currentBreed.isNotEmpty) {
@@ -134,8 +202,17 @@ class _PetFormController {
         }
       }
     } catch (e) {
-      breedError = '$e';
-      breedOptions = const [];
+      final fallback = _fallbackBreedsBySpecies[selected] ?? const <String>[];
+      if (fallback.isNotEmpty) {
+        breedOptions = [
+          for (var i = 0; i < fallback.length; i++)
+            PetBreed(id: -(i + 1), speciesId: 0, name: fallback[i]),
+        ];
+        breedError = null;
+      } else {
+        breedError = '$e';
+        breedOptions = const [];
+      }
     } finally {
       loadingBreeds = false;
     }
@@ -186,9 +263,9 @@ InputDecoration _fieldDecoration(String label, {Widget? suffixIcon, String? hint
 
 String _formatDob(DateTime? date) {
   if (date == null) return '';
-  final m = date.month.toString().padLeft(2, '0');
   final d = date.day.toString().padLeft(2, '0');
-  return '${date.year}-$m-$d';
+  final m = date.month.toString().padLeft(2, '0');
+  return '$d-$m-${date.year}';
 }
 
 class _PetFormFields extends StatelessWidget {
@@ -278,7 +355,9 @@ class _PetFormFields extends StatelessWidget {
             ? 'Select species first'
             : controller.loadingBreeds
                 ? 'Loading breeds...'
-                : 'Select breed',
+                : controller.breedOptions.isEmpty
+                    ? 'No breeds for this species'
+                    : 'Select breed',
       ),
       decoration: _fieldDecoration(
         'Breed',
@@ -358,7 +437,7 @@ class _PetFormFields extends StatelessWidget {
       child: InputDecorator(
         decoration: _fieldDecoration(
           'Date of birth',
-          hint: 'YYYY-MM-DD',
+          hint: 'dd-mm-yyyy',
           suffixIcon: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -380,7 +459,7 @@ class _PetFormFields extends StatelessWidget {
           ),
         ),
         child: Text(
-          dobText.isEmpty ? 'YYYY-MM-DD' : dobText,
+          dobText.isEmpty ? 'dd-mm-yyyy' : dobText,
           style: TextStyle(
             color: dobText.isEmpty
                 ? AppTheme.textSecondary

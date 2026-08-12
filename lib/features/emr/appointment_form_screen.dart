@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/services/permission_service.dart';
+import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
 import '../../core/widgets/app_dropdown.dart';
@@ -55,11 +57,33 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
 
   Future<void> _bootstrap() async {
     setState(() => _loading = true);
+    final auth = context.read<AuthSession>();
     try {
-      _doctors = await context.read<AppServices>().emr.listDoctors();
+      final isAdmin =
+          auth.hasRole(AppRoles.superAdmin) || auth.hasRole(AppRoles.branchManager);
+
       if (_isEdit) {
-        final appt = await context.read<AppServices>().emr.getAppointment(widget.appointmentId!);
+        final appt =
+            await context.read<AppServices>().emr.getAppointment(widget.appointmentId!);
         _applyAppointment(appt);
+      }
+
+      if (isAdmin) {
+        _doctors = [];
+        _selectedDoctor = null;
+      } else {
+        _doctors = await context.read<AppServices>().emr.listDoctors();
+        final user = auth.user;
+        if (user != null && auth.hasRole(AppRoles.doctor)) {
+          final fromList = _doctors.where((d) => d.id == user.id).firstOrNull;
+          final me = fromList ??
+              DoctorLite(
+                id: user.id,
+                name: user.name.trim().isNotEmpty ? user.name : 'Doctor #${user.id}',
+              );
+          _doctors = [me];
+          _selectedDoctor = me;
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -247,44 +271,72 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
             ),
           ],
           const SizedBox(height: 12),
-          if (_doctors.isNotEmpty)
-            AppDropdownButtonFormField<int>(
-              value: _selectedDoctor?.id,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Doctor'),
-              selectedItemBuilder: (context) => [
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('— None —', overflow: TextOverflow.ellipsis, maxLines: 1),
-                ),
-                ..._doctors.map(
-                  (d) => Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      d.displayLabel,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+          if (_doctors.isNotEmpty || _selectedDoctor != null)
+            Builder(
+              builder: (context) {
+                final auth = context.watch<AuthSession>();
+                final isAdmin = auth.hasRole(AppRoles.superAdmin) ||
+                    auth.hasRole(AppRoles.branchManager);
+                if (isAdmin) return const SizedBox.shrink();
+                final locked = auth.hasRole(AppRoles.doctor) &&
+                    auth.user != null &&
+                    _selectedDoctor?.id == auth.user!.id &&
+                    _doctors.length == 1;
+                if (locked) {
+                  return InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Doctor',
+                      suffixIcon: Icon(Icons.lock_outline, size: 18),
                     ),
-                  ),
-                ),
-              ],
-              items: [
-                const DropdownMenuItem(value: null, child: Text('— None —')),
-                ..._doctors.map(
-                  (d) => DropdownMenuItem(
-                    value: d.id,
                     child: Text(
-                      d.displayLabel,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+                      _selectedDoctor?.name ?? '',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textPrimary,
+                      ),
                     ),
-                  ),
-                ),
-              ],
-              onChanged: (id) => setState(() {
-                _selectedDoctor =
-                    id == null ? null : _doctors.firstWhere((d) => d.id == id);
-              }),
+                  );
+                }
+                return AppDropdownButtonFormField<int>(
+                  value: _selectedDoctor?.id,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Doctor'),
+                  selectedItemBuilder: (context) => [
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('— None —', overflow: TextOverflow.ellipsis, maxLines: 1),
+                    ),
+                    ..._doctors.map(
+                      (d) => Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          d.displayLabel,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ),
+                  ],
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('— None —')),
+                    ..._doctors.map(
+                      (d) => DropdownMenuItem(
+                        value: d.id,
+                        child: Text(
+                          d.displayLabel,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (id) => setState(() {
+                    _selectedDoctor =
+                        id == null ? null : _doctors.firstWhere((d) => d.id == id);
+                  }),
+                );
+              },
             ),
           const SizedBox(height: 12),
           Row(

@@ -8,51 +8,70 @@ import '../app_config.dart';
 import '../messaging/app_messenger.dart';
 import 'update_models.dart';
 import 'update_service.dart';
+import 'windows_update_gate.dart';
+
+/// Whether cold-start Windows update check runs on this build/platform.
+bool shouldRunWindowsUpdateFlow() {
+  if (kIsWeb || !Platform.isWindows) return false;
+  if (kDebugMode) return false;
+  if (!AppConfig.enableWindowsAutoUpdate) return false;
+  return UpdateService().isSupported;
+}
 
 /// Runs Windows update check + UI after the first frame.
+///
+/// While an update prompt or download is active, [WindowsUpdateGate] blocks
+/// splash from navigating to login/dashboard so the download is not skipped.
 Future<void> runWindowsUpdateFlow(BuildContext context) async {
-  if (kIsWeb || !Platform.isWindows) return;
-  if (kDebugMode) return; // release / profile builds only
-  if (!AppConfig.enableWindowsAutoUpdate) return;
-
-  final service = UpdateService();
-  if (!service.isSupported) return;
-
-  final prev = await service.consumeLastResult();
-  if (prev != null && context.mounted) {
-    final ok = prev['ok'] == true;
-    final msg = prev['message']?.toString() ??
-        (ok ? 'Application updated successfully.' : 'Previous update failed.');
-    if (ok) {
-      AppMessenger.success(context, msg);
-    } else {
-      AppMessenger.error(context, msg);
-    }
-  }
-
-  UpdateCheckResult check;
-  try {
-    check = await service.checkForUpdate();
-  } catch (_) {
-    // Soft-fail on optional network issues at startup.
+  if (!shouldRunWindowsUpdateFlow()) {
+    WindowsUpdateGate.instance.release();
     return;
   }
 
-  if (!check.updateAvailable) return;
-  if (check.package == null) return;
-  if (!context.mounted) return;
+  final service = UpdateService();
+  final gate = WindowsUpdateGate.instance;
+  gate.acquire();
+  try {
+    final prev = await service.consumeLastResult();
+    if (prev != null && context.mounted) {
+      final ok = prev['ok'] == true;
+      final msg = prev['message']?.toString() ??
+          (ok ? 'Application updated successfully.' : 'Previous update failed.');
+      if (ok) {
+        AppMessenger.success(context, msg);
+      } else {
+        AppMessenger.error(context, msg);
+      }
+    }
 
-  final bool? proceed;
-  if (check.mandatory) {
-    proceed = await _showMandatoryDialog(context, check);
-  } else {
-    proceed = await _showOptionalDialog(context, check);
+    UpdateCheckResult check;
+    try {
+      check = await service.checkForUpdate();
+    } catch (_) {
+      // Soft-fail on optional network issues at startup.
+      return;
+    }
+
+    if (!check.updateAvailable) return;
+    if (check.package == null) return;
+    if (!context.mounted) return;
+
+    final bool? proceed;
+    if (check.mandatory) {
+      proceed = await _showMandatoryDialog(context, check);
+    } else {
+      proceed = await _showOptionalDialog(context, check);
+    }
+
+    if (proceed != true) return;
+    if (!context.mounted) return;
+
+    // Stay blocking through download / app exit.
+    await _downloadAndInstall(context, service, check);
+  } finally {
+    // If the app is exiting for install, this is a no-op for navigation.
+    gate.release();
   }
-
-  if (proceed != true) return;
-  if (!context.mounted) return;
-
-  await _downloadAndInstall(context, service, check);
 }
 
 Future<bool?> _showOptionalDialog(BuildContext context, UpdateCheckResult check) {
@@ -61,19 +80,23 @@ Future<bool?> _showOptionalDialog(BuildContext context, UpdateCheckResult check)
       : 'A new version of Maran Billing is available.';
   return showDialog<bool>(
     context: context,
-    barrierDismissible: true,
-    builder: (ctx) => AlertDialog(
-      title: Text('Update available (v${check.version})'),
-      content: Text(
-        '$notes\n\n'
-        'If the app is installed under Program Files, Windows may ask for '
-        'permission (UAC) — click Yes.\n'
-        'If installed under AppData (recommended), no admin permission is needed.',
+    useRootNavigator: true,
+    barrierDismissible: false,
+    builder: (ctx) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: Text('Update available (v${check.version})'),
+        content: Text(
+          '$notes\n\n'
+          'If the app is installed under Program Files, Windows may ask for '
+          'permission (UAC) — click Yes.\n'
+          'If installed under AppData (recommended), no admin permission is needed.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Update now')),
+        ],
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Update now')),
-      ],
     ),
   );
 }
@@ -81,6 +104,7 @@ Future<bool?> _showOptionalDialog(BuildContext context, UpdateCheckResult check)
 Future<bool?> _showMandatoryDialog(BuildContext context, UpdateCheckResult check) {
   return showDialog<bool>(
     context: context,
+    useRootNavigator: true,
     barrierDismissible: false,
     builder: (ctx) => PopScope(
       canPop: false,
@@ -110,6 +134,7 @@ Future<void> _downloadAndInstall(
 
   showDialog<void>(
     context: context,
+    useRootNavigator: true,
     barrierDismissible: false,
     builder: (ctx) => PopScope(
       canPop: false,
@@ -162,6 +187,7 @@ Future<void> _downloadAndInstall(
       Navigator.of(context, rootNavigator: true).pop();
       final retry = await showDialog<bool>(
         context: context,
+        useRootNavigator: true,
         builder: (ctx) => AlertDialog(
           title: const Text('Update failed'),
           content: Text(e.message),

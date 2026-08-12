@@ -28,7 +28,7 @@ class PosProductRepository {
         final remote = await _api.search(q);
         if (remote.isNotEmpty) {
           await _dao.upsertAll(remote, branchId);
-          return remote.take(30).toList();
+          return remote.take(100).toList();
         }
         // Empty API result — do not fall back to stale local matches for the
         // same query; return empty so deleted products don't reappear.
@@ -38,7 +38,7 @@ class PosProductRepository {
       }
     }
 
-    return _dao.search(branchId, q, limit: 30);
+    return _dao.search(branchId, q, limit: 100);
   }
 
   Future<Product?> findByBarcode(int branchId, String barcode, {required bool online}) async {
