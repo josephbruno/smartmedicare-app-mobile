@@ -222,7 +222,7 @@ class ProductDatasheetRow {
     syncedAt = other.syncedAt;
   }
 
-  Map<String, dynamic> toPayload({bool autoSync = true}) {
+  Map<String, dynamic> toPayload({bool autoSync = true, bool autoMatch = false}) {
     return {
       'name': name,
       'category_name': categoryName,
@@ -250,6 +250,7 @@ class ProductDatasheetRow {
       'brand_id': brandId,
       'unit_id': unitId,
       'auto_sync': autoSync,
+      'auto_match': autoMatch,
     };
   }
 }
