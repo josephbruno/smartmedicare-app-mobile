@@ -9,6 +9,7 @@ import 'data/services/emr_service.dart';
 import 'data/services/expense_service.dart';
 import 'data/services/inventory_service.dart';
 import 'data/services/product_service.dart';
+import 'data/services/product_datasheet_service.dart';
 import 'data/services/purchase_service.dart';
 import 'data/services/reports_service.dart';
 import 'data/services/emr_master_data_service.dart';
@@ -21,6 +22,7 @@ class AppServices {
         billing = BillingService(api),
         cashierCash = CashierCashSessionService(api),
         products = ProductService(api),
+        productDatasheets = ProductDatasheetService(api),
         customers = CustomerService(api),
         inventory = InventoryService(api),
         purchases = PurchaseService(api),
@@ -41,6 +43,7 @@ class AppServices {
   final BillingService billing;
   final CashierCashSessionService cashierCash;
   final ProductService products;
+  final ProductDatasheetService productDatasheets;
   final CustomerService customers;
   final InventoryService inventory;
   final PurchaseService purchases;

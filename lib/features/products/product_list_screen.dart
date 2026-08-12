@@ -152,6 +152,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
                 ),
                 if (canCreate) ...[
                   const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: () => context.go('/products/datasheet'),
+                    icon: const Icon(Icons.grid_on_outlined, size: 18),
+                    label: const Text('Datasheet'),
+                  ),
+                  const SizedBox(width: 10),
                   FilledButton.icon(
                     onPressed: () => context.go('/products/new'),
                     icon: const Icon(Icons.add, size: 18),

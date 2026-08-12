@@ -46,6 +46,7 @@ import '../../features/invoices/invoice_list_screen.dart';
 import '../../features/pos/pos_screen.dart';
 import '../../features/products/product_form_screen.dart';
 import '../../features/products/product_list_screen.dart';
+import '../../features/products/product_datasheet_screen.dart';
 import '../../features/invoices/sale_return_form_screen.dart';
 import '../../features/purchases/purchase_detail_screen.dart';
 import '../../features/purchases/purchase_form_screen.dart';
@@ -90,7 +91,7 @@ GoRouter createAppRouter({
       }
     }
     if (path.startsWith('/products')) {
-      if (path.endsWith('/new')) {
+      if (path.endsWith('/new') || path.endsWith('/datasheet')) {
         if (need(AppPermissions.productsCreate)) return denied;
       } else if (path.contains('/edit')) {
         if (need(AppPermissions.productsEdit)) return denied;
@@ -367,6 +368,11 @@ GoRouter createAppRouter({
             path: '/products',
             name: 'Products',
             builder: (c, s) => const ProductListScreen(),
+          ),
+          GoRoute(
+            path: '/products/datasheet',
+            name: 'ProductDatasheet',
+            builder: (c, s) => const ProductDatasheetScreen(),
           ),
           GoRoute(
             path: '/products/new',
