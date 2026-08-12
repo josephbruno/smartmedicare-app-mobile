@@ -114,9 +114,13 @@ class _InventoryScreenState extends State<InventoryScreen>
     final auth = context.read<AuthSession>();
     if (!auth.hasPermission(AppPermissions.inventoryAdjust)) return;
 
-    final qtyCtrl = TextEditingController(text: '1');
-    final reasonCtrl = TextEditingController(text: 'Physical stock count');
-    var type = 'add';
+    final zeroStock = item.quantity <= 0;
+    final qtyCtrl = TextEditingController(text: zeroStock ? '' : '1');
+    // New / zero-stock products default to Set (opening stock).
+    var type = zeroStock ? 'set' : 'add';
+    final reasonCtrl = TextEditingController(
+      text: zeroStock ? 'Opening stock' : 'Physical stock count',
+    );
     final branchId = auth.currentBranchId;
     if (branchId == null) {
       AppMessenger.show(context, const SnackBar(content: Text('Select a branch first')));
@@ -129,7 +133,11 @@ class _InventoryScreenState extends State<InventoryScreen>
         return StatefulBuilder(
           builder: (ctx, setLocal) {
             return AlertDialog(
-              title: Text('Adjust stock — ${item.product?.name ?? 'Product #${item.productId}'}'),
+              title: Text(
+                item.quantity <= 0
+                    ? 'Set opening stock — ${item.product?.name ?? 'Product #${item.productId}'}'
+                    : 'Adjust stock — ${item.product?.name ?? 'Product #${item.productId}'}',
+              ),
               content: SizedBox(
                 width: 360,
                 child: Column(
@@ -153,15 +161,15 @@ class _InventoryScreenState extends State<InventoryScreen>
                     TextField(
                       controller: qtyCtrl,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Quantity'),
+                      decoration: InputDecoration(
+                        labelText: type == 'set' ? 'Opening / stock quantity' : 'Quantity',
+                      ),
+                      autofocus: item.quantity <= 0,
                     ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: reasonCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Reason',
-                        hintText: 'e.g. Physical count / Damage / Expired',
-                      ),
+                      decoration: const InputDecoration(labelText: 'Reason'),
                     ),
                   ],
                 ),
@@ -191,12 +199,14 @@ class _InventoryScreenState extends State<InventoryScreen>
 
     try {
       await context.read<AppServices>().inventory.adjust({
-        'inventory_id': item.id,
+        if (item.id > 0) 'inventory_id': item.id,
         'product_id': item.productId,
         'branch_id': branchId,
         'quantity': qty,
         'type': type,
-        'reason': reasonText.isEmpty ? 'Stock adjustment' : reasonText,
+        'reason': reasonText.isEmpty
+            ? (item.quantity <= 0 ? 'Opening stock' : 'Stock adjustment')
+            : reasonText,
       });
       if (!mounted) return;
       AppMessenger.show(context, const SnackBar(content: Text('Stock updated & logged')));
@@ -392,7 +402,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                         key: _stockTableKey,
                         emptyMessage: hasStockFilters
                             ? 'No products match your filters.'
-                            : 'No inventory items for this branch.',
+                            : 'No stockable products for this branch.',
                         headerFontSize: 9,
                         cellFontSize: 12,
                         loadPage: ({required page, required perPage}) =>
