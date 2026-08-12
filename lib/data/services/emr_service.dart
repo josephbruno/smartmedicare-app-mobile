@@ -372,6 +372,29 @@ class EmrService {
     }
   }
 
+  /// Persist free-typed EMR terms into templates for future suggestions.
+  Future<void> rememberTemplates({
+    List<String>? complaints,
+    List<String>? observations,
+    List<String>? investigations,
+    List<String>? diagnoses,
+  }) async {
+    final body = <String, dynamic>{
+      if (complaints != null && complaints.isNotEmpty) 'complaints': complaints,
+      if (observations != null && observations.isNotEmpty)
+        'observations': observations,
+      if (investigations != null && investigations.isNotEmpty)
+        'investigations': investigations,
+      if (diagnoses != null && diagnoses.isNotEmpty) 'diagnoses': diagnoses,
+    };
+    if (body.isEmpty) return;
+    try {
+      await _client.post('/visits/templates/remember', data: body);
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
   Future<List<VisitDiagnosis>> getDiagnosisSuggestions({String? q}) async {
     try {
       final res = await _client.get(

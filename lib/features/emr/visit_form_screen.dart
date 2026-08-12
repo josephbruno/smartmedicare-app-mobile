@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
@@ -10,7 +12,6 @@ import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
 import '../../data/models/product.dart';
-import '../../data/services/emr_master_data_service.dart';
 import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/app_form_dialog.dart';
 class VisitFormScreen extends StatefulWidget {
@@ -55,6 +56,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   final List<_DewormingRow> _dewormings = [];
   final List<_SurgeryRow> _surgeries = [];
   List<String> _complaintSuggestions = [];
+  List<String> _defaultComplaintSuggestions = [];
   List<String> _observationSuggestions = [];
   List<String> _investigationSuggestions = [];
   List<VisitDiagnosis> _diagnosisSuggestions = [];
@@ -228,6 +230,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _addDiagnosisFromSuggestion(d);
   }
 
+  bool _isKnownComplaint(String value) {
+    final key = value.toLowerCase();
+    return _defaultComplaintSuggestions.any((s) => s.toLowerCase() == key) ||
+        _complaintSuggestions.any((s) => s.toLowerCase() == key);
+  }
+
   bool _isKnownObservation(String value) {
     final key = value.toLowerCase();
     return _defaultObservationSuggestions.any((s) => s.toLowerCase() == key) ||
@@ -245,6 +253,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     return _defaultDiagnosisSuggestions
             .any((s) => s.diagnosisName.toLowerCase() == key) ||
         _diagnosisSuggestions.any((s) => s.diagnosisName.toLowerCase() == key);
+  }
+
+  void _rememberComplaint(String value) {
+    if (_isKnownComplaint(value)) return;
+    _defaultComplaintSuggestions = [value, ..._defaultComplaintSuggestions];
+    _complaintSuggestions = List.of(_defaultComplaintSuggestions);
   }
 
   void _rememberObservation(String value) {
@@ -273,41 +287,93 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions);
   }
 
+  Future<void> _persistNewComplaint(String name) async {
+    if (!mounted) return;
+    try {
+      await context.read<AppServices>().emr.rememberTemplates(
+            complaints: [name],
+          );
+      _rememberComplaint(name);
+    } catch (_) {}
+  }
+
   Future<void> _persistNewObservation(String name) async {
     if (!mounted) return;
-    final auth = context.read<AuthSession>();
-    if (!auth.hasPermission(AppPermissions.emrMasterDataManage)) return;
     try {
-      await context
-          .read<AppServices>()
-          .emrMasterData
-          .createObservation({'name': name, 'is_active': true});
-    } catch (_) {
-      // Duplicate / permission — local chip + visit save still keep the value.
-    }
+      await context.read<AppServices>().emr.rememberTemplates(
+            observations: [name],
+          );
+      _rememberObservation(name);
+    } catch (_) {}
   }
 
   Future<void> _persistNewInvestigation(String name) async {
     if (!mounted) return;
-    final auth = context.read<AuthSession>();
-    if (!auth.hasPermission(AppPermissions.emrMasterDataManage)) return;
     try {
-      await context
-          .read<AppServices>()
-          .emrMasterData
-          .createInvestigation({'name': name, 'is_active': true});
+      await context.read<AppServices>().emr.rememberTemplates(
+            investigations: [name],
+          );
+      _rememberInvestigation(name);
     } catch (_) {}
   }
 
   Future<void> _persistNewDiagnosis(String name) async {
     if (!mounted) return;
-    final auth = context.read<AuthSession>();
-    if (!auth.hasPermission(AppPermissions.emrMasterDataManage)) return;
     try {
-      await context
-          .read<AppServices>()
-          .emrMasterData
-          .createDiagnosis({'name': name, 'is_active': true});
+      await context.read<AppServices>().emr.rememberTemplates(
+            diagnoses: [name],
+          );
+      _rememberDiagnosis(name);
+    } catch (_) {}
+  }
+
+  /// Persist any free-typed terms from the current form into EMR templates.
+  Future<void> _persistAllNewEmrTerms() async {
+    if (!mounted) return;
+    final complaints = _complaintForApi
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty && !_isKnownComplaint(e))
+        .toList();
+    final observations = _observations
+        .where((e) => e.trim().isNotEmpty && !_isKnownObservation(e))
+        .map((e) => e.trim())
+        .toList();
+    final investigations = _investigations
+        .where((e) => e.trim().isNotEmpty && !_isKnownInvestigation(e))
+        .map((e) => e.trim())
+        .toList();
+    final diagnoses = _diagnoses
+        .map((d) => d.diagnosisName.trim())
+        .where((e) => e.isNotEmpty && !_isKnownDiagnosis(e))
+        .toList();
+
+    if (complaints.isEmpty &&
+        observations.isEmpty &&
+        investigations.isEmpty &&
+        diagnoses.isEmpty) {
+      return;
+    }
+
+    try {
+      await context.read<AppServices>().emr.rememberTemplates(
+            complaints: complaints.isEmpty ? null : complaints,
+            observations: observations.isEmpty ? null : observations,
+            investigations: investigations.isEmpty ? null : investigations,
+            diagnoses: diagnoses.isEmpty ? null : diagnoses,
+          );
+      for (final c in complaints) {
+        _rememberComplaint(c);
+      }
+      for (final o in observations) {
+        _rememberObservation(o);
+      }
+      for (final i in investigations) {
+        _rememberInvestigation(i);
+      }
+      for (final d in diagnoses) {
+        _rememberDiagnosis(d);
+      }
     } catch (_) {}
   }
 
@@ -319,7 +385,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     try {
       // Include unavailable doctors so the logged-in doctor still appears.
       _doctors = _uniqueDoctors(await emr.listDoctors());
-      _complaintSuggestions = await emr.getComplaints();
+      _defaultComplaintSuggestions = await emr.getComplaints();
+      _complaintSuggestions = List.of(_defaultComplaintSuggestions);
       _defaultObservationSuggestions = await emr.getObservations();
       _defaultInvestigationSuggestions = await emr.getInvestigations();
       _defaultDiagnosisSuggestions = await emr.getDiagnosisSuggestions();
@@ -340,8 +407,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         await _prefillFromPetId(widget.petId!);
       }
 
-      // Doctor account: always use that login's name (not other doctors).
-      // Admin / branch manager: hide Doctor field entirely.
+      // Doctor login: bind doctor_id from session (Doctor UI is hidden).
+      // Admin / branch manager: no doctor_id.
       if (_isAdminSession(auth)) {
         _doctors = [];
         _selectedDoctor = null;
@@ -473,31 +540,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   bool _isAdminSession(AuthSession auth) =>
       auth.hasRole(AppRoles.superAdmin) || auth.hasRole(AppRoles.branchManager);
-
-  /// Hide Doctor for admin; doctor logins see only their own name; staff get the list.
-  bool get _showDoctorField {
-    final auth = context.read<AuthSession>();
-    if (_isAdminSession(auth)) return false;
-    return _doctors.isNotEmpty || _selectedDoctor != null;
-  }
-
-  bool get _doctorLockedToLogin {
-    final auth = context.read<AuthSession>();
-    final user = auth.user;
-    if (_isAdminSession(auth)) return false;
-    return auth.hasRole(AppRoles.doctor) &&
-        user != null &&
-        _selectedDoctor?.id == user.id &&
-        _doctors.length == 1;
-  }
-
-  /// Dropdown requires exactly one matching item; fall back to null otherwise.
-  int? get _doctorDropdownValue {
-    final id = _selectedDoctor?.id;
-    if (id == null) return null;
-    final matches = _doctors.where((d) => d.id == id).length;
-    return matches == 1 ? id : null;
-  }
 
   void _applyDoctorServiceChargeDefaults() {
     final doctor = _selectedDoctor;
@@ -829,6 +871,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ? q
           : '${text.substring(0, lastComma + 1).trimRight()} $q';
       _setComplaintText('$committed, ');
+      if (!_isKnownComplaint(q)) {
+        _rememberComplaint(q);
+        unawaited(_persistNewComplaint(q));
+      }
     }
     setState(() {});
     _searchComplaints('');
@@ -839,7 +885,14 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     try {
       final results =
           await context.read<AppServices>().emr.getComplaints(q: q.isEmpty ? null : q);
-      if (mounted) setState(() => _complaintSuggestions = results);
+      if (mounted) {
+        setState(() {
+          _complaintSuggestions = results;
+          if (q.isEmpty) {
+            _defaultComplaintSuggestions = List.of(results);
+          }
+        });
+      }
     } catch (_) {}
   }
 
@@ -1095,6 +1148,14 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (serviceCharge > 0 && _serviceChargeProductId == null) {
       await _ensureServiceChargeProductLinked();
     }
+
+    // Commit any in-progress complaint term, then learn new EMR suggestions.
+    final pendingComplaint = _complaintSearchTerm(_complaint.text);
+    if (pendingComplaint.isNotEmpty &&
+        !_complaint.text.trimRight().endsWith(',')) {
+      _commitComplaintTerm();
+    }
+    await _persistAllNewEmrTerms();
 
     return <String, dynamic>{
       'pet_id': _selectedPet!.id,
@@ -1470,59 +1531,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 ),
               ),
             ),
-          ],
-          if (_showDoctorField) ...[
-            const SizedBox(height: 12),
-            if (_doctorLockedToLogin)
-              InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Doctor',
-                  suffixIcon: Icon(Icons.lock_outline, size: 18),
-                ),
-                child: Text(
-                  _selectedDoctor?.name ?? '',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-              )
-            else
-              AppDropdownButtonFormField<int?>(
-                value: _doctorDropdownValue,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Doctor'),
-                selectedItemBuilder: (context) => [
-                  const Text('— None —', overflow: TextOverflow.ellipsis, maxLines: 1),
-                  ..._doctors.map(
-                    (d) => Text(
-                      d.displayLabel,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                  ),
-                ],
-                items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('— None —')),
-                  ..._doctors.map(
-                    (d) => DropdownMenuItem<int?>(
-                      value: d.id,
-                      child: Text(
-                        d.displayLabel,
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                  ),
-                ],
-                onChanged: (id) => setState(() {
-                  _selectedDoctor = id == null
-                      ? null
-                      : _doctors.where((d) => d.id == id).firstOrNull;
-                  _applyDoctorServiceChargeDefaults();
-                }),
-              ),
           ],
           const SizedBox(height: 16),
           Text('Chief complaint',
