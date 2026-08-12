@@ -951,24 +951,6 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
     }
   }
 
-  Future<void> _newSheet() async {
-    try {
-      final sheet = await _services.productDatasheets.create(emptyRows: 20);
-      if (!mounted) return;
-      for (final e in _editors.values) {
-        e.dispose();
-      }
-      _editors.clear();
-      setState(() {
-        _sheet = sheet;
-        _syncEditors(sheet.rows);
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    }
-  }
-
   Future<void> _onCategoryChanged(ProductDatasheetRow row, int? id) async {
     final e = _editors[row.id];
     if (e == null) return;
@@ -1258,12 +1240,6 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
               ],
             ),
           ),
-          TextButton.icon(
-            onPressed: _loading ? null : _newSheet,
-            icon: const Icon(Icons.note_add_outlined, size: 18),
-            label: const Text('New sheet'),
-          ),
-          const SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: _addRows,
             icon: const Icon(Icons.add, size: 16),
