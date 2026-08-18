@@ -71,11 +71,11 @@ class ProductDatasheet {
 }
 
 class ProductDatasheetRow {
-  /// Datasheet barcode is limited to 18 characters (digits/letters).
-  static const int maxBarcodeLength = 18;
+  /// Datasheet barcode is limited to 24 characters (digits/letters).
+  static const int maxBarcodeLength = 24;
 
   /// Column width that shows [maxBarcodeLength] digits at datasheet font size 12.
-  static const double barcodeColumnWidth = 176;
+  static const double barcodeColumnWidth = 320;
 
   ProductDatasheetRow({
     required this.id,
