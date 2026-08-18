@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -71,7 +72,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
     _SheetCol('category', 'C', 'Category', 150),
     _SheetCol('brand', 'D', 'Brand', 140),
     _SheetCol('unit', 'E', 'Unit', 80),
-    _SheetCol('barcode', 'F', 'Barcode', 130),
+    _SheetCol('barcode', 'F', 'Barcode', ProductDatasheetRow.barcodeColumnWidth),
     _SheetCol('mrp', 'G', 'MRP', 100),
     _SheetCol('selling', 'H', 'Selling *', 100),
     _SheetCol('stock', 'I', 'Stock QTY', 90),
@@ -700,7 +701,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
         e.purchase.text = _RowEditors._fmt(row.purchasePrice!);
       }
     }
-    row.gstRate = e.gstRate ?? 5;
+    row.gstRate = e.gstRate ?? 0;
     row.gstType =
         (e.gstType == null || e.gstType!.isEmpty) ? 'exclusive' : e.gstType;
     row.categoryId = e.categoryId;
@@ -1559,7 +1560,8 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
             colKey: 'barcode',
             controller: e.barcode,
             tint: tint,
-            width: 130,
+            width: ProductDatasheetRow.barcodeColumnWidth,
+            maxLength: ProductDatasheetRow.maxBarcodeLength,
             onEditingComplete: () => _commitBarcode(row),
             onFocusLost: () => _commitBarcode(row),
           ),
@@ -1766,6 +1768,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
     required double width,
     bool numeric = false,
     bool readOnly = false,
+    int? maxLength,
     String? hintText,
     VoidCallback? onEditingComplete,
     VoidCallback? onFocusLost,
@@ -1788,14 +1791,22 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
           fontSize: 12,
           height: 1.1,
           color: readOnly ? AppTheme.textSecondary : AppTheme.textPrimary,
+          fontFeatures: maxLength != null
+              ? const [FontFeature.tabularFigures()]
+              : null,
         ),
+        maxLength: maxLength,
+        maxLengthEnforcement: maxLength != null
+            ? MaxLengthEnforcement.enforced
+            : MaxLengthEnforcement.none,
         textAlign: numeric ? TextAlign.right : TextAlign.left,
         keyboardType: numeric
             ? const TextInputType.numberWithOptions(decimal: true)
             : TextInputType.text,
-        inputFormatters: numeric
-            ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))]
-            : null,
+        inputFormatters: [
+          if (numeric) FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+          if (maxLength != null) LengthLimitingTextInputFormatter(maxLength),
+        ],
         decoration: InputDecoration(
           isDense: true,
           filled: false,
@@ -1807,6 +1818,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
           focusedErrorBorder: InputBorder.none,
           hintText: hintText,
           hintStyle: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+          counterText: maxLength != null ? '' : null,
           contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
         ),
         onTap: readOnly ? null : () => _markActive(row.id, colKey),
@@ -1909,7 +1921,7 @@ class _RowEditors {
     required this.selling,
     required this.mrp,
     required this.stock,
-    this.gstRate = 5,
+    this.gstRate = 0,
     this.gstType = 'exclusive',
     this.productType,
     this.categoryId,
@@ -2014,7 +2026,7 @@ class _RowEditors {
       ),
       mrp: TextEditingController(text: row.mrp != null ? _fmt(row.mrp!) : ''),
       stock: TextEditingController(text: row.stockQty != null ? _fmt(row.stockQty!) : ''),
-      gstRate: row.gstRate ?? 5,
+      gstRate: row.gstRate ?? 0,
       gstType: row.gstType ?? 'exclusive',
       productType: _typeFromFlags(
         isService: row.isService,
@@ -2053,7 +2065,7 @@ class _RowEditors {
     if (!preserveKeys.contains('stock')) {
       _setIfChanged(stock, row.stockQty != null ? _fmt(row.stockQty!) : '');
     }
-    gstRate = row.gstRate ?? 5;
+    gstRate = row.gstRate ?? 0;
     gstType = row.gstType ?? 'exclusive';
     productType = _typeFromFlags(
       isService: row.isService,

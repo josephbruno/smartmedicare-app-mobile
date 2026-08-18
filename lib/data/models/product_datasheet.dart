@@ -71,6 +71,12 @@ class ProductDatasheet {
 }
 
 class ProductDatasheetRow {
+  /// Datasheet barcode is limited to 18 characters (digits/letters).
+  static const int maxBarcodeLength = 18;
+
+  /// Column width that shows [maxBarcodeLength] digits at datasheet font size 12.
+  static const double barcodeColumnWidth = 176;
+
   ProductDatasheetRow({
     required this.id,
     required this.datasheetId,
@@ -228,8 +234,8 @@ class ProductDatasheetRow {
       'category_name': categoryName,
       'brand_name': brandName,
       'unit_name': unitName,
-      'sku': sku,
-      'barcode': barcode,
+      'sku': _trimBarcode(sku),
+      'barcode': _trimBarcode(barcode),
       'hsn_code': hsnCode,
       'description': description,
       'purchase_price': purchasePrice,
@@ -252,5 +258,13 @@ class ProductDatasheetRow {
       'auto_sync': autoSync,
       'auto_match': autoMatch,
     };
+  }
+
+  static String? _trimBarcode(String? value) {
+    if (value == null) return null;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    if (trimmed.length <= maxBarcodeLength) return trimmed;
+    return trimmed.substring(0, maxBarcodeLength);
   }
 }
