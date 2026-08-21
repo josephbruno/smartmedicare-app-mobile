@@ -687,6 +687,8 @@ class PetVaccination {
     this.administeredBy,
     this.notes,
     this.status = 'completed',
+    this.vaccinationTemplateId,
+    this.doseNumber,
   });
 
   final int id;
@@ -701,6 +703,8 @@ class PetVaccination {
   final String? administeredBy;
   final String? notes;
   final String status;
+  final int? vaccinationTemplateId;
+  final int? doseNumber;
 
   factory PetVaccination.fromJson(Map<String, dynamic> j) => PetVaccination(
         id: intOrNull(j['id']) ?? 0,
@@ -717,6 +721,8 @@ class PetVaccination {
         administeredBy: j['administered_by']?.toString(),
         notes: j['notes']?.toString(),
         status: j['status']?.toString() ?? 'completed',
+        vaccinationTemplateId: intOrNull(j['vaccination_template_id']),
+        doseNumber: intOrNull(j['dose_number']),
       );
 }
 

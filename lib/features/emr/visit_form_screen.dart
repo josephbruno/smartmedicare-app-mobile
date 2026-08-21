@@ -76,6 +76,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   int? _medicineSuggestForIndex;
   int? _medicineFrequencySuggestForIndex;
   List<String> _frequencySuggestions = [];
+  List<VaccinationTemplate> _defaultVaccinationSuggestions = [];
+  List<VaccinationTemplate> _vaccinationSuggestions = [];
+  int? _vaccinationSuggestForIndex;
   PetSummary? _petSummary;
   int? _serviceChargeProductId;
   String? _serviceChargeProductName;
@@ -520,6 +523,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         await _prefillFromPetId(widget.petId!);
       }
 
+      await _loadVaccinationSuggestions();
+
       // Doctor login: bind doctor_id from session (Doctor UI is hidden).
       // Admin / branch manager: no doctor_id.
       if (_isAdminSession(auth)) {
@@ -777,6 +782,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         }
       }
     } catch (_) {}
+    await _loadVaccinationSuggestions();
   }
 
   void _showTreatmentSuggestionsFor(int index, {String? query}) {
@@ -926,6 +932,101 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       _medicineSuggestForIndex = null;
       _medicineSuggestions = [];
     });
+  }
+
+  String? get _petVaccinationSpecies => VaccinationTemplate.normalizeSpecies(
+        _selectedPet?.species ?? _petSummary?.species,
+      );
+
+  Future<void> _loadVaccinationSuggestions({String? query}) async {
+    final species = _petVaccinationSpecies;
+    if (species == null) {
+      if (!mounted) return;
+      setState(() {
+        _defaultVaccinationSuggestions = [];
+        _vaccinationSuggestions = [];
+      });
+      return;
+    }
+    try {
+      final results = await context.read<AppServices>().emr.getVaccinationSuggestions(
+            species: species,
+            petId: _selectedPet?.id,
+            q: query,
+          );
+      if (!mounted) return;
+      setState(() {
+        if (query == null || query.isEmpty) {
+          _defaultVaccinationSuggestions = results;
+        }
+        _vaccinationSuggestions = results;
+        _attachVaccinationTemplates();
+      });
+    } catch (_) {}
+  }
+
+  void _attachVaccinationTemplates() {
+    for (final row in _vaccinations) {
+      if (row.template != null) continue;
+      VaccinationTemplate? match;
+      for (final t in _defaultVaccinationSuggestions) {
+        if (row.templateId != null && t.id == row.templateId) {
+          match = t;
+          break;
+        }
+      }
+      if (match == null) {
+        final n = row.nameCtrl.text.trim().toLowerCase();
+        if (n.isNotEmpty) {
+          for (final t in _defaultVaccinationSuggestions) {
+            if (t.name.toLowerCase() == n) {
+              match = t;
+              break;
+            }
+          }
+        }
+      }
+      if (match != null) {
+        row.template = match;
+        row.templateId = match.id;
+      }
+    }
+  }
+
+  void _showVaccinationSuggestionsFor(int index, {String? query}) {
+    final q = (query ?? _vaccinations[index].nameCtrl.text).trim();
+    setState(() {
+      _vaccinationSuggestForIndex = index;
+      if (q.length < 2) {
+        _vaccinationSuggestions = _defaultVaccinationSuggestions;
+      }
+    });
+    if (q.length >= 2) {
+      final lower = q.toLowerCase();
+      setState(() {
+        _vaccinationSuggestions = _defaultVaccinationSuggestions
+            .where((t) => t.name.toLowerCase().contains(lower))
+            .toList();
+      });
+    }
+  }
+
+  void _clearVaccinationSuggestions({int? onlyIfIndex}) {
+    if (onlyIfIndex != null && _vaccinationSuggestForIndex != onlyIfIndex) return;
+    setState(() {
+      _vaccinationSuggestForIndex = null;
+      _vaccinationSuggestions = [];
+    });
+  }
+
+  void _applyVaccineTemplate(_VaccinationRow row, VaccinationTemplate t) {
+    row.nameCtrl.text = t.name;
+    row.template = t;
+    row.templateId = t.id;
+    row.doseNumber = t.isCourse ? t.nextDoseNumber.clamp(1, t.totalDoses) : 1;
+    if (!row.nextDueManual) {
+      row.nextDueDate = t.nextDueDate(givenOn: _visitDate, doseNumber: row.doseNumber);
+    }
   }
 
   Future<void> _searchDiagnoses(String q) async {
@@ -1475,10 +1576,15 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                             : IconButton(
                                 icon: const Icon(Icons.close, size: 20),
                                 tooltip: 'Clear patient',
-                                onPressed: () => setState(() {
-                                  _selectedPet = null;
-                                  _petSummary = null;
-                                }),
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedPet = null;
+                                    _petSummary = null;
+                                    _defaultVaccinationSuggestions = [];
+                                    _vaccinationSuggestions = [];
+                                    _vaccinationSuggestForIndex = null;
+                                  });
+                                },
                               ),
                       ),
                       child: Row(
@@ -2768,14 +2874,26 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   }
 
   Widget _buildVaccinationSection() {
+    final species = _petVaccinationSpecies;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _sectionHeader('Vaccinations', () {
+          if (species == null) {
+            AppMessenger.show(
+              context,
+              const SnackBar(content: Text('Select a pet first to load dog or cat vaccines')),
+            );
+            return;
+          }
           setState(() => _vaccinations.add(_VaccinationRow()));
         }),
         Text(
-          'Set next due date to create a vaccination reminder',
+          species == null
+              ? 'Select a pet to load that species vaccination list'
+              : species == 'cat'
+                  ? 'Cat vaccines from EMR master data. Next due is filled automatically.'
+                  : 'Dog vaccines from EMR master data. Next due is filled automatically.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: AppTheme.textSecondary,
               ),
@@ -2789,6 +2907,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         ..._vaccinations.asMap().entries.map((e) {
           final i = e.key;
           final row = e.value;
+          final course = row.template?.isCourse == true;
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Container(
@@ -2798,15 +2917,29 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
                     children: [
                       Expanded(
-                        child: TextField(
-                          controller: row.nameCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Vaccine name *',
-                            isDense: true,
+                        child: Focus(
+                          onFocusChange: (hasFocus) {
+                            if (hasFocus) {
+                              _showVaccinationSuggestionsFor(i);
+                            } else {
+                              Future.delayed(const Duration(milliseconds: 180), () {
+                                if (!mounted) return;
+                                _clearVaccinationSuggestions(onlyIfIndex: i);
+                              });
+                            }
+                          },
+                          child: TextField(
+                            controller: row.nameCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Vaccine name *',
+                              isDense: true,
+                            ),
+                            onChanged: (q) => _showVaccinationSuggestionsFor(i, query: q),
                           ),
                         ),
                       ),
@@ -2815,6 +2948,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         onPressed: () {
                           setState(() {
                             final removed = _vaccinations.removeAt(i);
+                            _clearVaccinationSuggestions();
                             WidgetsBinding.instance
                                 .addPostFrameCallback((_) => removed.dispose());
                           });
@@ -2823,6 +2957,59 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                       ),
                     ],
                   ),
+                  if (_vaccinationSuggestForIndex == i &&
+                      _vaccinationSuggestions.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: _vaccinationSuggestions.take(8).map((s) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: ActionChip(
+                                label: Text(
+                                  s.isCourse ? '${s.name} (${s.scheduleLabel})' : s.name,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _applyVaccineTemplate(row, s);
+                                    _vaccinationSuggestForIndex = null;
+                                    _vaccinationSuggestions = [];
+                                  });
+                                },
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  if (course) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (var d = 1; d <= row.template!.totalDoses; d++)
+                          ChoiceChip(
+                            label: Text('Dose $d', style: const TextStyle(fontSize: 12)),
+                            selected: row.doseNumber == d,
+                            onSelected: (_) {
+                              setState(() {
+                                row.doseNumber = d;
+                                if (!row.nextDueManual) {
+                                  row.nextDueDate = row.template!.nextDueDate(
+                                    givenOn: _visitDate,
+                                    doseNumber: d,
+                                  );
+                                }
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -2853,7 +3040,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     icon: Icons.notifications_active_outlined,
                     onPick: () async {
                       final d = await _pickDueDate(row.nextDueDate);
-                      if (d != null) setState(() => row.nextDueDate = d);
+                      if (d != null) {
+                        setState(() {
+                          row.nextDueDate = d;
+                          row.nextDueManual = true;
+                        });
+                      }
                     },
                   ),
                 ],
@@ -3642,6 +3834,10 @@ class _VaccinationRow {
     String brand = '',
     String administeredBy = '',
     this.nextDueDate,
+    this.templateId,
+    this.doseNumber = 1,
+    this.template,
+    this.nextDueManual = false,
   })  : nameCtrl = TextEditingController(text: name),
         brandCtrl = TextEditingController(text: brand),
         byCtrl = TextEditingController(text: administeredBy);
@@ -3651,20 +3847,28 @@ class _VaccinationRow {
         brand: v.vaccineBrand ?? '',
         administeredBy: v.administeredBy ?? '',
         nextDueDate: v.nextDueDate != null ? DateTime.tryParse(v.nextDueDate!) : null,
+        templateId: v.vaccinationTemplateId,
+        doseNumber: v.doseNumber ?? 1,
       );
 
   final TextEditingController nameCtrl;
   final TextEditingController brandCtrl;
   final TextEditingController byCtrl;
   DateTime? nextDueDate;
+  int? templateId;
+  int doseNumber;
+  VaccinationTemplate? template;
+  bool nextDueManual;
 
   Map<String, dynamic> toJson() => {
         'vaccine_name': nameCtrl.text.trim(),
         if (brandCtrl.text.trim().isNotEmpty) 'vaccine_brand': brandCtrl.text.trim(),
         if (byCtrl.text.trim().isNotEmpty) 'administered_by': byCtrl.text.trim(),
+        if (templateId != null) 'vaccination_template_id': templateId,
+        if (template?.isCourse == true) 'dose_number': doseNumber,
         if (nextDueDate != null)
           'next_due_date': nextDueDate!.toIso8601String().substring(0, 10),
-        'reminder_days_before': 7,
+        'reminder_days_before': template?.reminderDaysBefore ?? 7,
       };
 
   void dispose() {

@@ -171,6 +171,88 @@ class ProcedureKitItem {
   }
 }
 
+class VaccinationTemplate {
+  VaccinationTemplate({
+    required this.id,
+    required this.name,
+    required this.species,
+    this.scheduleType = 'booster',
+    this.nextDueDays,
+    this.doseDays = const [],
+    this.reminderDaysBefore = 7,
+    this.nextDoseNumber = 1,
+    this.isActive = true,
+  });
+
+  final int id;
+  final String name;
+  final String species;
+  final String scheduleType;
+  final int? nextDueDays;
+  final List<int> doseDays;
+  final int reminderDaysBefore;
+  final int nextDoseNumber;
+  final bool isActive;
+
+  bool get isCourse => scheduleType == 'course';
+  int get totalDoses => isCourse ? (doseDays.isEmpty ? 1 : doseDays.length) : 1;
+
+  String get speciesLabel => species == 'cat' ? 'Cat' : 'Dog';
+
+  String get scheduleLabel {
+    if (isCourse) {
+      final days = doseDays.join(', ');
+      return 'Days $days';
+    }
+    if (nextDueDays != null) return 'Every ${nextDueDays}d';
+    return 'Booster';
+  }
+
+  DateTime? nextDueDate({required DateTime givenOn, int doseNumber = 1}) {
+    if (!isCourse && nextDueDays != null) {
+      return givenOn.add(Duration(days: nextDueDays!));
+    }
+    if (isCourse && doseDays.length >= 2) {
+      final i = (doseNumber - 1).clamp(0, doseDays.length - 1);
+      if (i >= doseDays.length - 1) return null;
+      final gap = doseDays[i + 1] - doseDays[i];
+      if (gap <= 0) return null;
+      return givenOn.add(Duration(days: gap));
+    }
+    return null;
+  }
+
+  static String? normalizeSpecies(String? raw) {
+    final s = (raw ?? '').toLowerCase().trim();
+    if (s.isEmpty) return null;
+    if (s.contains('dog') || s == 'canine') return 'dog';
+    if (s.contains('cat') || s == 'feline') return 'cat';
+    return null;
+  }
+
+  factory VaccinationTemplate.fromJson(Map<String, dynamic> json) {
+    final rawDays = json['dose_days'];
+    final days = <int>[];
+    if (rawDays is List) {
+      for (final d in rawDays) {
+        final n = intOrNull(d);
+        if (n != null) days.add(n);
+      }
+    }
+    return VaccinationTemplate(
+      id: intOrNull(json['id']) ?? 0,
+      name: json['name']?.toString() ?? '',
+      species: json['species']?.toString() ?? 'dog',
+      scheduleType: json['schedule_type']?.toString() ?? 'booster',
+      nextDueDays: intOrNull(json['next_due_days']),
+      doseDays: days,
+      reminderDaysBefore: intOrNull(json['reminder_days_before']) ?? 7,
+      nextDoseNumber: intOrNull(json['next_dose_number']) ?? 1,
+      isActive: json['is_active'] != false,
+    );
+  }
+}
+
 class MedicineSuggestion {
   MedicineSuggestion({
     required this.name,
@@ -223,6 +305,56 @@ class EmrMasterDataService {
 
   Future<List<EmrTemplateItem>> listInvestigations({String? search}) =>
       _list('$_base/investigations', search);
+
+  Future<List<VaccinationTemplate>> listVaccinations({
+    String? search,
+    String? species,
+  }) async {
+    try {
+      final res = await _client.get(
+        '$_base/vaccinations',
+        queryParameters: {
+          if (search != null && search.isNotEmpty) 'search': search,
+          if (species != null && species.isNotEmpty) 'species': species,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, VaccinationTemplate.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<VaccinationTemplate> createVaccination(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('$_base/vaccinations', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => VaccinationTemplate.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<VaccinationTemplate> updateVaccination(
+    int id,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final res = await _client.put('$_base/vaccinations/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => VaccinationTemplate.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deleteVaccination(int id) => _delete('$_base/vaccinations/$id');
 
   Future<EmrTemplateItem> createComplaint(Map<String, dynamic> body) =>
       _create('$_base/complaints', body);

@@ -454,6 +454,32 @@ class EmrService {
     }
   }
 
+  Future<List<VaccinationTemplate>> getVaccinationSuggestions({
+    String? species,
+    int? petId,
+    String? q,
+  }) async {
+    try {
+      final res = await _client.get(
+        '/visits/vaccinations',
+        queryParameters: {
+          if (species != null && species.isNotEmpty) 'species': species,
+          if (petId != null) 'pet_id': petId,
+          if (q != null && q.isNotEmpty) 'q': q,
+        },
+      );
+      return parseEnvelopeData(res, (data) {
+        if (data is! List) return <VaccinationTemplate>[];
+        return data
+            .whereType<Map>()
+            .map((e) => VaccinationTemplate.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
   Future<List<MedicineSuggestion>> getMedicineSuggestions({String? q}) async {
     try {
       final res = await _client.get(

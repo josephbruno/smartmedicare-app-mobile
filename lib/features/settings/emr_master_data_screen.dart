@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/services/emr_master_data_service.dart';
 import 'procedure_kits_master_tab.dart';
+import 'vaccination_master_tab.dart';
 
 class EmrMasterDataScreen extends StatefulWidget {
   const EmrMasterDataScreen({super.key});
@@ -20,6 +21,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
   late final TabController _tabs;
   final _search = TextEditingController();
   final _kitsTabKey = GlobalKey<ProcedureKitsMasterTabState>();
+  final _vaccinationsTabKey = GlobalKey<VaccinationMasterTabState>();
   bool _loading = false;
   List<EmrTemplateItem> _items = [];
 
@@ -32,6 +34,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     'frequencies',
     'observations',
     'investigations',
+    'vaccinations',
     'service_kits',
   ];
 
@@ -44,10 +47,12 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     'Frequencies',
     'Observations',
     'Investigations',
+    'Vaccinations',
     'Service kits',
   ];
 
   bool get _isKitsTab => _currentKey == 'service_kits';
+  bool get _isVaccinationsTab => _currentKey == 'vaccinations';
 
   @override
   void initState() {
@@ -58,6 +63,9 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
         if (_isKitsTab) {
           setState(() {});
           _kitsTabKey.currentState?.reload();
+        } else if (_isVaccinationsTab) {
+          setState(() {});
+          _vaccinationsTabKey.currentState?.reload();
         } else {
           _load();
         }
@@ -78,6 +86,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
   Future<void> _load() async {
     if (_isKitsTab) {
       await _kitsTabKey.currentState?.reload();
+      return;
+    }
+    if (_isVaccinationsTab) {
+      await _vaccinationsTabKey.currentState?.reload();
       return;
     }
     setState(() => _loading = true);
@@ -106,6 +118,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
   Future<void> _openForm({EmrTemplateItem? item}) async {
     if (_isKitsTab) {
       await _kitsTabKey.currentState?.openForm();
+      return;
+    }
+    if (_isVaccinationsTab) {
+      await _vaccinationsTabKey.currentState?.openForm();
       return;
     }
     final isEdit = item != null;
@@ -383,6 +399,11 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
                     key: _kitsTabKey,
                     searchQuery: _search.text.trim(),
                   )
+                : _isVaccinationsTab
+                    ? VaccinationMasterTab(
+                        key: _vaccinationsTabKey,
+                        searchQuery: _search.text.trim(),
+                      )
                 : _loading
                     ? const Center(child: CircularProgressIndicator())
                     : _items.isEmpty
