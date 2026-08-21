@@ -209,17 +209,32 @@ class VaccinationTemplate {
   }
 
   DateTime? nextDueDate({required DateTime givenOn, int doseNumber = 1}) {
-    if (!isCourse && nextDueDays != null) {
-      return givenOn.add(Duration(days: nextDueDays!));
+    final given = DateTime(givenOn.year, givenOn.month, givenOn.day);
+    if (isCourse) {
+      return courseDoseDate(
+        givenOn: given,
+        givenDoseNumber: doseNumber,
+        targetDoseNumber: doseNumber + 1,
+      );
     }
-    if (isCourse && doseDays.length >= 2) {
-      final i = (doseNumber - 1).clamp(0, doseDays.length - 1);
-      if (i >= doseDays.length - 1) return null;
-      final gap = doseDays[i + 1] - doseDays[i];
-      if (gap <= 0) return null;
-      return givenOn.add(Duration(days: gap));
-    }
-    return null;
+    return given.add(Duration(days: nextDueDays ?? 365));
+  }
+
+  /// Planned date for [targetDoseNumber] when [givenDoseNumber] is given on [givenOn].
+  DateTime? courseDoseDate({
+    required DateTime givenOn,
+    required int givenDoseNumber,
+    required int targetDoseNumber,
+  }) {
+    if (!isCourse || doseDays.length < 2) return null;
+    if (targetDoseNumber <= givenDoseNumber) return null;
+    final gi = (givenDoseNumber - 1).clamp(0, doseDays.length - 1);
+    final ti = (targetDoseNumber - 1).clamp(0, doseDays.length - 1);
+    if (ti <= gi) return null;
+    final gap = doseDays[ti] - doseDays[gi];
+    if (gap <= 0) return null;
+    final given = DateTime(givenOn.year, givenOn.month, givenOn.day);
+    return given.add(Duration(days: gap));
   }
 
   static String? normalizeSpecies(String? raw) {

@@ -965,9 +965,21 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     } catch (_) {}
   }
 
+  VaccinationTemplate? _templateForName(String name) {
+    final n = name.trim().toLowerCase();
+    if (n.isEmpty) return null;
+    for (final t in _defaultVaccinationSuggestions) {
+      if (t.name.toLowerCase() == n) return t;
+    }
+    return null;
+  }
+
   void _attachVaccinationTemplates() {
     for (final row in _vaccinations) {
-      if (row.template != null) continue;
+      if (row.template != null) {
+        _fillVaccinationNextDue(row);
+        continue;
+      }
       VaccinationTemplate? match;
       for (final t in _defaultVaccinationSuggestions) {
         if (row.templateId != null && t.id == row.templateId) {
@@ -975,20 +987,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           break;
         }
       }
-      if (match == null) {
-        final n = row.nameCtrl.text.trim().toLowerCase();
-        if (n.isNotEmpty) {
-          for (final t in _defaultVaccinationSuggestions) {
-            if (t.name.toLowerCase() == n) {
-              match = t;
-              break;
-            }
-          }
-        }
-      }
+      match ??= _templateForName(row.nameCtrl.text);
       if (match != null) {
         row.template = match;
         row.templateId = match.id;
+        _fillVaccinationNextDue(row);
       }
     }
   }
@@ -1019,13 +1022,91 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     });
   }
 
+  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  void _removeScheduledFollowUps({required int keepIndex, int? templateId}) {
+    if (templateId == null) return;
+    for (var j = _vaccinations.length - 1; j >= 0; j--) {
+      if (j == keepIndex) continue;
+      final r = _vaccinations[j];
+      if (r.templateId == templateId && r.isScheduled) {
+        _vaccinations.removeAt(j).dispose();
+      }
+    }
+  }
+
+  void _removeVaccinationAt(int index) {
+    if (index < 0 || index >= _vaccinations.length) return;
+    final row = _vaccinations[index];
+    if (row.isGiven) {
+      _removeScheduledFollowUps(keepIndex: index, templateId: row.templateId);
+    }
+    _vaccinations.removeAt(index);
+    _clearVaccinationSuggestions();
+    WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
+  }
+
+  void _fillVaccinationNextDue(_VaccinationRow row) {
+    if (row.nextDueManual || row.isScheduled) return;
+    final t = row.template;
+    if (t == null) return;
+    if (t.isCourse) {
+      row.nextDueDate = null;
+      return;
+    }
+    row.nextDueDate = t.nextDueDate(
+      givenOn: row.administeredDate ?? _visitDate,
+      doseNumber: 1,
+    );
+  }
+
   void _applyVaccineTemplate(_VaccinationRow row, VaccinationTemplate t) {
+    final index = _vaccinations.indexOf(row);
+    if (index < 0) return;
+    if (row.templateId == t.id && row.isGiven) {
+      if (!t.isCourse) _fillVaccinationNextDue(row);
+      return;
+    }
+
+    _removeScheduledFollowUps(keepIndex: index, templateId: row.templateId);
+
+    final given = _dateOnly(_visitDate);
     row.nameCtrl.text = t.name;
     row.template = t;
     row.templateId = t.id;
+    row.status = 'completed';
+    row.administeredDate = given;
+    row.nextDueManual = false;
     row.doseNumber = t.isCourse ? t.nextDoseNumber.clamp(1, t.totalDoses) : 1;
-    if (!row.nextDueManual) {
-      row.nextDueDate = t.nextDueDate(givenOn: _visitDate, doseNumber: row.doseNumber);
+
+    if (!t.isCourse) {
+      row.nextDueDate = given.add(Duration(days: t.nextDueDays ?? 365));
+      return;
+    }
+
+    row.nextDueDate = null;
+    final start = row.doseNumber;
+    for (var d = t.totalDoses; d >= start + 1; d--) {
+      final when = t.courseDoseDate(
+        givenOn: given,
+        givenDoseNumber: start,
+        targetDoseNumber: d,
+      );
+      if (when == null) continue;
+      _vaccinations.insert(
+        index + 1,
+        _VaccinationRow(
+          name: t.name,
+          brand: row.brandCtrl.text,
+          administeredBy: row.byCtrl.text,
+          templateId: t.id,
+          template: t,
+          doseNumber: d,
+          status: 'scheduled',
+          administeredDate: when,
+          nextDueDate: when,
+        ),
+      );
     }
   }
 
@@ -2834,15 +2915,30 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     required Future<void> Function() onPick,
     IconData icon = Icons.notifications_active_outlined,
   }) {
+    String label = 'Set next due (reminder)';
+    if (date != null) {
+      final days = DateTime(date.year, date.month, date.day)
+          .difference(DateTime(_visitDate.year, _visitDate.month, _visitDate.day))
+          .inDays;
+      label = days > 0
+          ? 'Next due ${_formatYmd(date)} ($days days)'
+          : 'Next due ${_formatYmd(date)}';
+    }
+    final filled = date != null;
     final button = OutlinedButton.icon(
       onPressed: onPick,
       icon: Icon(icon, size: 16),
       label: Text(
-        date != null
-            ? 'Next due ${date.toIso8601String().substring(0, 10)}'
-            : 'Set next due (reminder)',
+        label,
         overflow: TextOverflow.ellipsis,
         maxLines: 1,
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: filled ? const Color(0xFF047857) : const Color(0xFF2563EB),
+        side: BorderSide(
+          color: filled ? const Color(0xFF6EE7B7) : const Color(0xFFBFDBFE),
+        ),
+        backgroundColor: filled ? const Color(0xFFECFDF5) : null,
       ),
     );
     if (!_compactUi) {
@@ -2865,10 +2961,19 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   }
 
   Future<DateTime?> _pickDueDate(DateTime? current) {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final currentDate = current == null
+        ? null
+        : DateTime(current.year, current.month, current.day);
+    final initial = currentDate ?? todayDate.add(const Duration(days: 30));
+    final first = currentDate != null && currentDate.isBefore(todayDate)
+        ? currentDate
+        : todayDate;
     return showDatePicker(
       context: context,
-      initialDate: current ?? DateTime.now().add(const Duration(days: 30)),
-      firstDate: DateTime.now(),
+      initialDate: initial.isBefore(first) ? first : initial,
+      firstDate: first,
       lastDate: DateTime(2100),
     );
   }
@@ -2886,14 +2991,17 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             );
             return;
           }
-          setState(() => _vaccinations.add(_VaccinationRow()));
+          setState(() {
+            _vaccinations.add(_VaccinationRow());
+            _vaccinationSuggestForIndex = _vaccinations.length - 1;
+            _vaccinationSuggestions = _defaultVaccinationSuggestions;
+          });
         }),
         Text(
           species == null
               ? 'Select a pet to load that species vaccination list'
-              : species == 'cat'
-                  ? 'Cat vaccines from EMR master data. Next due is filled automatically.'
-                  : 'Dog vaccines from EMR master data. Next due is filled automatically.',
+              : 'Yearly vaccines: given today, reminder next year. '
+                  'Course vaccines: remaining doses are scheduled on this visit.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: AppTheme.textSecondary,
               ),
@@ -2907,6 +3015,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         ..._vaccinations.asMap().entries.map((e) {
           final i = e.key;
           final row = e.value;
+          if (row.isScheduled) {
+            return _scheduledVaccinationTile(i, row);
+          }
           final course = row.template?.isCourse == true;
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
@@ -2927,6 +3038,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                             if (hasFocus) {
                               _showVaccinationSuggestionsFor(i);
                             } else {
+                              final match = _templateForName(row.nameCtrl.text);
+                              if (match != null) {
+                                setState(() => _applyVaccineTemplate(row, match));
+                              }
                               Future.delayed(const Duration(milliseconds: 180), () {
                                 if (!mounted) return;
                                 _clearVaccinationSuggestions(onlyIfIndex: i);
@@ -2939,20 +3054,34 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                               labelText: 'Vaccine name *',
                               isDense: true,
                             ),
-                            onChanged: (q) => _showVaccinationSuggestionsFor(i, query: q),
+                            onChanged: (q) {
+                              final match = _templateForName(q);
+                              if (match != null) {
+                                setState(() {
+                                  _applyVaccineTemplate(row, match);
+                                  _vaccinationSuggestForIndex = null;
+                                  _vaccinationSuggestions = [];
+                                });
+                                return;
+                              }
+                              _showVaccinationSuggestionsFor(i, query: q);
+                            },
+                            onSubmitted: (v) {
+                              final match = _templateForName(v);
+                              if (match != null) {
+                                setState(() {
+                                  _applyVaccineTemplate(row, match);
+                                  _vaccinationSuggestForIndex = null;
+                                  _vaccinationSuggestions = [];
+                                });
+                              }
+                            },
                           ),
                         ),
                       ),
                       IconButton(
                         tooltip: 'Remove',
-                        onPressed: () {
-                          setState(() {
-                            final removed = _vaccinations.removeAt(i);
-                            _clearVaccinationSuggestions();
-                            WidgetsBinding.instance
-                                .addPostFrameCallback((_) => removed.dispose());
-                          });
-                        },
+                        onPressed: () => setState(() => _removeVaccinationAt(i)),
                         icon: const Icon(Icons.close, size: 18),
                       ),
                     ],
@@ -2961,53 +3090,40 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                       _vaccinationSuggestions.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: _vaccinationSuggestions.take(8).map((s) {
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 6),
-                              child: ActionChip(
-                                label: Text(
-                                  s.isCourse ? '${s.name} (${s.scheduleLabel})' : s.name,
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _applyVaccineTemplate(row, s);
-                                    _vaccinationSuggestForIndex = null;
-                                    _vaccinationSuggestions = [];
-                                  });
-                                },
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: _vaccinationSuggestions.map((s) {
+                          return Listener(
+                            onPointerDown: (_) {
+                              setState(() {
+                                _applyVaccineTemplate(row, s);
+                                _vaccinationSuggestForIndex = null;
+                                _vaccinationSuggestions = [];
+                              });
+                              FocusManager.instance.primaryFocus?.unfocus();
+                            },
+                            child: Chip(
+                              label: Text(
+                                s.isCourse ? '${s.name} (${s.scheduleLabel})' : s.name,
+                                style: const TextStyle(fontSize: 12),
                               ),
-                            );
-                          }).toList(),
-                        ),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          );
+                        }).toList(),
                       ),
                     ),
                   if (course) ...[
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        for (var d = 1; d <= row.template!.totalDoses; d++)
-                          ChoiceChip(
-                            label: Text('Dose $d', style: const TextStyle(fontSize: 12)),
-                            selected: row.doseNumber == d,
-                            onSelected: (_) {
-                              setState(() {
-                                row.doseNumber = d;
-                                if (!row.nextDueManual) {
-                                  row.nextDueDate = row.template!.nextDueDate(
-                                    givenOn: _visitDate,
-                                    doseNumber: d,
-                                  );
-                                }
-                              });
-                            },
-                          ),
-                      ],
+                    Text(
+                      'Dose ${row.doseNumber} given today. Remaining doses are scheduled below.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 8),
@@ -3034,26 +3150,81 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  _nextDueButton(
-                    date: row.nextDueDate,
-                    icon: Icons.notifications_active_outlined,
-                    onPick: () async {
-                      final d = await _pickDueDate(row.nextDueDate);
-                      if (d != null) {
-                        setState(() {
-                          row.nextDueDate = d;
-                          row.nextDueManual = true;
-                        });
-                      }
-                    },
-                  ),
+                  if (!course) ...[
+                    const SizedBox(height: 8),
+                    _nextDueButton(
+                      date: row.nextDueDate,
+                      icon: Icons.notifications_active_outlined,
+                      onPick: () async {
+                        final d = await _pickDueDate(row.nextDueDate);
+                        if (d != null) {
+                          setState(() {
+                            row.nextDueDate = d;
+                            row.nextDueManual = true;
+                          });
+                        }
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
           );
         }),
       ],
+    );
+  }
+
+  Widget _scheduledVaccinationTile(int index, _VaccinationRow row) {
+    final when = row.administeredDate ?? row.nextDueDate;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFECFDF5),
+          border: Border.all(color: const Color(0xFFA7F3D0)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event_available_outlined, size: 18, color: Color(0xFF047857)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Dose ${row.doseNumber}'
+                '${when != null ? ' · ${_formatYmd(when)}' : ''}'
+                ' · Reminder',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF047857),
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Change date',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+              onPressed: () async {
+                final d = await _pickDueDate(when);
+                if (d == null) return;
+                setState(() {
+                  row.administeredDate = d;
+                  row.nextDueDate = d;
+                  row.nextDueManual = true;
+                });
+              },
+            ),
+            IconButton(
+              tooltip: 'Remove reminder',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () => setState(() => _removeVaccinationAt(index)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -3297,6 +3468,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       ],
     );
   }
+}
+
+String _formatYmd(DateTime d) {
+  final y = d.year.toString().padLeft(4, '0');
+  final m = d.month.toString().padLeft(2, '0');
+  final day = d.day.toString().padLeft(2, '0');
+  return '$y-$m-$day';
 }
 
 String _formatAmount(double value) {
@@ -3838,6 +4016,8 @@ class _VaccinationRow {
     this.doseNumber = 1,
     this.template,
     this.nextDueManual = false,
+    this.status = 'completed',
+    this.administeredDate,
   })  : nameCtrl = TextEditingController(text: name),
         brandCtrl = TextEditingController(text: brand),
         byCtrl = TextEditingController(text: administeredBy);
@@ -3849,6 +4029,8 @@ class _VaccinationRow {
         nextDueDate: v.nextDueDate != null ? DateTime.tryParse(v.nextDueDate!) : null,
         templateId: v.vaccinationTemplateId,
         doseNumber: v.doseNumber ?? 1,
+        status: v.status,
+        administeredDate: DateTime.tryParse(v.administeredDate),
       );
 
   final TextEditingController nameCtrl;
@@ -3859,15 +4041,22 @@ class _VaccinationRow {
   int doseNumber;
   VaccinationTemplate? template;
   bool nextDueManual;
+  String status;
+  DateTime? administeredDate;
+
+  bool get isScheduled => status == 'scheduled';
+  bool get isGiven => status == 'completed';
 
   Map<String, dynamic> toJson() => {
         'vaccine_name': nameCtrl.text.trim(),
         if (brandCtrl.text.trim().isNotEmpty) 'vaccine_brand': brandCtrl.text.trim(),
         if (byCtrl.text.trim().isNotEmpty) 'administered_by': byCtrl.text.trim(),
         if (templateId != null) 'vaccination_template_id': templateId,
-        if (template?.isCourse == true) 'dose_number': doseNumber,
-        if (nextDueDate != null)
-          'next_due_date': nextDueDate!.toIso8601String().substring(0, 10),
+        'dose_number': doseNumber,
+        'status': status,
+        if (administeredDate != null)
+          'administered_date': _formatYmd(administeredDate!),
+        if (nextDueDate != null) 'next_due_date': _formatYmd(nextDueDate!),
         'reminder_days_before': template?.reminderDaysBefore ?? 7,
       };
 
@@ -3904,8 +4093,7 @@ class _DewormingRow {
         'medicine_name': nameCtrl.text.trim(),
         if (dosageCtrl.text.trim().isNotEmpty) 'dosage': dosageCtrl.text.trim(),
         if (byCtrl.text.trim().isNotEmpty) 'administered_by': byCtrl.text.trim(),
-        if (nextDueDate != null)
-          'next_due_date': nextDueDate!.toIso8601String().substring(0, 10),
+        if (nextDueDate != null) 'next_due_date': _formatYmd(nextDueDate!),
       };
 
   void dispose() {
