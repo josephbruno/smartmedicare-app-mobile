@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/app_config.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
@@ -97,6 +98,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   int? _sourceAppointmentId;
 
   bool get _isEdit => widget.visitId != null;
+
+  /// Phone/tablet native app only. Windows/web keep the current wide layout.
+  bool get _compactUi => AppConfig.isNativeMobile;
 
   static const _visitTypes = [
     'consultation',
@@ -1428,14 +1432,24 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       );
     }
 
+    final compact = _compactUi;
+    final listPadding = compact
+        ? EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.viewInsetsOf(context).bottom,
+          )
+        : const EdgeInsets.all(16);
+
     return Scaffold(
       appBar: AppBar(title: Text(_isEdit ? 'Edit visit' : 'New visit')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: listPadding,
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
-              final narrow = constraints.maxWidth < 640;
+              final narrow = compact || constraints.maxWidth < 640;
               final patientField = _selectedPet == null
                   ? TextField(
                       decoration: InputDecoration(
@@ -1687,7 +1701,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           const SizedBox(height: 8),
           LayoutBuilder(
             builder: (context, constraints) {
-              final narrow = constraints.maxWidth < 520;
+              final narrow = compact || constraints.maxWidth < 520;
               final tempOpts =
                   _doubleOptionsWith(_temperatureF, _temperatureOptions);
               final weightOpts = _doubleOptionsWith(_weightKg, _weightOptions);
@@ -1780,7 +1794,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           const SizedBox(height: 16),
           LayoutBuilder(
             builder: (context, constraints) {
-              final narrow = constraints.maxWidth < 900;
+              final narrow = compact || constraints.maxWidth < 900;
 
               Widget chipField({
                 required String title,
@@ -2066,29 +2080,27 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             },
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    Text('Treatments / Procedures',
-                        style: Theme.of(context).textTheme.titleSmall),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.warning.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text('Billable',
-                          style: TextStyle(fontSize: 11)),
-                    ),
-                  ],
+          _responsiveSectionHeader(
+            title: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                Text('Treatments / Procedures',
+                    style: Theme.of(context).textTheme.titleSmall),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warning.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('Billable',
+                      style: TextStyle(fontSize: 11)),
                 ),
-              ),
+              ],
+            ),
+            actions: [
               TextButton.icon(
                 onPressed: _addProductsMulti,
                 icon: const Icon(Icons.add, size: 18),
@@ -2113,6 +2125,72 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             final t = e.value;
             final showSuggestions =
                 _treatmentSuggestForIndex == i && _treatmentSuggestions.isNotEmpty;
+            final nameField = Focus(
+              onFocusChange: (hasFocus) {
+                if (hasFocus) {
+                  _showTreatmentSuggestionsFor(i);
+                } else {
+                  // Delay so ActionChip taps still register.
+                  Future.delayed(const Duration(milliseconds: 180), () {
+                    if (!mounted) return;
+                    _clearTreatmentSuggestions(onlyIfIndex: i);
+                  });
+                }
+              },
+              child: TextField(
+                decoration: const InputDecoration(
+                  labelText: 'Treatment name',
+                  isDense: true,
+                ),
+                controller: t.nameCtrl,
+                onChanged: (q) => _searchTreatments(q, forIndex: i),
+              ),
+            );
+            final priceField = TextField(
+              decoration: const InputDecoration(
+                labelText: 'Price (₹)',
+                isDense: true,
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              controller: t.priceCtrl,
+            );
+            final linkBtn = IconButton(
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              icon: Icon(
+                Icons.inventory_2_outlined,
+                size: 20,
+                color: t.productId != null ? AppTheme.accent : AppTheme.primary,
+              ),
+              tooltip: t.productId != null
+                  ? 'Service product linked'
+                  : 'Link / add service product',
+              onPressed: () async {
+                final p = await _pickProduct(
+                  type: 'service',
+                  allowCreateService: true,
+                );
+                if (p != null) {
+                  setState(() {
+                    t.productId = p.id;
+                    t.nameCtrl.text = p.name;
+                    t.priceCtrl.text = _formatAmount(p.sellingPrice);
+                  });
+                }
+              },
+            );
+            final removeBtn = IconButton(
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+              icon: const Icon(Icons.close, color: AppTheme.danger),
+              onPressed: () {
+                final row = _treatments.removeAt(i);
+                _clearTreatmentSuggestions();
+                setState(() {});
+                WidgetsBinding.instance
+                    .addPostFrameCallback((_) => row.dispose());
+              },
+            );
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: Padding(
@@ -2120,84 +2198,32 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Focus(
-                            onFocusChange: (hasFocus) {
-                              if (hasFocus) {
-                                _showTreatmentSuggestionsFor(i);
-                              } else {
-                                // Delay so ActionChip taps still register.
-                                Future.delayed(const Duration(milliseconds: 180), () {
-                                  if (!mounted) return;
-                                  _clearTreatmentSuggestions(onlyIfIndex: i);
-                                });
-                              }
-                            },
-                            child: TextField(
-                              decoration: const InputDecoration(
-                                labelText: 'Treatment name',
-                                isDense: true,
+                    compact
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(child: nameField),
+                                  linkBtn,
+                                  removeBtn,
+                                ],
                               ),
-                              controller: t.nameCtrl,
-                              onChanged: (q) => _searchTreatments(q, forIndex: i),
-                            ),
+                              const SizedBox(height: 8),
+                              priceField,
+                            ],
+                          )
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 3, child: nameField),
+                              const SizedBox(width: 10),
+                              Expanded(flex: 2, child: priceField),
+                              linkBtn,
+                              removeBtn,
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              labelText: 'Price (₹)',
-                              isDense: true,
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            controller: t.priceCtrl,
-                          ),
-                        ),
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                          icon: Icon(
-                            Icons.inventory_2_outlined,
-                            size: 20,
-                            color: t.productId != null ? AppTheme.accent : AppTheme.primary,
-                          ),
-                          tooltip: t.productId != null
-                              ? 'Service product linked'
-                              : 'Link / add service product',
-                          onPressed: () async {
-                            final p = await _pickProduct(
-                              type: 'service',
-                              allowCreateService: true,
-                            );
-                            if (p != null) {
-                              setState(() {
-                                t.productId = p.id;
-                                t.nameCtrl.text = p.name;
-                                t.priceCtrl.text = _formatAmount(p.sellingPrice);
-                              });
-                            }
-                          },
-                        ),
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                          icon: const Icon(Icons.close, color: AppTheme.danger),
-                          onPressed: () {
-                            final row = _treatments.removeAt(i);
-                            _clearTreatmentSuggestions();
-                            setState(() {});
-                            WidgetsBinding.instance
-                                .addPostFrameCallback((_) => row.dispose());
-                          },
-                        ),
-                      ],
-                    ),
                     if (showSuggestions)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
@@ -2264,29 +2290,27 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             );
           }),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    Text('Prescriptions / Medicines',
-                        style: Theme.of(context).textTheme.titleSmall),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.warning.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text('Medicine product + stock',
-                          style: TextStyle(fontSize: 11)),
-                    ),
-                  ],
+          _responsiveSectionHeader(
+            title: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                Text('Prescriptions / Medicines',
+                    style: Theme.of(context).textTheme.titleSmall),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warning.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('Medicine product + stock',
+                      style: TextStyle(fontSize: 11)),
                 ),
-              ),
+              ],
+            ),
+            actions: [
               TextButton.icon(
                 onPressed: () async {
                   final p = await _pickProduct(type: 'medicine', requiredQty: 1);
@@ -2326,158 +2350,139 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Focus(
-                            onFocusChange: (hasFocus) {
-                              if (hasFocus) {
-                                _showMedicineSuggestionsFor(i);
-                              } else {
-                                Future.delayed(const Duration(milliseconds: 180), () {
-                                  if (!mounted) return;
-                                  _clearMedicineSuggestions(onlyIfIndex: i);
-                                });
-                              }
-                            },
-                            child: TextField(
-                              decoration: const InputDecoration(
-                                labelText: 'Medicine name',
-                                isDense: true,
-                              ),
-                              controller: m.nameCtrl,
-                              onChanged: (q) => _searchMedicines(q, forIndex: i),
-                            ),
+                    _medicineFieldsLayout(
+                      compact: compact,
+                      nameField: Focus(
+                        onFocusChange: (hasFocus) {
+                          if (hasFocus) {
+                            _showMedicineSuggestionsFor(i);
+                          } else {
+                            Future.delayed(const Duration(milliseconds: 180), () {
+                              if (!mounted) return;
+                              _clearMedicineSuggestions(onlyIfIndex: i);
+                            });
+                          }
+                        },
+                        child: TextField(
+                          decoration: const InputDecoration(
+                            labelText: 'Medicine name',
+                            isDense: true,
                           ),
+                          controller: m.nameCtrl,
+                          onChanged: (q) => _searchMedicines(q, forIndex: i),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              labelText: 'Price (₹)',
-                              isDense: true,
-                            ),
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            controller: m.priceCtrl,
-                          ),
+                      ),
+                      priceField: TextField(
+                        decoration: const InputDecoration(
+                          labelText: 'Price (₹)',
+                          isDense: true,
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 2,
-                          child: Focus(
-                            onFocusChange: (hasFocus) {
-                              if (hasFocus) {
-                                setState(() => _medicineFrequencySuggestForIndex = i);
-                              } else {
-                                Future.delayed(const Duration(milliseconds: 180), () {
-                                  if (!mounted) return;
-                                  if (_medicineFrequencySuggestForIndex == i) {
-                                    setState(() => _medicineFrequencySuggestForIndex = null);
-                                  }
-                                });
-                              }
-                            },
-                            child: TextField(
-                              decoration: const InputDecoration(
-                                labelText: 'Frequency',
-                                isDense: true,
-                              ),
-                              controller: m.freqCtrl,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: AppDropdownButtonFormField<int?>(
-                            value: m.durationDays,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Days',
-                              isDense: true,
-                            ),
-                            items: [
-                              const DropdownMenuItem<int?>(
-                                value: null,
-                                child: Text('—'),
-                              ),
-                              ...List.generate(
-                                15,
-                                (i) => DropdownMenuItem<int?>(
-                                  value: i + 1,
-                                  child: Text('${i + 1}'),
-                                ),
-                              ),
-                            ],
-                            onChanged: (v) => setState(() => m.durationDays = v),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: AppDropdownButtonFormField<int>(
-                            value: m.quantity,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Qty',
-                              isDense: true,
-                            ),
-                            items: List.generate(
-                              20,
-                              (i) => DropdownMenuItem(
-                                value: i + 1,
-                                child: Text('${i + 1}'),
-                              ),
-                            ),
-                            onChanged: (v) =>
-                                setState(() => m.quantity = v ?? 1),
-                          ),
-                        ),
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                          icon: Icon(
-                            Icons.medication_outlined,
-                            size: 20,
-                            color: m.productId != null ? AppTheme.accent : AppTheme.primary,
-                          ),
-                          tooltip: m.productId != null
-                              ? 'Medicine product linked'
-                              : 'Link medicine product (stock checked)',
-                          onPressed: () async {
-                            final qty = m.quantity.toDouble();
-                            final p = await _pickProduct(
-                              initial: m.nameCtrl.text,
-                              type: 'medicine',
-                              requiredQty: qty,
-                            );
-                            if (p != null) {
-                              setState(() {
-                                m.productId = p.id;
-                                m.nameCtrl.text = p.name;
-                                m.priceCtrl.text = _formatAmount(p.sellingPrice);
-                              });
-                            }
-                          },
-                        ),
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                          icon: const Icon(Icons.close, color: AppTheme.danger),
-                          onPressed: () {
-                            final row = _medicines.removeAt(i);
-                            _clearMedicineSuggestions();
-                            setState(() {
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        controller: m.priceCtrl,
+                      ),
+                      frequencyField: Focus(
+                        onFocusChange: (hasFocus) {
+                          if (hasFocus) {
+                            setState(() => _medicineFrequencySuggestForIndex = i);
+                          } else {
+                            Future.delayed(const Duration(milliseconds: 180), () {
+                              if (!mounted) return;
                               if (_medicineFrequencySuggestForIndex == i) {
-                                _medicineFrequencySuggestForIndex = null;
+                                setState(() => _medicineFrequencySuggestForIndex = null);
                               }
                             });
-                            WidgetsBinding.instance
-                                .addPostFrameCallback((_) => row.dispose());
-                          },
+                          }
+                        },
+                        child: TextField(
+                          decoration: const InputDecoration(
+                            labelText: 'Frequency',
+                            isDense: true,
+                          ),
+                          controller: m.freqCtrl,
                         ),
-                      ],
+                      ),
+                      daysField: AppDropdownButtonFormField<int?>(
+                        value: m.durationDays,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Days',
+                          isDense: true,
+                        ),
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('—'),
+                          ),
+                          ...List.generate(
+                            15,
+                            (i) => DropdownMenuItem<int?>(
+                              value: i + 1,
+                              child: Text('${i + 1}'),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() => m.durationDays = v),
+                      ),
+                      qtyField: AppDropdownButtonFormField<int>(
+                        value: m.quantity,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Qty',
+                          isDense: true,
+                        ),
+                        items: List.generate(
+                          20,
+                          (i) => DropdownMenuItem(
+                            value: i + 1,
+                            child: Text('${i + 1}'),
+                          ),
+                        ),
+                        onChanged: (v) =>
+                            setState(() => m.quantity = v ?? 1),
+                      ),
+                      linkBtn: IconButton(
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                        icon: Icon(
+                          Icons.medication_outlined,
+                          size: 20,
+                          color: m.productId != null ? AppTheme.accent : AppTheme.primary,
+                        ),
+                        tooltip: m.productId != null
+                            ? 'Medicine product linked'
+                            : 'Link medicine product (stock checked)',
+                        onPressed: () async {
+                          final qty = m.quantity.toDouble();
+                          final p = await _pickProduct(
+                            initial: m.nameCtrl.text,
+                            type: 'medicine',
+                            requiredQty: qty,
+                          );
+                          if (p != null) {
+                            setState(() {
+                              m.productId = p.id;
+                              m.nameCtrl.text = p.name;
+                              m.priceCtrl.text = _formatAmount(p.sellingPrice);
+                            });
+                          }
+                        },
+                      ),
+                      removeBtn: IconButton(
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                        icon: const Icon(Icons.close, color: AppTheme.danger),
+                        onPressed: () {
+                          final row = _medicines.removeAt(i);
+                          _clearMedicineSuggestions();
+                          setState(() {
+                            if (_medicineFrequencySuggestForIndex == i) {
+                              _medicineFrequencySuggestForIndex = null;
+                            }
+                          });
+                          WidgetsBinding.instance
+                              .addPostFrameCallback((_) => row.dispose());
+                        },
+                      ),
                     ),
                     if (showMedicineSuggestions)
                       Padding(
@@ -2575,31 +2580,55 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             decoration: const InputDecoration(labelText: 'Follow-up instructions'),
           ),
           const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _saving ? null : _hold,
-                  icon: const Icon(Icons.pause_circle_outline, size: 20),
-                  label: const Text('Hold'),
-                ),
+          if (compact) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _saving ? null : _hold,
+                icon: const Icon(Icons.pause_circle_outline, size: 20),
+                label: const Text('Hold'),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const SizedBox(
-                          height: 22,
-                          width: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(_isEdit ? 'Update visit' : 'Create visit'),
-                ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _saving ? null : _save,
+                child: _saving
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(_isEdit ? 'Update visit' : 'Create visit'),
               ),
-            ],
-          ),
+            ),
+          ] else
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _saving ? null : _hold,
+                    icon: const Icon(Icons.pause_circle_outline, size: 20),
+                    label: const Text('Hold'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    child: _saving
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(_isEdit ? 'Update visit' : 'Create visit'),
+                  ),
+                ),
+              ],
+            ),
           const SizedBox(height: 8),
           Text(
             'Hold saves your progress as an open visit so you can leave and resume later.',
@@ -2612,12 +2641,114 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     );
   }
 
-  Widget _sectionHeader(String title, VoidCallback onAdd) {
-    return Row(
+  Widget _responsiveSectionHeader({
+    required Widget title,
+    required List<Widget> actions,
+  }) {
+    if (!_compactUi) {
+      return Row(
+        children: [
+          Expanded(child: title),
+          ...actions,
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Text(title, style: Theme.of(context).textTheme.titleSmall),
+        title,
+        const SizedBox(height: 4),
+        Wrap(spacing: 4, runSpacing: 4, children: actions),
+      ],
+    );
+  }
+
+  /// Desktop keeps a single wide row. Mobile stacks so fields stay tappable.
+  Widget _medicineFieldsLayout({
+    required bool compact,
+    required Widget nameField,
+    required Widget priceField,
+    required Widget frequencyField,
+    required Widget daysField,
+    required Widget qtyField,
+    required Widget linkBtn,
+    required Widget removeBtn,
+  }) {
+    if (!compact) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(flex: 3, child: nameField),
+          const SizedBox(width: 8),
+          Expanded(flex: 2, child: priceField),
+          const SizedBox(width: 8),
+          Expanded(flex: 2, child: frequencyField),
+          const SizedBox(width: 8),
+          Expanded(child: daysField),
+          const SizedBox(width: 8),
+          Expanded(child: qtyField),
+          linkBtn,
+          removeBtn,
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: nameField),
+            linkBtn,
+            removeBtn,
+          ],
         ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: priceField),
+            const SizedBox(width: 8),
+            Expanded(child: frequencyField),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: daysField),
+            const SizedBox(width: 8),
+            Expanded(child: qtyField),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _nextDueButton({
+    required DateTime? date,
+    required Future<void> Function() onPick,
+    IconData icon = Icons.notifications_active_outlined,
+  }) {
+    final button = OutlinedButton.icon(
+      onPressed: onPick,
+      icon: Icon(icon, size: 16),
+      label: Text(
+        date != null
+            ? 'Next due ${date.toIso8601String().substring(0, 10)}'
+            : 'Set next due (reminder)',
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+      ),
+    );
+    if (!_compactUi) {
+      return Align(alignment: Alignment.centerLeft, child: button);
+    }
+    return SizedBox(width: double.infinity, child: button);
+  }
+
+  Widget _sectionHeader(String title, VoidCallback onAdd) {
+    return _responsiveSectionHeader(
+      title: Text(title, style: Theme.of(context).textTheme.titleSmall),
+      actions: [
         TextButton.icon(
           onPressed: onAdd,
           icon: const Icon(Icons.add, size: 18),
@@ -2717,20 +2848,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final d = await _pickDueDate(row.nextDueDate);
-                        if (d != null) setState(() => row.nextDueDate = d);
-                      },
-                      icon: const Icon(Icons.notifications_active_outlined, size: 16),
-                      label: Text(
-                        row.nextDueDate != null
-                            ? 'Next due ${row.nextDueDate!.toIso8601String().substring(0, 10)}'
-                            : 'Set next due (reminder)',
-                      ),
-                    ),
+                  _nextDueButton(
+                    date: row.nextDueDate,
+                    icon: Icons.notifications_active_outlined,
+                    onPick: () async {
+                      final d = await _pickDueDate(row.nextDueDate);
+                      if (d != null) setState(() => row.nextDueDate = d);
+                    },
                   ),
                 ],
               ),
@@ -2822,20 +2946,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final d = await _pickDueDate(row.nextDueDate);
-                        if (d != null) setState(() => row.nextDueDate = d);
-                      },
-                      icon: const Icon(Icons.event_outlined, size: 16),
-                      label: Text(
-                        row.nextDueDate != null
-                            ? 'Next due ${row.nextDueDate!.toIso8601String().substring(0, 10)}'
-                            : 'Set next due (reminder)',
-                      ),
-                    ),
+                  _nextDueButton(
+                    date: row.nextDueDate,
+                    icon: Icons.event_outlined,
+                    onPick: () async {
+                      final d = await _pickDueDate(row.nextDueDate);
+                      if (d != null) setState(() => row.nextDueDate = d);
+                    },
                   ),
                 ],
               ),
@@ -2923,36 +3040,63 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: row.costCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(
-                            labelText: 'Cost',
-                            isDense: true,
-                          ),
+                  if (_compactUi) ...[
+                    TextField(
+                      controller: row.costCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Cost',
+                        isDense: true,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final d = await _pickDueDate(row.followUpDate);
+                          if (d != null) setState(() => row.followUpDate = d);
+                        },
+                        icon: const Icon(Icons.event_outlined, size: 16),
+                        label: Text(
+                          row.followUpDate != null
+                              ? row.followUpDate!.toIso8601String().substring(0, 10)
+                              : 'Follow-up',
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            final d = await _pickDueDate(row.followUpDate);
-                            if (d != null) setState(() => row.followUpDate = d);
-                          },
-                          icon: const Icon(Icons.event_outlined, size: 16),
-                          label: Text(
-                            row.followUpDate != null
-                                ? row.followUpDate!.toIso8601String().substring(0, 10)
-                                : 'Follow-up',
-                            overflow: TextOverflow.ellipsis,
+                    ),
+                  ] else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: row.costCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Cost',
+                              isDense: true,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              final d = await _pickDueDate(row.followUpDate);
+                              if (d != null) setState(() => row.followUpDate = d);
+                            },
+                            icon: const Icon(Icons.event_outlined, size: 16),
+                            label: Text(
+                              row.followUpDate != null
+                                  ? row.followUpDate!.toIso8601String().substring(0, 10)
+                                  : 'Follow-up',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),

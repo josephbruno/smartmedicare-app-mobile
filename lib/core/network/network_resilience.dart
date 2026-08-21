@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 
+import '../app_config.dart';
+
 /// Retries transient DNS / connection failures a few times.
 class ConnectionRetryInterceptor extends Interceptor {
   ConnectionRetryInterceptor(
@@ -89,11 +91,18 @@ String humanizeNetworkError(DioException e) {
   if (raw.contains('failed host lookup') ||
       raw.contains('name not resolved') ||
       raw.contains('no address associated')) {
+    final hostHint = _apiHostHint();
+    if (Platform.isWindows) {
+      return 'Cannot reach the Maran server (DNS lookup failed for '
+          '$hostHint).\n\n'
+          'Check your internet connection, then allow Maran Billing through '
+          'antivirus/firewall (Total Security, Windows Defender). '
+          'Try again in a few seconds.';
+    }
     return 'Cannot reach the Maran server (DNS lookup failed for '
-        'api-maran.biapps.cloud).\n\n'
-        'Check your internet connection, then allow Maran Billing through '
-        'antivirus/firewall (Total Security, Windows Defender). '
-        'Try again in a few seconds.';
+        '$hostHint).\n\n'
+        'Check Wi‑Fi/mobile data, then try again. If this keeps happening, '
+        'reinstall the latest app build.';
   }
   if (e.type == DioExceptionType.connectionTimeout ||
       e.type == DioExceptionType.receiveTimeout ||
@@ -106,8 +115,18 @@ String humanizeNetworkError(DioException e) {
       raw.contains('connection errored') ||
       raw.contains('network is unreachable') ||
       raw.contains('socketexception')) {
+    if (Platform.isWindows) {
+      return 'No network connection to the Maran server. '
+          'Check Wi‑Fi/Ethernet and antivirus network protection, then retry.';
+    }
     return 'No network connection to the Maran server. '
-        'Check Wi‑Fi/Ethernet and antivirus network protection, then retry.';
+        'Check Wi‑Fi/mobile data, then retry.';
   }
   return e.message ?? 'Network error';
+}
+
+String _apiHostHint() {
+  final host = Uri.tryParse(AppConfig.apiBaseUrl)?.host;
+  if (host == null || host.isEmpty) return 'the API host';
+  return host;
 }
