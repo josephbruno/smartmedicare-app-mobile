@@ -44,7 +44,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen> {
     } catch (e) {
       _pinKey.currentState?.clear();
       setState(() {
-        _error = e.toString();
+        _error = e is ApiException ? e.displayMessage : 'Could not verify PIN. Please try again.';
         _shakeTrigger++;
       });
     } finally {

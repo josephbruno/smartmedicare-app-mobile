@@ -105,6 +105,7 @@ class ApiClient {
 
   static Never throwFromDio(DioException e) {
     final data = e.response?.data;
+    final status = e.response?.statusCode;
     String msg = humanizeNetworkError(e);
     Map<String, List<String>>? errors;
     if (data is Map) {
@@ -118,6 +119,10 @@ class ApiClient {
           }
         });
       }
+    } else if (_looksLikeHtml(data) || status == 403) {
+      msg = status == 403
+          ? 'Unlock was blocked by the server. Check your PIN and try again.'
+          : 'The server returned an unexpected response. Please try again.';
     }
 
     // Prefer the first field error over a generic validation message.
@@ -138,5 +143,11 @@ class ApiClient {
       statusCode: e.response?.statusCode,
       errors: errors,
     );
+  }
+
+  static bool _looksLikeHtml(dynamic data) {
+    if (data is! String) return false;
+    final s = data.trimLeft().toLowerCase();
+    return s.startsWith('<!doctype') || s.startsWith('<html');
   }
 }

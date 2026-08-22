@@ -100,8 +100,17 @@ class AuthService {
 
   Future<void> verifyPin(String pin) async {
     try {
-      await _client.post('/auth/verify-pin', data: {'pin': pin});
+      await _client.post('/auth/unlock', data: {'code': pin});
     } on DioException catch (e) {
+      // Older APIs only have /verify-pin; retry once if unlock is missing.
+      if (e.response?.statusCode == 404) {
+        try {
+          await _client.post('/auth/verify-pin', data: {'code': pin});
+          return;
+        } on DioException catch (e2) {
+          ApiClient.throwFromDio(e2);
+        }
+      }
       ApiClient.throwFromDio(e);
     }
   }
