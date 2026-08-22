@@ -32,6 +32,8 @@ class ApiClient {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
+              'User-Agent': apiClientUserAgent(),
+              'Accept-Language': 'en-US,en;q=0.9',
             },
           ),
         ) {
@@ -120,9 +122,14 @@ class ApiClient {
         });
       }
     } else if (_looksLikeHtml(data) || status == 403) {
-      msg = status == 403
-          ? 'Unlock was blocked by the server. Check your PIN and try again.'
-          : 'The server returned an unexpected response. Please try again.';
+      final html = data is String ? data.toLowerCase() : '';
+      if (html.contains('lsrecap') || html.contains('bot verification')) {
+        msg = 'The host blocked this request as a bot. Please try again in a minute.';
+      } else if (status == 403) {
+        msg = 'Unlock was blocked by the server. Check your PIN and try again.';
+      } else {
+        msg = 'The server returned an unexpected response. Please try again.';
+      }
     }
 
     // Prefer the first field error over a generic validation message.
