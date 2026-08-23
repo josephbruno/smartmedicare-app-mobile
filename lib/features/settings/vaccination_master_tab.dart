@@ -7,6 +7,7 @@ import '../../app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/app_form_dialog.dart';
+import '../../data/models/vaccination_category.dart';
 import '../../data/services/emr_master_data_service.dart';
 
 /// EMR Master Data tab: dog/cat vaccination names, booster duration, day-gap courses.
@@ -61,6 +62,7 @@ class VaccinationMasterTabState extends State<VaccinationMasterTab> {
       text: item?.nextDueDays?.toString() ?? '365',
     );
     var species = item?.species == 'cat' ? 'cat' : 'dog';
+    var category = VaccinationCategory.normalize(item?.category) ?? VaccinationCategory.annual;
     var scheduleType = item?.isCourse == true ? 'course' : 'booster';
     var doseDays = List<int>.from(
       item != null && item.doseDays.isNotEmpty ? item.doseDays : const [0, 3, 7, 14, 28],
@@ -83,6 +85,21 @@ class VaccinationMasterTabState extends State<VaccinationMasterTab> {
             onChanged: (v) => setLocal(() => species = v ?? 'dog'),
           ),
           const SizedBox(height: 16),
+          AppDropdownButtonFormField<String>(
+            value: category,
+            decoration: appFormFieldDecoration('Category *'),
+            items: [
+              for (final key in VaccinationCategory.keys)
+                DropdownMenuItem(
+                  value: key,
+                  child: Text(VaccinationCategory.labelOf(key)),
+                ),
+            ],
+            onChanged: (v) => setLocal(
+              () => category = VaccinationCategory.normalize(v) ?? VaccinationCategory.annual,
+            ),
+          ),
+          const SizedBox(height: 16),
           TextField(
             controller: name,
             decoration: appFormFieldDecoration('Vaccination name *'),
@@ -98,14 +115,14 @@ class VaccinationMasterTabState extends State<VaccinationMasterTab> {
             onChanged: (v) => setLocal(() => scheduleType = v ?? 'booster'),
           ),
           const SizedBox(height: 16),
-          if (scheduleType == 'booster')
-            TextField(
-              controller: nextDays,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: appFormFieldDecoration('Next consume (days) *'),
-            )
-          else ...[
+          TextField(
+            controller: nextDays,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: appFormFieldDecoration('Next follow duration (days) *'),
+          ),
+          if (scheduleType == 'course') ...[
+            const SizedBox(height: 16),
             Text(
               'Dose days from first shot (must include 0)',
               style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
@@ -218,12 +235,12 @@ class VaccinationMasterTabState extends State<VaccinationMasterTab> {
 
     final body = <String, dynamic>{
       'species': species,
+      'category': category,
       'name': nameText,
       'schedule_type': scheduleType,
       'is_active': isActive,
       'reminder_days_before': 7,
-      if (scheduleType == 'booster')
-        'next_due_days': int.tryParse(nextDaysText) ?? 365,
+      'next_due_days': int.tryParse(nextDaysText) ?? 365,
       if (scheduleType == 'course') 'dose_days': doseDays,
     };
 
@@ -278,7 +295,9 @@ class VaccinationMasterTabState extends State<VaccinationMasterTab> {
         final item = _items[i];
         return ListTile(
           title: Text(item.name),
-          subtitle: Text('${item.speciesLabel} · ${item.scheduleLabel}'),
+          subtitle: Text(
+            '${item.speciesLabel} · ${item.categoryLabel} · ${item.scheduleLabel}',
+          ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

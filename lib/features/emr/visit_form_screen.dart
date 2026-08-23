@@ -16,6 +16,7 @@ import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/emr.dart';
 import '../../data/models/product.dart';
 import '../../data/models/treatment_under.dart';
+import '../../data/models/vaccination_category.dart';
 import '../../data/services/emr_master_data_service.dart';
 
 class VisitFormScreen extends StatefulWidget {
@@ -51,8 +52,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   final List<_TreatmentRow> _treatments = [];
   final List<_MedicineRow> _medicines = [];
   final List<_VaccinationRow> _vaccinations = [];
-  final List<_DewormingRow> _dewormings = [];
-  final List<_SurgeryRow> _surgeries = [];
   List<String> _complaintSuggestions = [];
   List<String> _defaultComplaintSuggestions = [];
   List<String> _investigationSuggestions = [];
@@ -70,7 +69,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   List<VaccinationTemplate> _defaultVaccinationSuggestions = [];
   List<VaccinationTemplate> _vaccinationSuggestions = [];
   int? _vaccinationSuggestForIndex;
-  String _treatmentUnderTab = TreatmentUnderCategory.antibiotics;
+  String _vaccinationTab = VaccinationCategory.annual;
+  String? _treatmentUnderTab;
   PetSummary? _petSummary;
   int? _serviceChargeProductId;
   String? _serviceChargeProductName;
@@ -448,18 +448,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _vaccinations
       ..clear()
       ..addAll((visit.vaccinations ?? []).map(_VaccinationRow.fromModel));
-    for (final r in _dewormings) {
-      r.dispose();
+    if (_vaccinations.isNotEmpty) {
+      _vaccinationTab = _rowCategory(_vaccinations.first);
     }
-    _dewormings
-      ..clear()
-      ..addAll((visit.dewormings ?? []).map(_DewormingRow.fromModel));
-    for (final r in _surgeries) {
-      r.dispose();
-    }
-    _surgeries
-      ..clear()
-      ..addAll((visit.surgeries ?? []).map(_SurgeryRow.fromModel));
     if (visit.serviceCharge > 0) {
       _serviceCharge.text = visit.serviceCharge.toString();
     } else {
@@ -816,16 +807,23 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   VaccinationTemplate? _templateForName(String name) {
     final n = name.trim().toLowerCase();
     if (n.isEmpty) return null;
+    VaccinationTemplate? any;
     for (final t in _defaultVaccinationSuggestions) {
-      if (t.name.toLowerCase() == n) return t;
+      if (t.name.toLowerCase() != n) continue;
+      if (VaccinationCategory.forVisit(snapshot: t.category, name: t.name) ==
+          _vaccinationTab) {
+        return t;
+      }
+      any ??= t;
     }
-    return null;
+    return any;
   }
 
   void _attachVaccinationTemplates() {
     for (final row in _vaccinations) {
       if (row.template != null) {
-        _fillVaccinationNextDue(row);
+        row.category = row.template!.category;
+        _fillVaccinationNextDue(row, overwrite: false);
         continue;
       }
       VaccinationTemplate? match;
@@ -839,25 +837,49 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (match != null) {
         row.template = match;
         row.templateId = match.id;
-        _fillVaccinationNextDue(row);
+        row.category = match.category;
+        _fillVaccinationNextDue(row, overwrite: false);
+      } else {
+        row.category ??= VaccinationCategory.inferFromName(row.nameCtrl.text);
       }
     }
   }
 
+  String _rowCategory(_VaccinationRow row) => VaccinationCategory.forVisit(
+        snapshot: row.category ?? row.template?.category,
+        name: row.nameCtrl.text,
+      );
+
+  List<VaccinationTemplate> _vaccinesForTab(String tab) {
+    return _defaultVaccinationSuggestions
+        .where(
+          (t) =>
+              VaccinationCategory.forVisit(snapshot: t.category, name: t.name) ==
+              tab,
+        )
+        .toList();
+  }
+
+  int _vaccinationCount(String tab) =>
+      _vaccinations.where((r) => _rowCategory(r) == tab).length;
+
+  bool _isVaccineSelected(VaccinationTemplate t) =>
+      _vaccinations.any((r) => r.templateId == t.id);
+
   void _showVaccinationSuggestionsFor(int index, {String? query}) {
     final q = (query ?? _vaccinations[index].nameCtrl.text).trim();
+    final tabVaccines = _vaccinesForTab(_vaccinationTab);
     setState(() {
       _vaccinationSuggestForIndex = index;
       if (q.length < 2) {
-        _vaccinationSuggestions = _defaultVaccinationSuggestions;
+        _vaccinationSuggestions = tabVaccines;
       }
     });
     if (q.length >= 2) {
       final lower = q.toLowerCase();
       setState(() {
-        _vaccinationSuggestions = _defaultVaccinationSuggestions
-            .where((t) => t.name.toLowerCase().contains(lower))
-            .toList();
+        _vaccinationSuggestions =
+            tabVaccines.where((t) => t.name.toLowerCase().contains(lower)).toList();
       });
     }
   }
@@ -872,90 +894,89 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  void _removeScheduledFollowUps({required int keepIndex, int? templateId}) {
-    if (templateId == null) return;
-    for (var j = _vaccinations.length - 1; j >= 0; j--) {
-      if (j == keepIndex) continue;
-      final r = _vaccinations[j];
-      if (r.templateId == templateId && r.isScheduled) {
-        _vaccinations.removeAt(j).dispose();
-      }
-    }
-  }
-
   void _removeVaccinationAt(int index) {
     if (index < 0 || index >= _vaccinations.length) return;
-    final row = _vaccinations[index];
-    if (row.isGiven) {
-      _removeScheduledFollowUps(keepIndex: index, templateId: row.templateId);
-    }
-    _vaccinations.removeAt(index);
-    _clearVaccinationSuggestions();
+    final row = _vaccinations.removeAt(index);
+    _vaccinationSuggestForIndex = null;
+    _vaccinationSuggestions = [];
     WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
   }
 
-  void _fillVaccinationNextDue(_VaccinationRow row) {
-    if (row.nextDueManual || row.isScheduled) return;
-    final t = row.template;
-    if (t == null) return;
-    if (t.isCourse) {
-      row.nextDueDate = null;
+  void _fillVaccinationNextDue(_VaccinationRow row, {bool overwrite = true}) {
+    if (row.nextDueManual) return;
+    if (!overwrite && row.nextDueDate != null) return;
+    final days = row.template?.durationDays;
+    if (days == null || days <= 0) {
+      if (overwrite) row.nextDueDate = null;
       return;
     }
-    row.nextDueDate = t.nextDueDate(
-      givenOn: row.administeredDate ?? _visitDate,
-      doseNumber: 1,
-    );
+    row.nextDueDate =
+        _dateOnly(row.administeredDate ?? _visitDate).add(Duration(days: days));
+  }
+
+  void _toggleVaccineTemplate(VaccinationTemplate t) {
+    final existing = _vaccinations.indexWhere((r) => r.templateId == t.id);
+    if (existing >= 0) {
+      setState(() => _removeVaccinationAt(existing));
+      return;
+    }
+    setState(() {
+      final row = _VaccinationRow(
+        name: t.name,
+        templateId: t.id,
+        template: t,
+        category: t.category,
+        administeredDate: _dateOnly(_visitDate),
+      );
+      _fillVaccinationNextDue(row);
+      _vaccinations.add(row);
+    });
+  }
+
+  void _addCustomVaccination() {
+    if (_petVaccinationSpecies == null) {
+      AppMessenger.show(
+        context,
+        const SnackBar(content: Text('Select a pet first to load dog or cat vaccines')),
+      );
+      return;
+    }
+    setState(() {
+      _vaccinations.add(
+        _VaccinationRow(
+          category: _vaccinationTab,
+          administeredDate: _dateOnly(_visitDate),
+        ),
+      );
+      _vaccinationSuggestForIndex = _vaccinations.length - 1;
+      _vaccinationSuggestions = _vaccinesForTab(_vaccinationTab);
+    });
   }
 
   void _applyVaccineTemplate(_VaccinationRow row, VaccinationTemplate t) {
     final index = _vaccinations.indexOf(row);
     if (index < 0) return;
-    if (row.templateId == t.id && row.isGiven) {
-      if (!t.isCourse) _fillVaccinationNextDue(row);
+    if (row.templateId == t.id) {
+      _fillVaccinationNextDue(row);
+      return;
+    }
+    if (_vaccinations.any((r) => r != row && r.templateId == t.id)) {
+      AppMessenger.show(
+        context,
+        SnackBar(content: Text('${t.name} is already added')),
+      );
       return;
     }
 
-    _removeScheduledFollowUps(keepIndex: index, templateId: row.templateId);
-
-    final given = _dateOnly(_visitDate);
     row.nameCtrl.text = t.name;
     row.template = t;
     row.templateId = t.id;
+    row.category = t.category;
     row.status = 'completed';
-    row.administeredDate = given;
+    row.administeredDate = _dateOnly(_visitDate);
     row.nextDueManual = false;
-    row.doseNumber = t.isCourse ? t.nextDoseNumber.clamp(1, t.totalDoses) : 1;
-
-    if (!t.isCourse) {
-      row.nextDueDate = given.add(Duration(days: t.nextDueDays ?? 365));
-      return;
-    }
-
-    row.nextDueDate = null;
-    final start = row.doseNumber;
-    for (var d = t.totalDoses; d >= start + 1; d--) {
-      final when = t.courseDoseDate(
-        givenOn: given,
-        givenDoseNumber: start,
-        targetDoseNumber: d,
-      );
-      if (when == null) continue;
-      _vaccinations.insert(
-        index + 1,
-        _VaccinationRow(
-          name: t.name,
-          brand: row.brandCtrl.text,
-          administeredBy: row.byCtrl.text,
-          templateId: t.id,
-          template: t,
-          doseNumber: d,
-          status: 'scheduled',
-          administeredDate: when,
-          nextDueDate: when,
-        ),
-      );
-    }
+    row.doseNumber = 1;
+    _fillVaccinationNextDue(row);
   }
 
   /// Search uses the last comma-separated segment so multi-select typing works.
@@ -1249,16 +1270,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           for (final v in _vaccinations)
             if (v.nameCtrl.text.trim().isNotEmpty) v.toJson(),
         ],
-      if (_isEdit || _dewormings.isNotEmpty)
-        'dewormings': [
-          for (final d in _dewormings)
-            if (d.nameCtrl.text.trim().isNotEmpty) d.toJson(),
-        ],
-      if (_isEdit || _surgeries.isNotEmpty)
-        'surgeries': [
-          for (final s in _surgeries)
-            if (s.nameCtrl.text.trim().isNotEmpty) s.toJson(),
-        ],
     };
   }
 
@@ -1344,12 +1355,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     }
     for (final v in _vaccinations) {
       v.dispose();
-    }
-    for (final d in _dewormings) {
-      d.dispose();
-    }
-    for (final s in _surgeries) {
-      s.dispose();
     }
     super.dispose();
   }
@@ -1918,12 +1923,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ),
           ),
           if (_treatments.isEmpty &&
-              !_medicines.any((m) =>
-                  m.treatmentUnderCategory != null &&
-                  TreatmentUnderCategory.forVisit(
-                        snapshot: m.treatmentUnderCategory,
-                      ) ==
-                      _treatmentUnderTab))
+              (_treatmentUnderTab == null ||
+                  !_medicines.any((m) =>
+                      m.treatmentUnderCategory != null &&
+                      TreatmentUnderCategory.forVisit(
+                            snapshot: m.treatmentUnderCategory,
+                          ) ==
+                          _treatmentUnderTab)))
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text(
@@ -2100,18 +2106,19 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               ),
             );
           }),
-          ..._medicines.asMap().entries.where((e) =>
-              e.value.treatmentUnderCategory != null &&
-              TreatmentUnderCategory.forVisit(
-                    snapshot: e.value.treatmentUnderCategory,
-                  ) ==
-                  _treatmentUnderTab).map((e) {
-            return _buildMedicineCard(
-              index: e.key,
-              compact: compact,
-              treatmentUnderCategory: _treatmentUnderTab,
-            );
-          }),
+          if (_treatmentUnderTab != null)
+            ..._medicines.asMap().entries.where((e) =>
+                e.value.treatmentUnderCategory != null &&
+                TreatmentUnderCategory.forVisit(
+                      snapshot: e.value.treatmentUnderCategory,
+                    ) ==
+                    _treatmentUnderTab).map((e) {
+              return _buildMedicineCard(
+                index: e.key,
+                compact: compact,
+                treatmentUnderCategory: _treatmentUnderTab,
+              );
+            }),
           const SizedBox(height: 16),
           _responsiveSectionHeader(
             title: Text('Prescriptions',
@@ -2148,10 +2155,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ),
           const SizedBox(height: 20),
           _buildVaccinationSection(),
-          const SizedBox(height: 20),
-          _buildDewormingSection(),
-          const SizedBox(height: 20),
-          _buildSurgerySection(),
           const SizedBox(height: 16),
           Text('Follow-up', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
@@ -2614,60 +2617,108 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   Widget _buildVaccinationSection() {
     final species = _petVaccinationSpecies;
+    final tabVaccines = _vaccinesForTab(_vaccinationTab);
+    final selected = _vaccinations.asMap().entries
+        .where((e) => _rowCategory(e.value) == _vaccinationTab)
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _sectionHeader('Vaccinations', () {
-          if (species == null) {
-            AppMessenger.show(
-              context,
-              const SnackBar(content: Text('Select a pet first to load dog or cat vaccines')),
-            );
-            return;
-          }
-          setState(() {
-            _vaccinations.add(_VaccinationRow());
-            _vaccinationSuggestForIndex = _vaccinations.length - 1;
-            _vaccinationSuggestions = _defaultVaccinationSuggestions;
-          });
-        }),
+        _sectionHeader('Vaccinations', _addCustomVaccination),
         Text(
           species == null
               ? 'Select a pet to load that species vaccination list'
-              : 'Yearly vaccines: given today, reminder next year. '
-                  'Course vaccines: remaining doses are scheduled on this visit.',
+              : 'Tap a vaccine to add it. Next reminder is set from the duration.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: AppTheme.textSecondary,
               ),
         ),
         const SizedBox(height: 8),
-        if (_vaccinations.isEmpty)
-          Text(
-            'No vaccinations for this visit',
-            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final key in VaccinationCategory.keys)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(
+                      _vaccinationCount(key) == 0
+                          ? VaccinationCategory.labelOf(key)
+                          : '${VaccinationCategory.labelOf(key)} (${_vaccinationCount(key)})',
+                    ),
+                    selected: _vaccinationTab == key,
+                    onSelected: (_) => setState(() {
+                      _vaccinationTab = key;
+                      _vaccinationSuggestForIndex = null;
+                      _vaccinationSuggestions = [];
+                    }),
+                  ),
+                ),
+            ],
           ),
-        ..._vaccinations.asMap().entries.map((e) {
-          final i = e.key;
-          final row = e.value;
-          if (row.isScheduled) {
-            return _scheduledVaccinationTile(i, row);
-          }
-          final course = row.template?.isCourse == true;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Focus(
+        ),
+        if (species != null) ...[
+          const SizedBox(height: 10),
+          if (tabVaccines.isEmpty)
+            Text(
+              'No ${VaccinationCategory.labelOf(_vaccinationTab).toLowerCase()}s in master data',
+              style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+            )
+          else
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final t in tabVaccines)
+                  FilterChip(
+                    label: Text(t.name, style: const TextStyle(fontSize: 12)),
+                    selected: _isVaccineSelected(t),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    onSelected: (_) => _toggleVaccineTemplate(t),
+                  ),
+              ],
+            ),
+        ],
+        const SizedBox(height: 8),
+        if (selected.isEmpty)
+          Text(
+            'No ${VaccinationCategory.labelOf(_vaccinationTab).toLowerCase()}s selected',
+            style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+          )
+        else
+          ...selected.map((e) => _selectedVaccinationTile(e.key, e.value)),
+      ],
+    );
+  }
+
+  Widget _selectedVaccinationTile(int i, _VaccinationRow row) {
+    final fromList = row.template != null;
+    final days = row.template?.durationDays;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: fromList
+                      ? Text(
+                          row.nameCtrl.text,
+                          style: const TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )
+                      : Focus(
                           onFocusChange: (hasFocus) {
                             if (hasFocus) {
                               _showVaccinationSuggestionsFor(i);
@@ -2712,394 +2763,70 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                             },
                           ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: 'Remove',
-                        onPressed: () => setState(() => _removeVaccinationAt(i)),
-                        icon: const Icon(Icons.close, size: 18),
-                      ),
-                    ],
-                  ),
-                  if (_vaccinationSuggestForIndex == i &&
-                      _vaccinationSuggestions.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: _vaccinationSuggestions.map((s) {
-                          return Listener(
-                            onPointerDown: (_) {
-                              setState(() {
-                                _applyVaccineTemplate(row, s);
-                                _vaccinationSuggestForIndex = null;
-                                _vaccinationSuggestions = [];
-                              });
-                              FocusManager.instance.primaryFocus?.unfocus();
-                            },
-                            child: Chip(
-                              label: Text(
-                                s.isCourse ? '${s.name} (${s.scheduleLabel})' : s.name,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  if (course) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Dose ${row.doseNumber} given today. Remaining doses are scheduled below.',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: row.brandCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Brand',
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: row.byCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Administered by',
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (!course) ...[
-                    const SizedBox(height: 8),
-                    _nextDueButton(
-                      date: row.nextDueDate,
-                      icon: Icons.notifications_active_outlined,
-                      onPick: () async {
-                        final d = await _pickDueDate(row.nextDueDate);
-                        if (d != null) {
-                          setState(() {
-                            row.nextDueDate = d;
-                            row.nextDueManual = true;
-                          });
-                        }
-                      },
-                    ),
-                  ],
-                ],
-              ),
+                ),
+                IconButton(
+                  tooltip: 'Remove',
+                  onPressed: () => setState(() => _removeVaccinationAt(i)),
+                  icon: const Icon(Icons.close, size: 18),
+                ),
+              ],
             ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _scheduledVaccinationTile(int index, _VaccinationRow row) {
-    final when = row.administeredDate ?? row.nextDueDate;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFECFDF5),
-          border: Border.all(color: const Color(0xFFA7F3D0)),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.event_available_outlined, size: 18, color: Color(0xFF047857)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Dose ${row.doseNumber}'
-                '${when != null ? ' · ${_formatYmd(when)}' : ''}'
-                ' · Reminder',
+            if (!fromList &&
+                _vaccinationSuggestForIndex == i &&
+                _vaccinationSuggestions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: _vaccinationSuggestions.map((s) {
+                    return Listener(
+                      onPointerDown: (_) {
+                        setState(() {
+                          _applyVaccineTemplate(row, s);
+                          _vaccinationSuggestForIndex = null;
+                          _vaccinationSuggestions = [];
+                        });
+                        FocusManager.instance.primaryFocus?.unfocus();
+                      },
+                      child: Chip(
+                        label: Text(s.name, style: const TextStyle(fontSize: 12)),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            const SizedBox(height: 8),
+            if (row.nextDueDate != null)
+              Text(
+                days != null
+                    ? 'Next reminder ${_formatYmd(row.nextDueDate!)} ($days days)'
+                    : 'Next reminder ${_formatYmd(row.nextDueDate!)}',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF047857),
                 ),
+              )
+            else
+              _nextDueButton(
+                date: row.nextDueDate,
+                icon: Icons.notifications_active_outlined,
+                onPick: () async {
+                  final d = await _pickDueDate(row.nextDueDate);
+                  if (d != null) {
+                    setState(() {
+                      row.nextDueDate = d;
+                      row.nextDueManual = true;
+                    });
+                  }
+                },
               ),
-            ),
-            IconButton(
-              tooltip: 'Change date',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.edit_calendar_outlined, size: 18),
-              onPressed: () async {
-                final d = await _pickDueDate(when);
-                if (d == null) return;
-                setState(() {
-                  row.administeredDate = d;
-                  row.nextDueDate = d;
-                  row.nextDueManual = true;
-                });
-              },
-            ),
-            IconButton(
-              tooltip: 'Remove reminder',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.close, size: 18),
-              onPressed: () => setState(() => _removeVaccinationAt(index)),
-            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildDewormingSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _sectionHeader('Deworming', () {
-          setState(() => _dewormings.add(_DewormingRow()));
-        }),
-        Text(
-          'Set next due date to create a deworming reminder',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppTheme.textSecondary,
-              ),
-        ),
-        const SizedBox(height: 8),
-        if (_dewormings.isEmpty)
-          Text(
-            'No deworming for this visit',
-            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-          ),
-        ..._dewormings.asMap().entries.map((e) {
-          final i = e.key;
-          final row = e.value;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: row.nameCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Medicine *',
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Remove',
-                        onPressed: () {
-                          setState(() {
-                            final removed = _dewormings.removeAt(i);
-                            WidgetsBinding.instance
-                                .addPostFrameCallback((_) => removed.dispose());
-                          });
-                        },
-                        icon: const Icon(Icons.close, size: 18),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: row.dosageCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Dosage',
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: row.byCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Administered by',
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _nextDueButton(
-                    date: row.nextDueDate,
-                    icon: Icons.event_outlined,
-                    onPick: () async {
-                      final d = await _pickDueDate(row.nextDueDate);
-                      if (d != null) setState(() => row.nextDueDate = d);
-                    },
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildSurgerySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _sectionHeader('Surgery', () {
-          setState(() => _surgeries.add(_SurgeryRow(
-                surgeonName: _selectedDoctor?.name ?? '',
-              )));
-        }),
-        const SizedBox(height: 8),
-        if (_surgeries.isEmpty)
-          Text(
-            'No surgery for this visit',
-            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-          ),
-        ..._surgeries.asMap().entries.map((e) {
-          final i = e.key;
-          final row = e.value;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: row.nameCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Surgery name *',
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Remove',
-                        onPressed: () {
-                          setState(() {
-                            final removed = _surgeries.removeAt(i);
-                            WidgetsBinding.instance
-                                .addPostFrameCallback((_) => removed.dispose());
-                          });
-                        },
-                        icon: const Icon(Icons.close, size: 18),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: row.anesthesiaCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Anesthesia',
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: row.surgeonCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Surgeon',
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (_compactUi) ...[
-                    TextField(
-                      controller: row.costCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Cost',
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final d = await _pickDueDate(row.followUpDate);
-                          if (d != null) setState(() => row.followUpDate = d);
-                        },
-                        icon: const Icon(Icons.event_outlined, size: 16),
-                        label: Text(
-                          row.followUpDate != null
-                              ? _formatYmd(row.followUpDate!)
-                              : 'Follow-up',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ] else
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: row.costCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: const InputDecoration(
-                              labelText: 'Cost',
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              final d = await _pickDueDate(row.followUpDate);
-                              if (d != null) setState(() => row.followUpDate = d);
-                            },
-                            icon: const Icon(Icons.event_outlined, size: 16),
-                            label: Text(
-                              row.followUpDate != null
-                                  ? _formatYmd(row.followUpDate!)
-                                  : 'Follow-up',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          );
-        }),
-      ],
     );
   }
 }
@@ -3653,8 +3380,6 @@ class _CreateServiceDialogState extends State<_CreateServiceDialog> {
 class _VaccinationRow {
   _VaccinationRow({
     String name = '',
-    String brand = '',
-    String administeredBy = '',
     this.nextDueDate,
     this.templateId,
     this.doseNumber = 1,
@@ -3662,24 +3387,23 @@ class _VaccinationRow {
     this.nextDueManual = false,
     this.status = 'completed',
     this.administeredDate,
-  })  : nameCtrl = TextEditingController(text: name),
-        brandCtrl = TextEditingController(text: brand),
-        byCtrl = TextEditingController(text: administeredBy);
+    this.category,
+  }) : nameCtrl = TextEditingController(text: name);
 
   factory _VaccinationRow.fromModel(PetVaccination v) => _VaccinationRow(
         name: v.vaccineName,
-        brand: v.vaccineBrand ?? '',
-        administeredBy: v.administeredBy ?? '',
         nextDueDate: v.nextDueDate != null ? DateTime.tryParse(v.nextDueDate!) : null,
         templateId: v.vaccinationTemplateId,
         doseNumber: v.doseNumber ?? 1,
         status: v.status,
         administeredDate: DateTime.tryParse(v.administeredDate),
+        category: VaccinationCategory.forVisit(
+          snapshot: v.category,
+          name: v.vaccineName,
+        ),
       );
 
   final TextEditingController nameCtrl;
-  final TextEditingController brandCtrl;
-  final TextEditingController byCtrl;
   DateTime? nextDueDate;
   int? templateId;
   int doseNumber;
@@ -3687,14 +3411,14 @@ class _VaccinationRow {
   bool nextDueManual;
   String status;
   DateTime? administeredDate;
+  String? category;
 
   bool get isScheduled => status == 'scheduled';
   bool get isGiven => status == 'completed';
 
   Map<String, dynamic> toJson() => {
         'vaccine_name': nameCtrl.text.trim(),
-        if (brandCtrl.text.trim().isNotEmpty) 'vaccine_brand': brandCtrl.text.trim(),
-        if (byCtrl.text.trim().isNotEmpty) 'administered_by': byCtrl.text.trim(),
+        if (category != null && category!.isNotEmpty) 'category': category,
         if (templateId != null) 'vaccination_template_id': templateId,
         'dose_number': doseNumber,
         'status': status,
@@ -3706,91 +3430,6 @@ class _VaccinationRow {
 
   void dispose() {
     nameCtrl.dispose();
-    brandCtrl.dispose();
-    byCtrl.dispose();
-  }
-}
-
-class _DewormingRow {
-  _DewormingRow({
-    String name = '',
-    String dosage = '',
-    String administeredBy = '',
-    this.nextDueDate,
-  })  : nameCtrl = TextEditingController(text: name),
-        dosageCtrl = TextEditingController(text: dosage),
-        byCtrl = TextEditingController(text: administeredBy);
-
-  factory _DewormingRow.fromModel(PetDeworming d) => _DewormingRow(
-        name: d.medicineName,
-        dosage: d.dosage ?? '',
-        administeredBy: d.administeredBy ?? '',
-        nextDueDate: d.nextDueDate != null ? DateTime.tryParse(d.nextDueDate!) : null,
-      );
-
-  final TextEditingController nameCtrl;
-  final TextEditingController dosageCtrl;
-  final TextEditingController byCtrl;
-  DateTime? nextDueDate;
-
-  Map<String, dynamic> toJson() => {
-        'medicine_name': nameCtrl.text.trim(),
-        if (dosageCtrl.text.trim().isNotEmpty) 'dosage': dosageCtrl.text.trim(),
-        if (byCtrl.text.trim().isNotEmpty) 'administered_by': byCtrl.text.trim(),
-        if (nextDueDate != null) 'next_due_date': _formatYmd(nextDueDate!),
-      };
-
-  void dispose() {
-    nameCtrl.dispose();
-    dosageCtrl.dispose();
-    byCtrl.dispose();
-  }
-}
-
-class _SurgeryRow {
-  _SurgeryRow({
-    String name = '',
-    String anesthesia = '',
-    String surgeonName = '',
-    String cost = '',
-    this.followUpDate,
-  })  : nameCtrl = TextEditingController(text: name),
-        anesthesiaCtrl = TextEditingController(text: anesthesia),
-        surgeonCtrl = TextEditingController(text: surgeonName),
-        costCtrl = TextEditingController(text: cost);
-
-  factory _SurgeryRow.fromModel(PetSurgery s) => _SurgeryRow(
-        name: s.surgeryName,
-        anesthesia: s.anesthesiaType ?? '',
-        surgeonName: s.surgeonName ?? '',
-        cost: s.cost > 0 ? _formatAmount(s.cost) : '',
-        followUpDate: s.followUpDate != null ? DateTime.tryParse(s.followUpDate!) : null,
-      );
-
-  final TextEditingController nameCtrl;
-  final TextEditingController anesthesiaCtrl;
-  final TextEditingController surgeonCtrl;
-  final TextEditingController costCtrl;
-  DateTime? followUpDate;
-
-  Map<String, dynamic> toJson() => {
-        'surgery_name': nameCtrl.text.trim(),
-        if (anesthesiaCtrl.text.trim().isNotEmpty)
-          'anesthesia_type': anesthesiaCtrl.text.trim(),
-        if (surgeonCtrl.text.trim().isNotEmpty)
-          'surgeon_name': surgeonCtrl.text.trim(),
-        if (costCtrl.text.trim().isNotEmpty)
-          'cost': double.tryParse(costCtrl.text.trim()) ?? 0,
-        if (followUpDate != null)
-          'follow_up_date': _formatYmd(followUpDate!),
-        'status': 'completed',
-      };
-
-  void dispose() {
-    nameCtrl.dispose();
-    anesthesiaCtrl.dispose();
-    surgeonCtrl.dispose();
-    costCtrl.dispose();
   }
 }
 

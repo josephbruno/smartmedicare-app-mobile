@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
 import '../models/product.dart';
+import '../models/vaccination_category.dart';
 
 class EmrTemplateItem {
   EmrTemplateItem({
@@ -177,6 +178,7 @@ class VaccinationTemplate {
     required this.id,
     required this.name,
     required this.species,
+    this.category = VaccinationCategory.annual,
     this.scheduleType = 'booster',
     this.nextDueDays,
     this.doseDays = const [],
@@ -188,6 +190,7 @@ class VaccinationTemplate {
   final int id;
   final String name;
   final String species;
+  final String category;
   final String scheduleType;
   final int? nextDueDays;
   final List<int> doseDays;
@@ -200,25 +203,30 @@ class VaccinationTemplate {
 
   String get speciesLabel => species == 'cat' ? 'Cat' : 'Dog';
 
-  String get scheduleLabel {
-    if (isCourse) {
-      final days = doseDays.join(', ');
-      return 'Days $days';
+  String get categoryLabel => VaccinationCategory.labelOf(category);
+
+  /// Duration used to set the next reminder on the visit form.
+  int? get durationDays {
+    if (nextDueDays != null && nextDueDays! > 0) return nextDueDays;
+    if (isCourse && doseDays.length >= 2) {
+      final gap = doseDays[1] - doseDays[0];
+      if (gap > 0) return gap;
     }
-    if (nextDueDays != null) return 'Every ${nextDueDays}d';
+    return null;
+  }
+
+  String get scheduleLabel {
+    final days = durationDays;
+    if (days != null) return 'Every ${days}d';
+    if (isCourse) return 'Days ${doseDays.join(', ')}';
     return 'Booster';
   }
 
   DateTime? nextDueDate({required DateTime givenOn, int doseNumber = 1}) {
     final given = DateTime(givenOn.year, givenOn.month, givenOn.day);
-    if (isCourse) {
-      return courseDoseDate(
-        givenOn: given,
-        givenDoseNumber: doseNumber,
-        targetDoseNumber: doseNumber + 1,
-      );
-    }
-    return given.add(Duration(days: nextDueDays ?? 365));
+    final days = durationDays;
+    if (days == null) return null;
+    return given.add(Duration(days: days));
   }
 
   /// Planned date for [targetDoseNumber] when [givenDoseNumber] is given on [givenOn].
@@ -255,10 +263,15 @@ class VaccinationTemplate {
         if (n != null) days.add(n);
       }
     }
+    final name = json['name']?.toString() ?? '';
     return VaccinationTemplate(
       id: intOrNull(json['id']) ?? 0,
-      name: json['name']?.toString() ?? '',
+      name: name,
       species: json['species']?.toString() ?? 'dog',
+      category: VaccinationCategory.forVisit(
+        snapshot: json['category']?.toString(),
+        name: name,
+      ),
       scheduleType: json['schedule_type']?.toString() ?? 'booster',
       nextDueDays: intOrNull(json['next_due_days']),
       doseDays: days,

@@ -9,6 +9,7 @@ import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
 import '../../data/models/treatment_under.dart';
+import '../../data/models/vaccination_category.dart';
 import 'emr_pet_hub.dart';
 import 'visit_pdf.dart';
 import 'visit_print_preview_screen.dart';
@@ -467,10 +468,31 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
           iconBg: const Color(0xFFECFDF5),
           title: 'Vaccinations',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (var i = 0; i < v.vaccinations!.length; i++) ...[
-                if (i > 0) const Divider(height: 20),
-                _VaccinationRow(vaccination: v.vaccinations![i]),
+              for (final group in VaccinationCategory.groupBy(
+                v.vaccinations!,
+                (PetVaccination item) => VaccinationCategory.forVisit(
+                  snapshot: item.category,
+                  name: item.vaccineName,
+                ),
+              )) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    VaccinationCategory.labelOf(group.key),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                for (var i = 0; i < group.value.length; i++) ...[
+                  if (i > 0) const Divider(height: 16),
+                  _VaccinationRow(vaccination: group.value[i]),
+                ],
+                const SizedBox(height: 12),
               ],
             ],
           ),
@@ -1153,13 +1175,9 @@ class _VaccinationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = [
-      if (vaccination.vaccineBrand != null && vaccination.vaccineBrand!.isNotEmpty)
-        vaccination.vaccineBrand!,
-      if (vaccination.nextDueDate != null) 'Next due ${vaccination.nextDueDate}',
-      if (vaccination.administeredBy != null && vaccination.administeredBy!.isNotEmpty)
-        vaccination.administeredBy!,
-    ].join(' · ');
+    final subtitle = vaccination.nextDueDate != null
+        ? 'Next reminder ${vaccination.nextDueDate}'
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1172,7 +1190,7 @@ class _VaccinationRow extends StatelessWidget {
             color: AppTheme.textPrimary,
           ),
         ),
-        if (subtitle.isNotEmpty) ...[
+        if (subtitle != null) ...[
           const SizedBox(height: 3),
           Text(
             subtitle,

@@ -740,6 +740,7 @@ class PetVaccination {
     required this.petId,
     this.visitId,
     required this.vaccineName,
+    this.category,
     this.vaccineBrand,
     this.batchNumber,
     required this.administeredDate,
@@ -756,6 +757,7 @@ class PetVaccination {
   final int petId;
   final int? visitId;
   final String vaccineName;
+  final String? category;
   final String? vaccineBrand;
   final String? batchNumber;
   final String administeredDate;
@@ -772,6 +774,7 @@ class PetVaccination {
         petId: intOrNull(j['pet_id']) ?? 0,
         visitId: intOrNull(j['visit_id']),
         vaccineName: j['vaccine_name']?.toString() ?? '',
+        category: j['category']?.toString(),
         vaccineBrand: j['vaccine_brand']?.toString(),
         batchNumber: j['batch_number']?.toString(),
         administeredDate: formatApiDate(j['administered_date']?.toString()),
