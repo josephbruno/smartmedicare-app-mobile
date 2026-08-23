@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../app_config.dart';
 import '../messaging/app_messenger.dart';
+import '../network/network_resilience.dart';
 import 'update_models.dart';
 import 'update_service.dart';
 import 'windows_update_gate.dart';
@@ -211,7 +212,10 @@ Future<void> _downloadAndInstall(
     if (cancel.isCancelled) return;
     if (context.mounted && !closed) {
       Navigator.of(context, rootNavigator: true).pop();
-      AppMessenger.error(context, 'Download failed: ${e.message}');
+      AppMessenger.error(
+        context,
+        humanizeNetworkError(e),
+      );
     }
   } finally {
     progress.dispose();

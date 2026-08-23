@@ -153,7 +153,8 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
         'pet_id': _selectedPet!.id,
         if (_selectedDoctor != null) 'doctor_id': _selectedDoctor!.id,
         'visit_type': _visitType,
-        'visit_date': _visitDate.toIso8601String().substring(0, 10),
+        'visit_date':
+            '${_visitDate.year.toString().padLeft(4, '0')}-${_visitDate.month.toString().padLeft(2, '0')}-${_visitDate.day.toString().padLeft(2, '0')}',
         if (_complaint.text.trim().isNotEmpty) 'chief_complaint': _complaint.text.trim(),
         if (_notes.text.trim().isNotEmpty) 'clinical_notes': _notes.text.trim(),
         if (_diagnoses.isNotEmpty)
@@ -391,7 +392,11 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
                               );
                               if (d != null) setState(() => _visitDate = d);
                             },
-                            child: Text(_visitDate.toIso8601String().substring(0, 10)),
+                            child: Text(
+                              '${_visitDate.year.toString().padLeft(4, '0')}-'
+                              '${_visitDate.month.toString().padLeft(2, '0')}-'
+                              '${_visitDate.day.toString().padLeft(2, '0')}',
+                            ),
                           ),
                         ),
                       ],

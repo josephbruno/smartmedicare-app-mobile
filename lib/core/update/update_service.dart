@@ -111,8 +111,18 @@ class UpdateService {
         },
       );
     } on DioException catch (e) {
-      await UpdateLogger.log('Download failed: ${e.message}');
-      throw UpdateException('Download failed: ${e.message}');
+      final detail = [
+        e.message,
+        e.error,
+        if (e.response != null) 'HTTP ${e.response!.statusCode}',
+      ].where((p) => p != null && '$p'.trim().isNotEmpty && '$p' != 'null').join(' — ');
+      await UpdateLogger.log(
+        'Download failed type=${e.type} status=${e.response?.statusCode} '
+        'error=${e.error} message=${e.message}',
+      );
+      throw UpdateException(
+        detail.isEmpty ? 'Download failed. Check internet and retry.' : 'Download failed: $detail',
+      );
     }
 
     final file = File(zipPath);

@@ -15,7 +15,7 @@ import '../../../core/widgets/app_dropdown.dart';
 
 /// POS / desktop toggles stored in SharedPreferences.
 ///
-/// [printerFocused] highlights USB TSPL (203 dpi) setup for cashier desktops.
+/// [printerFocused] highlights USB thermal printer setup for cashier desktops.
 class PosDesktopSettingsSection extends StatefulWidget {
   const PosDesktopSettingsSection({super.key, this.printerFocused = false});
 
@@ -29,12 +29,17 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
   bool _autoPrint = false;
   bool _sound = true;
   bool _directPrint = true;
+  PrintLanguage _language = PrintLanguage.tspl;
   String _printerName = '';
+  String _tsplPrinter = '';
+  String _escposPrinter = '';
   int _paperWidth = 70;
   List<String> _printers = [];
   bool _loading = true;
   bool _loadingPrinters = false;
   bool _testing = false;
+
+  bool get _isEscPos => _language == PrintLanguage.escpos;
 
   bool get _isDesktopPrintSupported {
     if (kIsWeb) return false;
@@ -51,14 +56,20 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
     final auto = await DesktopPrefs.getAutoPrintReceipt();
     final sound = await DesktopPrefs.getNotificationSound();
     final direct = await DesktopPrefs.getDirectThermalPrint();
-    final printer = await DesktopPrefs.getThermalPrinterName();
+    final language = await DesktopPrefs.getPrintLanguage();
+    final tsplPrinter = await DesktopPrefs.getThermalPrinterName();
+    final escposPrinter = await DesktopPrefs.getEscPosPrinterName();
     final paper = await DesktopPrefs.getThermalPaperWidthMm();
     if (!mounted) return;
     setState(() {
       _autoPrint = auto;
       _sound = sound;
       _directPrint = direct;
-      _printerName = printer;
+      _language = language;
+      _tsplPrinter = tsplPrinter;
+      _escposPrinter = escposPrinter;
+      _printerName =
+          language == PrintLanguage.escpos ? escposPrinter : tsplPrinter;
       _paperWidth = paper;
       _loading = false;
     });
@@ -76,8 +87,6 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
       _loadingPrinters = false;
       if (_printerName.isNotEmpty && !_printers.contains(_printerName)) {
         // Keep saved name even if temporarily offline.
-      } else if (_printerName.isEmpty && _printers.isNotEmpty) {
-        _printerName = _printers.first;
       }
     });
   }
@@ -92,13 +101,15 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
       shopName: header.name.isEmpty
           ? 'Maran Veterinary Hospital'
           : header.name,
+      companyName: header.shopName,
       shopPhone: header.phone,
+      shopGstin: header.gstin,
       shopAddress: header.address,
       billerName: auth.user?.name,
     );
     if (!mounted) return;
     setState(() => _testing = false);
-    await _showTsplPreviewDialog(sample);
+    await _showPrintPreviewDialog(sample);
   }
 
   void _showRootSnack(String message, {Color? backgroundColor}) {
@@ -119,7 +130,64 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
     }
   }
 
-  Future<void> _showTsplPreviewDialog(ThermalSamplePrintResult sample) {
+  Future<void> _setLanguage(PrintLanguage language) async {
+    await DesktopPrefs.setPrintLanguage(language);
+    if (!mounted) return;
+    setState(() {
+      _language = language;
+      _printerName =
+          language == PrintLanguage.escpos ? _escposPrinter : _tsplPrinter;
+      _paperWidth = language == PrintLanguage.escpos ? 80 : 70;
+    });
+  }
+
+  Future<void> _setPrinterName(String name) async {
+    if (_language == PrintLanguage.escpos) {
+      await DesktopPrefs.setEscPosPrinterName(name);
+    } else {
+      await DesktopPrefs.setThermalPrinterName(name);
+    }
+    await DesktopPrefs.setDirectThermalPrint(true);
+    if (!mounted) return;
+    setState(() {
+      _printerName = name;
+      _directPrint = true;
+      if (_language == PrintLanguage.escpos) {
+        _escposPrinter = name;
+      } else {
+        _tsplPrinter = name;
+      }
+    });
+  }
+
+  String _printerHelperText() {
+    if (_printers.isEmpty) {
+      return _isEscPos
+          ? 'No printers found — plug in the Retsol RTP 80, install Generic / Text Only, then refresh'
+          : 'No printers found — plug in the USB XPrinter, then refresh';
+    }
+    if (_printerName.isEmpty) {
+      return _isEscPos
+          ? 'Select Generic / Text Only (RAW ESC/POS) for the RTP 80'
+          : 'TSPL · 203 dpi';
+    }
+    final lower = _printerName.toLowerCase();
+    if (_isEscPos) {
+      if (lower.contains('generic') ||
+          lower.contains('retsol') ||
+          lower.contains('rtp') ||
+          lower.contains('text')) {
+        return 'RAW ESC/POS → $_printerName (recommended)';
+      }
+      return 'Prefer "Generic / Text Only" — GDI drivers often queue without printing';
+    }
+    if (lower.contains('tspl')) {
+      return 'RAW TSPL → $_printerName (recommended)';
+    }
+    return 'Prefer "XP-470B TSPL Raw" — Seagull driver often queues without printing';
+  }
+
+  Future<void> _showPrintPreviewDialog(ThermalSamplePrintResult sample) {
     return showDialog<void>(
       context: context,
       builder: (ctx) {
@@ -129,7 +197,11 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
           builder: (ctx, setDialogState) {
             final statusColor = status.isSuccess ? AppTheme.accent : Colors.red;
             return AlertDialog(
-              title: const Text('TSPL command preview'),
+              title: Text(
+                sample.language == PrintLanguage.escpos
+                    ? 'ESC/POS receipt preview'
+                    : 'TSPL command preview',
+              ),
               content: SizedBox(
                 width: 520,
                 child: Column(
@@ -189,7 +261,11 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                           await Clipboard.setData(
                             ClipboardData(text: sample.commands),
                           );
-                          _showRootSnack('TSPL commands copied');
+                          _showRootSnack(
+                            sample.language == PrintLanguage.escpos
+                                ? 'Receipt preview copied'
+                                : 'TSPL commands copied',
+                          );
                         },
                   icon: const Icon(Icons.copy_outlined, size: 18),
                   label: const Text('Copy'),
@@ -203,9 +279,11 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                               ? await ThermalPrinterService.printRawBytes(
                                   sample.rawBytes!,
                                 )
-                              : await ThermalPrinterService.printTsplCommands(
-                                  sample.commands,
-                                );
+                              : sample.language == PrintLanguage.escpos
+                                  ? ThermalPrintResult.failed
+                                  : await ThermalPrinterService.printTsplCommands(
+                                      sample.commands,
+                                    );
                           if (ctx.mounted) {
                             setDialogState(() {
                               status = result;
@@ -280,12 +358,14 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
               color: AppTheme.primary,
             ),
             title: Text(
-              printerOnly ? 'USB TSPL Printer' : 'Desktop & POS',
+              printerOnly ? 'USB Thermal Printer' : 'Desktop & POS',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             subtitle: Text(
               printerOnly
-                  ? 'Local XPrinter · TSPL · 203 dpi — configured on this PC'
+                  ? (_isEscPos
+                      ? 'Local Retsol RTP 80 · ESC/POS · 80 mm — configured on this PC'
+                      : 'Local XPrinter · TSPL · 203 dpi — configured on this PC')
                   : 'Receipt printing and notifications',
             ),
           ),
@@ -315,14 +395,55 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
           if (_isDesktopPrintSupported) ...[
             if (!printerOnly) const Divider(height: 1),
             if (!printerOnly)
-              const ListTile(
-                leading: Icon(Icons.print_outlined, color: AppTheme.primary),
-                title: Text('USB thermal printer', style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text('XPrinter TSPL (203 dpi) installed on this computer'),
+              ListTile(
+                leading: const Icon(Icons.print_outlined, color: AppTheme.primary),
+                title: const Text('USB thermal printer', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(
+                  _isEscPos
+                      ? 'Retsol RTP 80 ESC/POS (80 mm) installed on this computer'
+                      : 'XPrinter TSPL (203 dpi) installed on this computer',
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: SegmentedButton<PrintLanguage>(
+                showSelectedIcon: false,
+                expandedInsets: EdgeInsets.zero,
+                segments: const [
+                  ButtonSegment(
+                    value: PrintLanguage.tspl,
+                    label: Text('TSPL · XPrinter'),
+                    tooltip: 'Branch 1 — XP-470B TSPL',
+                  ),
+                  ButtonSegment(
+                    value: PrintLanguage.escpos,
+                    label: Text('ESC/POS · RTP 80'),
+                    tooltip: 'Branch 2 — 80 mm receipt printer',
+                  ),
+                ],
+                selected: {_language},
+                onSelectionChanged: (selected) {
+                  if (selected.isEmpty) return;
+                  _setLanguage(selected.first);
+                },
+              ),
+            ),
+            if (_isEscPos)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  'Install the Retsol RTP 80 in Windows as Generic / Text Only (RAW). '
+                  'GDI drivers accept the job then never print.',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.35),
+                ),
               ),
             SwitchListTile(
               title: const Text('Direct USB print (no dialog)'),
-              subtitle: const Text('TSPL commands (203 dpi) to the selected local XPrinter'),
+              subtitle: Text(
+                _isEscPos
+                    ? 'ESC/POS commands to the selected Retsol RTP 80'
+                    : 'TSPL commands (203 dpi) to the selected local XPrinter',
+              ),
               value: _directPrint,
               onChanged: (v) async {
                 await DesktopPrefs.setDirectThermalPrint(v);
@@ -348,17 +469,15 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                     child: AppDropdownButtonFormField<String>(
                       value: _dropdownPrinterValue(),
                       items: _printerDropdownItems(),
-                      hint: const Text('Select TSPL Raw queue'),
+                      hint: Text(
+                        _isEscPos
+                            ? 'Select Generic / Text Only queue'
+                            : 'Select TSPL Raw queue',
+                      ),
                       decoration: InputDecoration(
                         labelText: 'Local USB printer',
                         border: const OutlineInputBorder(),
-                        helperText: _printers.isEmpty
-                            ? 'No printers found — plug in the USB XPrinter, then refresh'
-                            : _printerName.toLowerCase().contains('tspl')
-                                ? 'RAW TSPL → $_printerName (recommended)'
-                                : _printerName.isNotEmpty
-                                    ? 'Prefer "XP-470B TSPL Raw" — Seagull driver often queues without printing'
-                                    : 'TSPL · 203 dpi',
+                        helperText: _printerHelperText(),
                         helperMaxLines: 2,
                         helperStyle: TextStyle(
                           color: _printerName.isNotEmpty && _printers.isNotEmpty
@@ -372,12 +491,7 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                       ),
                       onChanged: (v) async {
                         if (v == null) return;
-                        await DesktopPrefs.setThermalPrinterName(v);
-                        await DesktopPrefs.setDirectThermalPrint(true);
-                        setState(() {
-                          _printerName = v;
-                          _directPrint = true;
-                        });
+                        await _setPrinterName(v);
                       },
                     ),
                   ),
@@ -400,13 +514,20 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                 ],
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text('Paper width', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text('70 mm · TSPL SIZE command · 203 dpi'),
-                trailing: Text('70 mm', style: TextStyle(fontWeight: FontWeight.w700)),
+                title: const Text('Paper width', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                  _isEscPos
+                      ? '80 mm roll · ESC/POS raster · 203 dpi'
+                      : '70 mm · TSPL SIZE command · 203 dpi',
+                ),
+                trailing: Text(
+                  '$_paperWidth mm',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
             ),
             Padding(
@@ -420,14 +541,18 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.receipt_long_outlined, size: 18),
-                label: Text(_testing ? 'Printing…' : 'Test print (TSPL)'),
+                label: Text(
+                  _testing
+                      ? 'Printing…'
+                      : (_isEscPos ? 'Test print (ESC/POS)' : 'Test print (TSPL)'),
+                ),
               ),
             ),
           ] else if (printerOnly)
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Text(
-                'Direct USB TSPL print is available on Windows and Linux cashier desktops only.',
+                'Direct USB print is available on Windows and Linux cashier desktops only.',
                 style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
               ),
             ),

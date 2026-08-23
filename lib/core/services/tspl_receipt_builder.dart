@@ -70,6 +70,10 @@ class TsplReceiptBuilder {
     if (phone.isNotEmpty) {
       lines.add(_TsplLine('Ph :$phone', align: _Align.center));
     }
+    final gstin = (shopGstin ?? '').trim();
+    if (gstin.isNotEmpty) {
+      lines.add(_TsplLine('GST No :$gstin', align: _Align.center));
+    }
     lines.add(const _TsplLine(''));
     lines.add(
       _TsplLine(_billTitle(invoice), font: titleFont, align: _Align.center),
@@ -162,6 +166,7 @@ class TsplReceiptBuilder {
   static Future<Uint8List> buildSample({
     required String shopName,
     String? shopPhone,
+    String? shopGstin,
     String? shopAddress,
     String? billerName,
     bool includeLogo = true,
@@ -169,6 +174,7 @@ class TsplReceiptBuilder {
     return buildSampleBytes(
       shopName: shopName,
       shopPhone: shopPhone,
+      shopGstin: shopGstin,
       shopAddress: shopAddress,
       billerName: billerName,
       includeLogo: includeLogo,
@@ -178,12 +184,14 @@ class TsplReceiptBuilder {
   static Future<String> buildSampleCommands({
     required String shopName,
     String? shopPhone,
+    String? shopGstin,
     String? shopAddress,
     String? billerName,
   }) async {
     final bytes = await buildSampleBytes(
       shopName: shopName,
       shopPhone: shopPhone,
+      shopGstin: shopGstin,
       shopAddress: shopAddress,
       billerName: billerName,
       includeLogo: false,
@@ -195,6 +203,7 @@ class TsplReceiptBuilder {
   static Future<Uint8List> buildSampleBytes({
     required String shopName,
     String? shopPhone,
+    String? shopGstin,
     String? shopAddress,
     String? billerName,
     bool includeLogo = true,
@@ -224,6 +233,10 @@ class TsplReceiptBuilder {
         align: _Align.center,
       ),
     );
+    final gstin = (shopGstin ?? '').trim();
+    if (gstin.isNotEmpty) {
+      lines.add(_TsplLine('GST No :$gstin', align: _Align.center));
+    }
     lines.add(const _TsplLine(''));
     lines.add(_TsplLine('CASH BILL', font: titleFont, align: _Align.center));
     lines.add(const _TsplLine(''));

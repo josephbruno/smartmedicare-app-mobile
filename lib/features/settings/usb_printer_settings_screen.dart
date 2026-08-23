@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import 'widgets/pos_desktop_settings_section.dart';
 
-/// Local USB TSPL thermal printer setup (XPrinter, 203 dpi) for cashier desktops.
+/// Local USB thermal printer setup (XPrinter TSPL or Retsol RTP 80 ESC/POS).
 class UsbPrinterSettingsScreen extends StatelessWidget {
   const UsbPrinterSettingsScreen({super.key});
 
@@ -21,8 +21,9 @@ class UsbPrinterSettingsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'Configure the local XPrinter TSPL USB printer (203 dpi) on this computer. '
-          'Print sends the bill directly to the selected printer — no dialog.',
+          'Choose the print language for this computer, then pick the Windows queue. '
+          'Branch 1 uses XPrinter TSPL. Branch 2 uses Retsol RTP 80 ESC/POS. '
+          'Checkout prints the same bill to whichever language is selected — no dialog.',
           style: TextStyle(
             color: AppTheme.textSecondary,
             fontSize: 14,

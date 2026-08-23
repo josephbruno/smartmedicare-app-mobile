@@ -12,36 +12,44 @@ class ReceiptBranchInfo {
   const ReceiptBranchInfo({
     required this.branchId,
     required this.name,
+    this.shopName = '',
     this.address = '',
     this.phone,
+    this.gstin,
   });
 
   final int branchId;
   final String name;
+  final String shopName;
   final String address;
   final String? phone;
+  final String? gstin;
 
   Map<String, dynamic> toJson() => {
         'branch_id': branchId,
         'name': name,
+        'shop_name': shopName,
         'address': address,
         if (phone != null) 'phone': phone,
+        if (gstin != null) 'gstin': gstin,
       };
 
   factory ReceiptBranchInfo.fromJson(Map<String, dynamic> j) {
     return ReceiptBranchInfo(
       branchId: (j['branch_id'] as num?)?.toInt() ?? 0,
       name: j['name']?.toString() ?? '',
+      shopName: j['shop_name']?.toString() ?? '',
       address: j['address']?.toString() ?? '',
       phone: j['phone']?.toString(),
+      gstin: j['gstin']?.toString(),
     );
   }
 }
 
-/// Loads branch name / address / phone from the API and keeps a local copy
-/// for offline bill printing.
+/// Loads branch name / address / phone / GSTIN from the logged-in branch
+/// and keeps a local copy for offline bill printing.
 abstract final class ReceiptBranchStore {
-  static const _prefsKey = 'receipt_branch_info_v1';
+  static const _prefsKey = 'receipt_branch_info_v2';
 
   static Future<ReceiptBranchInfo?> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -64,24 +72,22 @@ abstract final class ReceiptBranchStore {
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_prefsKey);
+    await prefs.remove('receipt_branch_info_v1');
   }
 
   static ReceiptBranchInfo? fromBranch(Branch branch) {
     if (branch.id <= 0) return null;
-    final address = [
-      branch.address,
-      branch.city,
-      branch.state,
-      branch.pincode,
-    ]
-        .where((p) => p != null && p.trim().isNotEmpty)
-        .map((p) => p!.trim())
-        .join(', ');
     return ReceiptBranchInfo(
       branchId: branch.id,
       name: branch.name.trim(),
-      address: address,
+      address: _joinAddress([
+        branch.address,
+        branch.city,
+        branch.state,
+        branch.pincode,
+      ]),
       phone: branch.phone?.trim(),
+      gstin: _cleanGstin(branch.gstin),
     );
   }
 
@@ -92,10 +98,11 @@ abstract final class ReceiptBranchStore {
       name: branch.name.trim(),
       address: branch.formattedAddress,
       phone: branch.phone?.trim(),
+      gstin: _cleanGstin(branch.gstin),
     );
   }
 
-  /// Fetch `/branches`, cache the current branch, fall back to session lite.
+  /// Fetch `/branches`, cache the **logged-in** branch, fall back to session lite.
   static Future<ReceiptBranchInfo?> sync({
     required BranchService branches,
     required AuthSession auth,
@@ -116,31 +123,7 @@ abstract final class ReceiptBranchStore {
     }
 
     cached ??= fromBranchLite(auth.currentBranch);
-
-    // Shop fallback when branch has empty name/address.
-    final shop = auth.currentShop;
-    if (cached != null && shop != null) {
-      final name = cached.name.isNotEmpty ? cached.name : shop.name;
-      final address = cached.address.trim().isNotEmpty
-          ? cached.address
-          : shop.formattedAddress;
-      final phone = (cached.phone?.trim().isNotEmpty == true)
-          ? cached.phone
-          : shop.phone;
-      cached = ReceiptBranchInfo(
-        branchId: cached.branchId,
-        name: name,
-        address: address,
-        phone: phone,
-      );
-    } else if (cached == null && shop != null && shop.id > 0) {
-      cached = ReceiptBranchInfo(
-        branchId: branchId ?? 0,
-        name: shop.name,
-        address: shop.formattedAddress,
-        phone: shop.phone,
-      );
-    }
+    cached = _mergeShopFallback(cached, auth.currentShop, branchId);
 
     if (cached != null) {
       await save(cached);
@@ -148,41 +131,82 @@ abstract final class ReceiptBranchStore {
     return cached;
   }
 
-  /// Prefer local cache for [branchId], else sync, else session fields.
+  /// Header for the logged-in user's current branch (never another branch).
   static Future<ReceiptBranchInfo> resolveForPrint(AuthSession auth) async {
     final branchId = auth.currentBranchId;
+    final session = fromBranchLite(auth.currentBranch);
     final cached = await load();
-    if (cached != null &&
+
+    ReceiptBranchInfo? info;
+    if (session != null && session.name.isNotEmpty) {
+      info = session;
+    } else if (cached != null &&
         (branchId == null || cached.branchId == branchId) &&
         cached.name.trim().isNotEmpty) {
-      return cached;
+      info = cached;
     }
 
-    final fromSession = fromBranchLite(auth.currentBranch);
-    if (fromSession != null && fromSession.name.isNotEmpty) {
-      final shop = auth.currentShop;
-      final merged = ReceiptBranchInfo(
-        branchId: fromSession.branchId,
-        name: fromSession.name,
-        address: fromSession.address.trim().isNotEmpty
-            ? fromSession.address
-            : (shop?.formattedAddress ?? ''),
-        phone: (fromSession.phone?.trim().isNotEmpty == true)
-            ? fromSession.phone
-            : shop?.phone,
+    info = _mergeShopFallback(info, auth.currentShop, branchId) ??
+        ReceiptBranchInfo(
+          branchId: branchId ?? 0,
+          name: auth.currentShop?.name.trim().isNotEmpty == true
+              ? auth.currentShop!.name.trim()
+              : 'Maran Veterinary Hospital',
+          shopName: auth.currentShop?.name.trim() ?? '',
+          address: auth.currentShop?.formattedAddress ?? '',
+          phone: auth.currentShop?.phone,
+          gstin: _cleanGstin(auth.currentShop?.gstin),
+        );
+
+    await save(info);
+    return info;
+  }
+
+  static ReceiptBranchInfo? _mergeShopFallback(
+    ReceiptBranchInfo? cached,
+    ShopLite? shop,
+    int? branchId,
+  ) {
+    if (cached != null) {
+      final name = cached.name.isNotEmpty ? cached.name : (shop?.name ?? '');
+      final address = cached.address.trim().isNotEmpty
+          ? cached.address
+          : (shop?.formattedAddress ?? '');
+      final phone = (cached.phone?.trim().isNotEmpty == true)
+          ? cached.phone
+          : shop?.phone;
+      final gstin = _cleanGstin(cached.gstin) ?? _cleanGstin(shop?.gstin);
+      return ReceiptBranchInfo(
+        branchId: cached.branchId,
+        name: name,
+        shopName: shop?.name.trim() ?? cached.shopName,
+        address: address,
+        phone: phone,
+        gstin: gstin,
       );
-      await save(merged);
-      return merged;
     }
+    if (shop != null && shop.id > 0) {
+      return ReceiptBranchInfo(
+        branchId: branchId ?? 0,
+        name: shop.name,
+        shopName: shop.name.trim(),
+        address: shop.formattedAddress,
+        phone: shop.phone,
+        gstin: _cleanGstin(shop.gstin),
+      );
+    }
+    return null;
+  }
 
-    final shop = auth.currentShop;
-    return ReceiptBranchInfo(
-      branchId: branchId ?? 0,
-      name: shop?.name.trim().isNotEmpty == true
-          ? shop!.name.trim()
-          : 'Maran Veterinary Hospital',
-      address: shop?.formattedAddress ?? '',
-      phone: shop?.phone,
-    );
+  static String _joinAddress(List<String?> parts) {
+    return parts
+        .where((p) => p != null && p.trim().isNotEmpty)
+        .map((p) => p!.trim())
+        .join(', ');
+  }
+
+  static String? _cleanGstin(String? value) {
+    final trimmed = value?.trim() ?? '';
+    return trimmed.isEmpty ? null : trimmed;
   }
 }

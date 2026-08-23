@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 
 import '../app_config.dart';
+import 'windows_winhttp_adapter.dart';
 
 /// Retries transient DNS / connection failures a few times.
 class ConnectionRetryInterceptor extends Interceptor {
@@ -61,35 +62,23 @@ class ConnectionRetryInterceptor extends Interceptor {
   }
 }
 
-/// Browser-like UA so LiteSpeed bot reCAPTCHA does not challenge the app.
-/// Dart's default `Dart/x.y (dart:io)` is treated as a robot on some hosts.
-String apiClientUserAgent() {
-  const app = 'MaranBilling/1.0';
-  if (Platform.isWindows) {
-    return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-        '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0 $app';
-  }
-  if (Platform.isAndroid) {
-    return 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 '
-        '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 $app';
-  }
-  return app;
-}
-
 /// Configures [Dio] for more reliable Windows DNS / TLS behavior.
+///
+/// Windows uses WinHTTP/SChannel so the host WAF does not treat Dart's
+/// BoringSSL fingerprint as a bot. Other platforms keep dart:io [HttpClient].
 void configureDioNetworking(Dio dio) {
-  final userAgent = apiClientUserAgent();
-  dio.options.headers['User-Agent'] = userAgent;
-  dio.options.headers['Accept-Language'] = 'en-US,en;q=0.9';
-  dio.httpClientAdapter = IOHttpClientAdapter(
-    createHttpClient: () {
-      final client = HttpClient();
-      client.userAgent = userAgent;
-      client.connectionTimeout = const Duration(seconds: 15);
-      client.idleTimeout = const Duration(seconds: 15);
-      return client;
-    },
-  );
+  if (Platform.isWindows) {
+    dio.httpClientAdapter = WinHttpDioAdapter();
+  } else {
+    dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        final client = HttpClient();
+        client.connectionTimeout = const Duration(seconds: 15);
+        client.idleTimeout = const Duration(seconds: 15);
+        return client;
+      },
+    );
+  }
   dio.interceptors.insert(0, ConnectionRetryInterceptor(dio));
 }
 

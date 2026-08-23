@@ -32,8 +32,6 @@ class ApiClient {
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-              'User-Agent': apiClientUserAgent(),
-              'Accept-Language': 'en-US,en;q=0.9',
             },
           ),
         ) {
@@ -125,8 +123,8 @@ class ApiClient {
       final html = data is String ? data.toLowerCase() : '';
       if (html.contains('lsrecap') || html.contains('bot verification')) {
         msg = 'The host blocked this request as a bot. Please try again in a minute.';
-      } else if (status == 403) {
-        msg = 'Unlock was blocked by the server. Check your PIN and try again.';
+      } else if (status == 403 || html.contains('access to this resource')) {
+        msg = 'The host firewall blocked this request. Try again in a few minutes.';
       } else {
         msg = 'The server returned an unexpected response. Please try again.';
       }

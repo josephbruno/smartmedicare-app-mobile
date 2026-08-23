@@ -213,7 +213,9 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       invoice: inv,
       items: inv.items!,
       shopName: header.name,
+      companyName: header.shopName,
       shopPhone: header.phone,
+      shopGstin: header.gstin,
       shopAddress: header.address,
       billerName: auth.user?.name,
     );

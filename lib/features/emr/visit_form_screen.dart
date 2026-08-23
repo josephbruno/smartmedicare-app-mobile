@@ -1455,7 +1455,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       'pet_id': _selectedPet!.id,
       if (_selectedDoctor != null) 'doctor_id': _selectedDoctor!.id,
       'visit_type': _visitType,
-      'visit_date': _visitDate.toIso8601String().substring(0, 10),
+      'visit_date': _formatYmd(_visitDate),
       'visit_time': timeStr,
       'service_charge': serviceCharge,
       if (serviceCharge > 0 && _serviceChargeProductId != null)
@@ -1476,7 +1476,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (_respiratoryRatePerMin != null)
         'respiratory_rate': _respiratoryRatePerMin,
       if (_followUpDate != null)
-        'follow_up_date': _followUpDate!.toIso8601String().substring(0, 10),
+        'follow_up_date': _formatYmd(_followUpDate!),
       // Always send child collections on edit so removals sync; on create only
       // when non-empty.
       if (_isEdit || _diagnoses.isNotEmpty)
@@ -2757,7 +2757,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             },
             icon: const Icon(Icons.event_outlined, size: 18),
             label: Text(_followUpDate != null
-                ? _followUpDate!.toIso8601String().substring(0, 10)
+                ? _formatYmd(_followUpDate!)
                 : 'Set follow-up date'),
           ),
           const SizedBox(height: 8),
@@ -3423,7 +3423,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         icon: const Icon(Icons.event_outlined, size: 16),
                         label: Text(
                           row.followUpDate != null
-                              ? row.followUpDate!.toIso8601String().substring(0, 10)
+                              ? _formatYmd(row.followUpDate!)
                               : 'Follow-up',
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -3452,7 +3452,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                             icon: const Icon(Icons.event_outlined, size: 16),
                             label: Text(
                               row.followUpDate != null
-                                  ? row.followUpDate!.toIso8601String().substring(0, 10)
+                                  ? _formatYmd(row.followUpDate!)
                                   : 'Follow-up',
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -4138,7 +4138,7 @@ class _SurgeryRow {
         if (costCtrl.text.trim().isNotEmpty)
           'cost': double.tryParse(costCtrl.text.trim()) ?? 0,
         if (followUpDate != null)
-          'follow_up_date': followUpDate!.toIso8601String().substring(0, 10),
+          'follow_up_date': _formatYmd(followUpDate!),
         'status': 'completed',
       };
 

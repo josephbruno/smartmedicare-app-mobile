@@ -79,13 +79,23 @@ Map<String, dynamic>? mapOrNull(dynamic v) {
 }
 
 /// API date fields may be `YYYY-MM-DD` or ISO-8601.
+///
+/// Calendar dates must stay on the local day. Laravel often serializes a
+/// `date` cast under Asia/Kolkata as UTC midnight-of-that-day (e.g.
+/// `2026-08-23` → `2026-08-22T18:30:00.000000Z`); reading UTC y/m/d would
+/// show the previous day.
 String formatApiDate(String? raw) {
   if (raw == null || raw.isEmpty) return '';
-  final parsed = DateTime.tryParse(raw);
+  final value = raw.trim();
+  if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
+    return value;
+  }
+  final parsed = DateTime.tryParse(value);
   if (parsed == null) return raw;
-  final y = parsed.year.toString().padLeft(4, '0');
-  final m = parsed.month.toString().padLeft(2, '0');
-  final d = parsed.day.toString().padLeft(2, '0');
+  final local = parsed.isUtc ? parsed.toLocal() : parsed;
+  final y = local.year.toString().padLeft(4, '0');
+  final m = local.month.toString().padLeft(2, '0');
+  final d = local.day.toString().padLeft(2, '0');
   return '$y-$m-$d';
 }
 

@@ -1331,7 +1331,7 @@ class _PosScreenState extends State<PosScreen> {
               (auth.hasRole(AppRoles.cashier) ||
                   auth.hasPermission(AppPermissions.shopManage)))
             IconButton(
-              tooltip: 'USB Printer (XPrinter TSPL · 203 dpi)',
+              tooltip: 'USB Printer (TSPL / ESC/POS)',
               visualDensity: VisualDensity.compact,
               onPressed: () => context.go('/settings/printer'),
               icon: Icon(Icons.print_outlined, size: _ic(20), color: AppTheme.primary),

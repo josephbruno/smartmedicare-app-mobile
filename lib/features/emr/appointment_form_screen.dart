@@ -150,7 +150,8 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
       'customer_id': _selectedPet!.customerId,
       if (_selectedDoctor != null) 'doctor_id': _selectedDoctor!.id,
       'appointment_type': _appointmentType,
-      'appointment_date': _date.toIso8601String().substring(0, 10),
+      'appointment_date':
+          '${_date.year.toString().padLeft(4, '0')}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}',
       'appointment_time': timeStr,
       'duration_minutes': _duration,
       'status': _status,
@@ -353,7 +354,11 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                     if (d != null) setState(() => _date = d);
                   },
                   icon: const Icon(Icons.calendar_today, size: 18),
-                  label: Text(_date.toIso8601String().substring(0, 10)),
+                  label: Text(
+                    '${_date.year.toString().padLeft(4, '0')}-'
+                    '${_date.month.toString().padLeft(2, '0')}-'
+                    '${_date.day.toString().padLeft(2, '0')}',
+                  ),
                 ),
               ),
               const SizedBox(width: 8),

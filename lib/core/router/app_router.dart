@@ -195,7 +195,7 @@ GoRouter createAppRouter({
       if (need(AppPermissions.productsEdit)) return denied;
     }
     if (path.startsWith('/settings/printer')) {
-      // Local USB TSPL config — cashiers on desktop, or anyone who can manage shop.
+      // Local USB thermal config — cashiers on desktop, or anyone who can manage shop.
       final canPrinter = auth.hasPermission(AppPermissions.shopManage) ||
           (auth.hasRole(AppRoles.cashier) &&
               AppConfig.isCashierPlatform &&

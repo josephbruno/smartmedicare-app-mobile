@@ -12,6 +12,7 @@ class ShopLite {
     this.logoUrl,
     this.currency,
     this.timezone,
+    this.gstin,
   });
 
   final int id;
@@ -26,6 +27,7 @@ class ShopLite {
   final String? logoUrl;
   final String? currency;
   final String? timezone;
+  final String? gstin;
 
   String get formattedAddress {
     final parts = [address, city, state, pincode]
@@ -52,6 +54,7 @@ class ShopLite {
       logoUrl: j['logo_url']?.toString(),
       currency: j['currency']?.toString(),
       timezone: j['timezone']?.toString(),
+      gstin: j['gstin']?.toString(),
     );
   }
 
@@ -68,6 +71,7 @@ class ShopLite {
         if (logoUrl != null) 'logo_url': logoUrl,
         if (currency != null) 'currency': currency,
         if (timezone != null) 'timezone': timezone,
+        if (gstin != null) 'gstin': gstin,
       };
 }
 
@@ -82,6 +86,7 @@ class BranchLite {
     this.city,
     this.state,
     this.pincode,
+    this.gstin,
     this.isMain,
     this.isActive,
   });
@@ -95,6 +100,7 @@ class BranchLite {
   final String? city;
   final String? state;
   final String? pincode;
+  final String? gstin;
   final bool? isMain;
   final bool? isActive;
 
@@ -120,6 +126,7 @@ class BranchLite {
       city: j['city']?.toString(),
       state: j['state']?.toString(),
       pincode: j['pincode']?.toString(),
+      gstin: j['gstin']?.toString(),
       isMain: j['is_main'] as bool?,
       isActive: j['is_active'] as bool?,
     );
@@ -135,6 +142,7 @@ class BranchLite {
         if (city != null) 'city': city,
         if (state != null) 'state': state,
         if (pincode != null) 'pincode': pincode,
+        if (gstin != null) 'gstin': gstin,
         if (isMain != null) 'is_main': isMain,
         if (isActive != null) 'is_active': isActive,
       };

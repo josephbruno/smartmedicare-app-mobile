@@ -8,12 +8,22 @@ import 'package:maran/data/models/product.dart';
 
 void main() {
   group('formatApiDate', () {
-    test('parses ISO date', () {
+    test('parses ISO date at UTC midnight', () {
       expect(formatApiDate('2026-06-26T00:00:00.000000Z'), '2026-06-26');
     });
 
     test('keeps plain date', () {
       expect(formatApiDate('2026-06-26'), '2026-06-26');
+    });
+
+    test('uses local calendar day for IST midnight serialized as UTC', () {
+      // 2026-08-23 00:00 Asia/Kolkata == 2026-08-22 18:30 UTC
+      final local = DateTime.parse('2026-08-22T18:30:00.000000Z').toLocal();
+      final expected =
+          '${local.year.toString().padLeft(4, '0')}-'
+          '${local.month.toString().padLeft(2, '0')}-'
+          '${local.day.toString().padLeft(2, '0')}';
+      expect(formatApiDate('2026-08-22T18:30:00.000000Z'), expected);
     });
   });
 
