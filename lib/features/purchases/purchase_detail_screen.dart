@@ -135,6 +135,7 @@ class _PurchaseDetailScreenState extends State<PurchaseDetailScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Text(p?.purchaseNumber ?? 'Purchase Detail'),
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.textPrimary,

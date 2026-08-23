@@ -160,6 +160,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Documents'),
         actions: [
           if (canUpload)

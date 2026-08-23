@@ -8,6 +8,7 @@ import '../../core/app_config.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
+import '../../data/models/treatment_under.dart';
 import 'emr_pet_hub.dart';
 import 'visit_pdf.dart';
 import 'visit_print_preview_screen.dart';
@@ -372,52 +373,37 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
           child: _VitalsGrid(visit: v),
         ),
       ],
-      if (v.observation != null && v.observation!.isNotEmpty) ...[
-        const SizedBox(height: 12),
-        _SectionCard(
-          icon: Icons.visibility_outlined,
-          iconColor: const Color(0xFF2563EB),
-          iconBg: const Color(0xFFEFF6FF),
-          title: 'Observation',
-          child: Text(
-            v.observation!,
-            style: const TextStyle(
-              fontSize: 14,
-              height: 1.55,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-        ),
-      ],
-      if (v.investigation != null && v.investigation!.isNotEmpty) ...[
+      if (v.investigationItems.isNotEmpty) ...[
         const SizedBox(height: 12),
         _SectionCard(
           icon: Icons.biotech_outlined,
           iconColor: const Color(0xFF0F766E),
           iconBg: const Color(0xFFF0FDFA),
           title: 'Investigation',
-          child: Text(
-            v.investigation!,
-            style: const TextStyle(
-              fontSize: 14,
-              height: 1.55,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-        ),
-      ],
-      if (v.diagnoses != null && v.diagnoses!.isNotEmpty) ...[
-        const SizedBox(height: 12),
-        _SectionCard(
-          icon: Icons.medical_information_outlined,
-          iconColor: const Color(0xFF16A34A),
-          iconBg: const Color(0xFFF0FDF4),
-          title: 'Diagnoses',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (var i = 0; i < v.diagnoses!.length; i++) ...[
+              for (var i = 0; i < v.investigationItems.length; i++) ...[
                 if (i > 0) const Divider(height: 20),
-                _DiagnosisRow(diagnosis: v.diagnoses![i]),
+                Text(
+                  v.investigationItems[i].name,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                if (v.investigationItems[i].notes.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    v.investigationItems[i].notes,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.45,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
               ],
             ],
           ),
@@ -446,12 +432,28 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
           icon: Icons.medication_outlined,
           iconColor: const Color(0xFFA21CAF),
           iconBg: const Color(0xFFFDF4FF),
-          title: 'Medicines',
+          title: 'Prescriptions',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (var i = 0; i < v.medicines!.length; i++) ...[
-                if (i > 0) const Divider(height: 20),
-                _MedicineRow(medicine: v.medicines![i]),
+              for (final entry in TreatmentUnderCategory.groupBy(
+                v.medicines!,
+                (m) => m.treatmentUnderCategory ?? m.product?.treatmentUnderCategory,
+              ).asMap().entries) ...[
+                if (entry.key > 0) const SizedBox(height: 12),
+                Text(
+                  TreatmentUnderCategory.labelOf(entry.value.key),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                for (var i = 0; i < entry.value.value.length; i++) ...[
+                  if (i > 0) const Divider(height: 20),
+                  _MedicineRow(medicine: entry.value.value[i]),
+                ],
               ],
             ],
           ),
@@ -1039,89 +1041,6 @@ class _VitalItem {
 }
 
 // ── Diagnosis / treatment / medicine rows ───────────────────────────────────
-
-class _DiagnosisRow extends StatelessWidget {
-  const _DiagnosisRow({required this.diagnosis});
-
-  final VisitDiagnosis diagnosis;
-
-  Color get _severityColor {
-    switch (diagnosis.severity) {
-      case 'severe':
-        return AppTheme.danger;
-      case 'moderate':
-        return AppTheme.warning;
-      default:
-        return AppTheme.accent;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  if (diagnosis.isPrimary) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEE2E2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'Primary',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFDC2626),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Flexible(
-                    child: Text(
-                      diagnosis.diagnosisName,
-                      style: const TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (diagnosis.icdCode != null && diagnosis.icdCode!.isNotEmpty) ...[
-                const SizedBox(height: 3),
-                Text(
-                  diagnosis.icdCode!,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontFamily: 'monospace',
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        Text(
-          diagnosis.severity[0].toUpperCase() + diagnosis.severity.substring(1),
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            color: _severityColor,
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _TreatmentRow extends StatelessWidget {
   const _TreatmentRow({required this.treatment});

@@ -167,6 +167,7 @@ class _SurgeryManagementScreenState extends State<SurgeryManagementScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Surgeries'),
         actions: [
           if (canCreate)

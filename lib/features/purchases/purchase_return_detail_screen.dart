@@ -114,6 +114,7 @@ class _PurchaseReturnDetailScreenState
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Text(r?.returnNumber ?? 'Supplier Return'),
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.textPrimary,

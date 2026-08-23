@@ -151,6 +151,7 @@ class _DewormingManagementScreenState extends State<DewormingManagementScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Deworming'),
         actions: [
           if (canCreate)

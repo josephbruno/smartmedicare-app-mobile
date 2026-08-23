@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app_services.dart';
 import '../../core/app_config.dart';
+import '../../core/navigation/shell_back.dart';
 import '../../core/responsive/breakpoints.dart';
 import '../../core/responsive/desktop_layout_helper.dart';
 import '../../core/desktop/command_palette.dart';
@@ -731,6 +732,10 @@ class _DesktopShellState extends State<_DesktopShell> {
                   ),
                   child: Row(
                     children: [
+                      if (shellShowsBack(widget.location)) ...[
+                        ShellBackButton(location: widget.location, compact: true),
+                        const SizedBox(width: 4),
+                      ],
                       Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1105,6 +1110,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/emr/pets') && path.contains('/lab-reports')) return 'Lab Reports';
   if (path.startsWith('/emr/pets') && path.contains('/documents')) return 'Documents';
   if (path.startsWith('/emr/visits')) return 'Visit Records';
+  if (path.startsWith('/emr/appointments')) return 'Appointments';
   if (path.startsWith('/emr/reminders')) return 'Reminders';
   if (path.startsWith('/expenses')) return 'Expenses';
   if (path.startsWith('/reports/payments')) return 'Payment Report';
@@ -1328,8 +1334,14 @@ class _MobileShellState extends State<_MobileShell> {
     final userName = auth.user?.name ?? 'Admin';
     final userInitials = userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'A';
 
+    final showBack = shellShowsBack(widget.location);
+
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: !showBack,
+        leading: showBack
+            ? ShellBackButton(location: widget.location, compact: true)
+            : null,
         title: Text(
           _titleForPath(widget.location),
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),

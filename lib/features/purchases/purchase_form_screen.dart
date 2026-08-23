@@ -358,6 +358,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

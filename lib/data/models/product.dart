@@ -31,6 +31,7 @@ class Product {
     required this.isPetFood,
     required this.isService,
     required this.isMedicine,
+    this.treatmentUnderCategory,
     required this.isActive,
     this.currentStock,
     this.categoryName,
@@ -60,6 +61,7 @@ class Product {
   final bool isPetFood;
   final bool isService;
   final bool isMedicine;
+  final String? treatmentUnderCategory;
   final bool isActive;
   final double? currentStock;
   final String? categoryName;
@@ -120,6 +122,7 @@ class Product {
       isPetFood: j['is_pet_food'] as bool? ?? false,
       isService: j['is_service'] as bool? ?? false,
       isMedicine: j['is_medicine'] as bool? ?? false,
+      treatmentUnderCategory: j['treatment_under_category']?.toString(),
       isActive: j['is_active'] as bool? ?? true,
       currentStock: numOrNull(j['current_stock']) ?? _stockFromInventory(j['inventory']),
       categoryName: cat?['name']?.toString(),

@@ -1204,11 +1204,6 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
       color: Colors.white,
       child: Row(
         children: [
-          IconButton(
-            tooltip: 'Back to products',
-            onPressed: () => context.go('/products'),
-            icon: const Icon(Icons.arrow_back),
-          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

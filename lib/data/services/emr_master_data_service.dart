@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
+import '../models/product.dart';
 
 class EmrTemplateItem {
   EmrTemplateItem({
@@ -434,6 +435,45 @@ class EmrMasterDataService {
       _update('$_base/investigations/$id', body);
 
   Future<void> deleteInvestigation(int id) => _delete('$_base/investigations/$id');
+
+  Future<List<Product>> listTreatmentUnderProducts({
+    String? search,
+    String? category,
+  }) async {
+    try {
+      final res = await _client.get(
+        '$_base/treatment-under-products',
+        queryParameters: {
+          if (search != null && search.isNotEmpty) 'search': search,
+          if (category != null && category.isNotEmpty) 'category': category,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, Product.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Product> assignTreatmentUnderProduct(
+    int productId,
+    String? category,
+  ) async {
+    try {
+      final res = await _client.put(
+        '$_base/treatment-under-products/$productId',
+        data: {'treatment_under_category': category},
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => Product.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
 
   // ── Procedure / service kits ──────────────────────────────────────
 

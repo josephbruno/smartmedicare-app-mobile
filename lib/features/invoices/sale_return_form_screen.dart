@@ -315,7 +315,10 @@ class _SaleReturnFormScreenState extends State<SaleReturnFormScreen> {
     }
     if (_error != null || _invoice == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Sale Return')),
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: const Text('Sale Return'),
+        ),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -335,6 +338,7 @@ class _SaleReturnFormScreenState extends State<SaleReturnFormScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

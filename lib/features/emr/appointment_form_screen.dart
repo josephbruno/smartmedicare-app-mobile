@@ -194,7 +194,10 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(_isEdit ? 'Edit appointment' : 'New appointment')),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: Text(_isEdit ? 'Edit appointment' : 'New appointment'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

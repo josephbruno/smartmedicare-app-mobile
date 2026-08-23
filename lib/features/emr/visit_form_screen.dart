@@ -15,6 +15,7 @@ import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/emr.dart';
 import '../../data/models/product.dart';
+import '../../data/models/treatment_under.dart';
 import '../../data/services/emr_master_data_service.dart';
 
 class VisitFormScreen extends StatefulWidget {
@@ -31,13 +32,9 @@ class VisitFormScreen extends StatefulWidget {
 class _VisitFormScreenState extends State<VisitFormScreen> {
   final _complaint = TextEditingController();
   final _clinicalNotes = TextEditingController();
-  final _observationInput = TextEditingController();
   final _investigationInput = TextEditingController();
   final _followUpNotes = TextEditingController();
-  final _diagnosisInput = TextEditingController();
-  final _observationFocus = FocusNode();
   final _investigationFocus = FocusNode();
-  final _diagnosisFocus = FocusNode();
   final _serviceCharge = TextEditingController();
 
   /// Selected vitals (dropdown values; null = not set).
@@ -50,9 +47,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   DoctorLite? _selectedDoctor;
   List<DoctorLite> _doctors = [];
   List<PetSearchResult> _petResults = [];
-  List<VisitDiagnosis> _diagnoses = [];
-  List<String> _observations = [];
-  List<String> _investigations = [];
+  final List<_InvestigationRow> _investigations = [];
   final List<_TreatmentRow> _treatments = [];
   final List<_MedicineRow> _medicines = [];
   final List<_VaccinationRow> _vaccinations = [];
@@ -60,13 +55,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   final List<_SurgeryRow> _surgeries = [];
   List<String> _complaintSuggestions = [];
   List<String> _defaultComplaintSuggestions = [];
-  List<String> _observationSuggestions = [];
   List<String> _investigationSuggestions = [];
-  List<VisitDiagnosis> _diagnosisSuggestions = [];
-  List<String> _defaultObservationSuggestions = [];
   List<String> _defaultInvestigationSuggestions = [];
-  List<VisitDiagnosis> _defaultDiagnosisSuggestions = [];
-  /// Which chip-field suggestion panel is open (`observation` / `investigation` / `diagnosis`).
+  /// Which chip-field suggestion panel is open (`investigation`).
   String? _openSuggestField;
   List<TreatmentSuggestion> _defaultTreatmentSuggestions = [];
   List<TreatmentSuggestion> _treatmentSuggestions = [];
@@ -79,13 +70,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   List<VaccinationTemplate> _defaultVaccinationSuggestions = [];
   List<VaccinationTemplate> _vaccinationSuggestions = [];
   int? _vaccinationSuggestForIndex;
+  String _treatmentUnderTab = TreatmentUnderCategory.antibiotics;
   PetSummary? _petSummary;
   int? _serviceChargeProductId;
   String? _serviceChargeProductName;
   Timer? _complaintLearnDebounce;
-  Timer? _observationLearnDebounce;
   Timer? _investigationLearnDebounce;
-  Timer? _diagnosisLearnDebounce;
 
   static const int _emrLearnMinChars = 6;
   static const Duration _emrLearnDebounce = Duration(milliseconds: 450);
@@ -178,16 +168,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void initState() {
     super.initState();
     _sourceAppointmentId = widget.appointmentId;
-    _diagnosisFocus.addListener(() => _onChipFieldFocus(
-          field: 'diagnosis',
-          focus: _diagnosisFocus,
-          loadSuggestions: () => _searchDiagnoses(_diagnosisInput.text),
-        ));
-    _observationFocus.addListener(() => _onChipFieldFocus(
-          field: 'observation',
-          focus: _observationFocus,
-          loadSuggestions: () => _searchObservations(_observationInput.text),
-        ));
     _investigationFocus.addListener(() => _onChipFieldFocus(
           field: 'investigation',
           focus: _investigationFocus,
@@ -219,31 +199,15 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   void _commitPendingChipInput(String field) {
     switch (field) {
-      case 'observation':
-        final t = _observationInput.text.trim();
-        if (t.isNotEmpty) _addObservation(t, keepFocus: false);
       case 'investigation':
         final t = _investigationInput.text.trim();
         if (t.isNotEmpty) _addInvestigation(t, keepFocus: false);
-      case 'diagnosis':
-        final t = _diagnosisInput.text.trim();
-        if (t.isNotEmpty) _addDiagnosis(t, keepFocus: false);
     }
-  }
-
-  void _selectObservationSuggestion(String phrase) {
-    _openSuggestField = 'observation';
-    _addObservation(phrase);
   }
 
   void _selectInvestigationSuggestion(String phrase) {
     _openSuggestField = 'investigation';
     _addInvestigation(phrase);
-  }
-
-  void _selectDiagnosisSuggestion(VisitDiagnosis d) {
-    _openSuggestField = 'diagnosis';
-    _addDiagnosisFromSuggestion(d);
   }
 
   bool _isKnownComplaint(String value) {
@@ -252,35 +216,16 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         _complaintSuggestions.any((s) => s.toLowerCase() == key);
   }
 
-  bool _isKnownObservation(String value) {
-    final key = value.toLowerCase();
-    return _defaultObservationSuggestions.any((s) => s.toLowerCase() == key) ||
-        _observationSuggestions.any((s) => s.toLowerCase() == key);
-  }
-
   bool _isKnownInvestigation(String value) {
     final key = value.toLowerCase();
     return _defaultInvestigationSuggestions.any((s) => s.toLowerCase() == key) ||
         _investigationSuggestions.any((s) => s.toLowerCase() == key);
   }
 
-  bool _isKnownDiagnosis(String value) {
-    final key = value.toLowerCase();
-    return _defaultDiagnosisSuggestions
-            .any((s) => s.diagnosisName.toLowerCase() == key) ||
-        _diagnosisSuggestions.any((s) => s.diagnosisName.toLowerCase() == key);
-  }
-
   void _rememberComplaint(String value) {
     if (_isKnownComplaint(value)) return;
     _defaultComplaintSuggestions = [value, ..._defaultComplaintSuggestions];
     _complaintSuggestions = List.of(_defaultComplaintSuggestions);
-  }
-
-  void _rememberObservation(String value) {
-    if (_isKnownObservation(value)) return;
-    _defaultObservationSuggestions = [value, ..._defaultObservationSuggestions];
-    _observationSuggestions = List.of(_defaultObservationSuggestions);
   }
 
   void _rememberInvestigation(String value) {
@@ -290,17 +235,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       ..._defaultInvestigationSuggestions,
     ];
     _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
-  }
-
-  void _rememberDiagnosis(String value) {
-    if (_isKnownDiagnosis(value)) return;
-    final item = VisitDiagnosis(
-      diagnosisName: value,
-      severity: 'mild',
-      isPrimary: false,
-    );
-    _defaultDiagnosisSuggestions = [item, ..._defaultDiagnosisSuggestions];
-    _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions);
   }
 
   Future<void> _persistNewComplaint(String name) async {
@@ -313,16 +247,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     } catch (_) {}
   }
 
-  Future<void> _persistNewObservation(String name) async {
-    if (!mounted) return;
-    try {
-      await context.read<AppServices>().emr.rememberTemplates(
-            observations: [name],
-          );
-      _rememberObservation(name);
-    } catch (_) {}
-  }
-
   Future<void> _persistNewInvestigation(String name) async {
     if (!mounted) return;
     try {
@@ -330,16 +254,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             investigations: [name],
           );
       _rememberInvestigation(name);
-    } catch (_) {}
-  }
-
-  Future<void> _persistNewDiagnosis(String name) async {
-    if (!mounted) return;
-    try {
-      await context.read<AppServices>().emr.rememberTemplates(
-            diagnoses: [name],
-          );
-      _rememberDiagnosis(name);
     } catch (_) {}
   }
 
@@ -365,25 +279,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     });
   }
 
-  void _scheduleLearnObservation(String raw, {required bool force}) {
-    final term = raw.trim();
-    if (term.isEmpty || _isKnownObservation(term)) return;
-    if (!force && term.length <= _emrLearnMinChars) return;
-
-    _observationLearnDebounce?.cancel();
-    if (force) {
-      unawaited(_persistNewObservation(term));
-      return;
-    }
-    _observationLearnDebounce = Timer(_emrLearnDebounce, () {
-      if (!mounted) return;
-      final current = _observationInput.text.trim();
-      if (current != term) return;
-      if (_isKnownObservation(term) || term.length <= _emrLearnMinChars) return;
-      unawaited(_persistNewObservation(term));
-    });
-  }
-
   void _scheduleLearnInvestigation(String raw, {required bool force}) {
     final term = raw.trim();
     if (term.isEmpty || _isKnownInvestigation(term)) return;
@@ -403,44 +298,14 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     });
   }
 
-  void _scheduleLearnDiagnosis(String raw, {required bool force}) {
-    final term = raw.trim();
-    if (term.isEmpty || _isKnownDiagnosis(term)) return;
-    if (!force && term.length <= _emrLearnMinChars) return;
-
-    _diagnosisLearnDebounce?.cancel();
-    if (force) {
-      unawaited(_persistNewDiagnosis(term));
-      return;
-    }
-    _diagnosisLearnDebounce = Timer(_emrLearnDebounce, () {
-      if (!mounted) return;
-      final current = _diagnosisInput.text.trim();
-      if (current != term) return;
-      if (_isKnownDiagnosis(term) || term.length <= _emrLearnMinChars) return;
-      unawaited(_persistNewDiagnosis(term));
-    });
-  }
-
   void _onComplaintChanged(String text) {
     _searchComplaints(text);
     _scheduleLearnComplaint(_complaintSearchTerm(text), force: false);
   }
 
-  void _onObservationChanged(String text) {
-    _searchObservations(text);
-    _scheduleLearnObservation(text, force: false);
-  }
-
   void _onInvestigationChanged(String text) {
     _searchInvestigations(text);
     _scheduleLearnInvestigation(text, force: false);
-  }
-
-  void _onDiagnosisChanged(String text) {
-    setState(() {});
-    _searchDiagnoses(text);
-    _scheduleLearnDiagnosis(text, force: false);
   }
 
   /// Persist any free-typed terms from the current form into EMR templates.
@@ -451,44 +316,25 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty && !_isKnownComplaint(e))
         .toList();
-    final observations = _observations
-        .where((e) => e.trim().isNotEmpty && !_isKnownObservation(e))
-        .map((e) => e.trim())
-        .toList();
     final investigations = _investigations
-        .where((e) => e.trim().isNotEmpty && !_isKnownInvestigation(e))
-        .map((e) => e.trim())
-        .toList();
-    final diagnoses = _diagnoses
-        .map((d) => d.diagnosisName.trim())
-        .where((e) => e.isNotEmpty && !_isKnownDiagnosis(e))
+        .map((e) => e.name.trim())
+        .where((e) => e.isNotEmpty && !_isKnownInvestigation(e))
         .toList();
 
-    if (complaints.isEmpty &&
-        observations.isEmpty &&
-        investigations.isEmpty &&
-        diagnoses.isEmpty) {
+    if (complaints.isEmpty && investigations.isEmpty) {
       return;
     }
 
     try {
       await context.read<AppServices>().emr.rememberTemplates(
             complaints: complaints.isEmpty ? null : complaints,
-            observations: observations.isEmpty ? null : observations,
             investigations: investigations.isEmpty ? null : investigations,
-            diagnoses: diagnoses.isEmpty ? null : diagnoses,
           );
       for (final c in complaints) {
         _rememberComplaint(c);
       }
-      for (final o in observations) {
-        _rememberObservation(o);
-      }
       for (final i in investigations) {
         _rememberInvestigation(i);
-      }
-      for (final d in diagnoses) {
-        _rememberDiagnosis(d);
       }
     } catch (_) {}
   }
@@ -503,12 +349,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       _doctors = _uniqueDoctors(await emr.listDoctors());
       _defaultComplaintSuggestions = await emr.getComplaints();
       _complaintSuggestions = List.of(_defaultComplaintSuggestions);
-      _defaultObservationSuggestions = await emr.getObservations();
       _defaultInvestigationSuggestions = await emr.getInvestigations();
-      _defaultDiagnosisSuggestions = await emr.getDiagnosisSuggestions();
-      _observationSuggestions = List.of(_defaultObservationSuggestions);
       _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
-      _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions);
       _defaultTreatmentSuggestions = await emr.getTreatmentSuggestions();
       _defaultMedicineSuggestions = await emr.getMedicineSuggestions();
       _frequencySuggestions = await emr.getFrequencySuggestions();
@@ -564,8 +406,15 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     }
     _complaint.text = visit.chiefComplaint ?? '';
     _clinicalNotes.text = visit.clinicalNotes ?? '';
-    _observations = _splitPhrases(visit.observation);
-    _investigations = _splitPhrases(visit.investigation);
+    for (final row in _investigations) {
+      row.dispose();
+    }
+    _investigations
+      ..clear()
+      ..addAll(
+        VisitInvestigationItem.parse(visit.investigation)
+            .map(_InvestigationRow.fromItem),
+      );
     _followUpNotes.text = visit.followUpNotes ?? '';
     if (visit.temperature != null) {
       // API stores °C; dropdown is °F.
@@ -587,7 +436,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (visit.followUpDate != null) {
       _followUpDate = DateTime.tryParse(visit.followUpDate!);
     }
-    _diagnoses = visit.diagnoses ?? [];
     _treatments
       ..clear()
       ..addAll((visit.treatments ?? []).map(_TreatmentRow.fromModel));
@@ -1110,28 +958,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     }
   }
 
-  Future<void> _searchDiagnoses(String q) async {
-    final query = q.trim();
-    try {
-      final results = await context.read<AppServices>().emr.getDiagnosisSuggestions(
-            q: query.isEmpty ? null : query,
-          );
-      if (mounted) {
-        setState(() {
-          _diagnosisSuggestions = results;
-          if (query.isEmpty) {
-            _defaultDiagnosisSuggestions = List.of(results);
-          }
-        });
-      }
-    } catch (_) {
-      if (!mounted) return;
-      if (query.isEmpty && _defaultDiagnosisSuggestions.isNotEmpty) {
-        setState(() => _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions));
-      }
-    }
-  }
-
   /// Search uses the last comma-separated segment so multi-select typing works.
   String _complaintSearchTerm(String text) {
     final parts = text.split(',');
@@ -1214,65 +1040,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _searchComplaints('');
   }
 
-  List<String> _splitPhrases(String? raw) {
-    if (raw == null || raw.trim().isEmpty) return [];
-    return raw
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
-  String? _joinPhrases(List<String> items) {
-    final joined = items.map((e) => e.trim()).where((e) => e.isNotEmpty).join(', ');
-    return joined.isEmpty ? null : joined;
-  }
-
-  Future<void> _searchObservations(String text) async {
-    final q = text.trim();
-    try {
-      final results = await context
-          .read<AppServices>()
-          .emr
-          .getObservations(q: q.isEmpty ? null : q);
-      if (mounted) {
-        setState(() {
-          _observationSuggestions = results;
-          if (q.isEmpty) {
-            _defaultObservationSuggestions = List.of(results);
-          }
-        });
-      }
-    } catch (_) {
-      if (!mounted) return;
-      if (q.isEmpty && _defaultObservationSuggestions.isNotEmpty) {
-        setState(() =>
-            _observationSuggestions = List.of(_defaultObservationSuggestions));
-      }
-    }
-  }
-
-  void _addObservation(String phrase, {bool keepFocus = true}) {
-    final trimmed = phrase.trim();
-    if (trimmed.isEmpty) return;
-    if (_observations.any((x) => x.toLowerCase() == trimmed.toLowerCase())) {
-      _observationInput.clear();
-      setState(() =>
-          _observationSuggestions = List.of(_defaultObservationSuggestions));
-      return;
-    }
-    final isNew = !_isKnownObservation(trimmed);
-    setState(() {
-      _observations.add(trimmed);
-      _observationInput.clear();
-      if (isNew) _rememberObservation(trimmed);
-      _observationSuggestions = List.of(_defaultObservationSuggestions);
-    });
-    // Enter: always check and save unknown terms.
-    if (isNew) _scheduleLearnObservation(trimmed, force: true);
-    if (keepFocus) _observationFocus.requestFocus();
-  }
-
   Future<void> _searchInvestigations(String text) async {
     final q = text.trim();
     try {
@@ -1300,7 +1067,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void _addInvestigation(String phrase, {bool keepFocus = true}) {
     final trimmed = phrase.trim();
     if (trimmed.isEmpty) return;
-    if (_investigations.any((x) => x.toLowerCase() == trimmed.toLowerCase())) {
+    if (_investigations.any((x) => x.name.toLowerCase() == trimmed.toLowerCase())) {
       _investigationInput.clear();
       setState(() => _investigationSuggestions =
           List.of(_defaultInvestigationSuggestions));
@@ -1308,7 +1075,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     }
     final isNew = !_isKnownInvestigation(trimmed);
     setState(() {
-      _investigations.add(trimmed);
+      _investigations.add(_InvestigationRow(name: trimmed));
       _investigationInput.clear();
       if (isNew) _rememberInvestigation(trimmed);
       _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
@@ -1317,28 +1084,40 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (keepFocus) _investigationFocus.requestFocus();
   }
 
-  void _addDiagnosisFromSuggestion(VisitDiagnosis d) {
-    final name = d.diagnosisName.trim();
-    if (name.isEmpty) return;
-    if (_diagnoses.any(
-      (x) => x.diagnosisName.toLowerCase() == name.toLowerCase(),
-    )) {
-      _diagnosisInput.clear();
-      setState(() =>
-          _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions));
-      return;
-    }
+  void _removeInvestigationAt(int index) {
+    if (index < 0 || index >= _investigations.length) return;
+    final row = _investigations.removeAt(index);
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
+  }
+
+  int _treatmentUnderCount(String category) {
+    return _medicines
+        .where((m) =>
+            m.treatmentUnderCategory != null &&
+            TreatmentUnderCategory.forVisit(snapshot: m.treatmentUnderCategory) ==
+                category)
+        .length;
+  }
+
+  Future<void> _addTreatmentUnderMedicine(String category) async {
+    final p = await _pickProduct(
+      type: 'medicine',
+      requiredQty: 1,
+      treatmentUnderCategory: category,
+    );
+    if (p == null || !mounted) return;
     setState(() {
-      _diagnoses.add(VisitDiagnosis(
-        diagnosisName: name,
-        icdCode: d.icdCode,
-        severity: d.severity,
-        isPrimary: _diagnoses.isEmpty,
-      ));
-      _diagnosisInput.clear();
-      _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions);
+      _treatmentUnderTab = category;
+      _medicines.add(
+        _MedicineRow(
+          productId: p.id,
+          name: p.name,
+          unitPrice: p.sellingPrice,
+          treatmentUnderCategory: category,
+        ),
+      );
     });
-    _diagnosisFocus.requestFocus();
   }
 
   Future<Product?> _pickProduct({
@@ -1346,6 +1125,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     String type = 'product', // product | service | medicine
     bool allowCreateService = false,
     double? requiredQty,
+    String? treatmentUnderCategory,
   }) {
     if (!mounted) return Future.value(null);
     return showAppDialog<Product>(
@@ -1355,34 +1135,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         initialQuery: initial,
         allowCreateService: allowCreateService,
         requiredQty: requiredQty,
+        treatmentUnderCategory: treatmentUnderCategory,
       ),
     );
-  }
-
-  void _addDiagnosis(String name, {bool keepFocus = true}) {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return;
-    if (_diagnoses.any(
-      (x) => x.diagnosisName.toLowerCase() == trimmed.toLowerCase(),
-    )) {
-      _diagnosisInput.clear();
-      setState(() =>
-          _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions));
-      return;
-    }
-    final isNew = !_isKnownDiagnosis(trimmed);
-    setState(() {
-      _diagnoses.add(VisitDiagnosis(
-        diagnosisName: trimmed,
-        severity: 'mild',
-        isPrimary: _diagnoses.isEmpty,
-      ));
-      _diagnosisInput.clear();
-      if (isNew) _rememberDiagnosis(trimmed);
-      _diagnosisSuggestions = List.of(_defaultDiagnosisSuggestions);
-    });
-    if (isNew) _scheduleLearnDiagnosis(trimmed, force: true);
-    if (keepFocus) _diagnosisFocus.requestFocus();
   }
 
   String _apiErrorMessage(Object e) {
@@ -1463,10 +1218,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (_complaintForApi.isNotEmpty) 'chief_complaint': _complaintForApi,
       if (_clinicalNotes.text.trim().isNotEmpty)
         'clinical_notes': _clinicalNotes.text.trim(),
-      if (_joinPhrases(_observations) case final observation?)
-        'observation': observation,
-      if (_joinPhrases(_investigations) case final investigation?)
-        'investigation': investigation,
+      if (_isEdit || _investigations.isNotEmpty)
+        'investigation':
+            VisitInvestigationItem.encode(_investigations.map((e) => e.toItem())) ??
+                '',
       if (_followUpNotes.text.trim().isNotEmpty)
         'follow_up_notes': _followUpNotes.text.trim(),
       if (_temperatureF != null)
@@ -1479,10 +1234,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         'follow_up_date': _formatYmd(_followUpDate!),
       // Always send child collections on edit so removals sync; on create only
       // when non-empty.
-      if (_isEdit || _diagnoses.isNotEmpty)
-        'diagnoses': [
-          for (final d in _diagnoses) d.toJson(),
-        ],
       if (_isEdit || _treatments.isNotEmpty)
         'treatments': [
           for (final t in _treatments)
@@ -1575,19 +1326,16 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   @override
   void dispose() {
     _complaintLearnDebounce?.cancel();
-    _observationLearnDebounce?.cancel();
     _investigationLearnDebounce?.cancel();
-    _diagnosisLearnDebounce?.cancel();
     _complaint.dispose();
     _clinicalNotes.dispose();
-    _observationInput.dispose();
     _investigationInput.dispose();
     _followUpNotes.dispose();
-    _diagnosisInput.dispose();
-    _observationFocus.dispose();
     _investigationFocus.dispose();
-    _diagnosisFocus.dispose();
     _serviceCharge.dispose();
+    for (final row in _investigations) {
+      row.dispose();
+    }
     for (final t in _treatments) {
       t.dispose();
     }
@@ -1625,7 +1373,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         : const EdgeInsets.all(16);
 
     return Scaffold(
-      appBar: AppBar(title: Text(_isEdit ? 'Edit visit' : 'New visit')),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: Text(_isEdit ? 'Edit visit' : 'New visit'),
+      ),
       body: ListView(
         padding: listPadding,
         children: [
@@ -1979,293 +1730,140 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             },
           ),
           const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final narrow = compact || constraints.maxWidth < 900;
-
-              Widget chipField({
-                required String title,
-                required String emptyHint,
-                required String suggestField,
-                required List<String> selected,
-                required TextEditingController input,
-                required FocusNode focus,
-                required List<String> suggestions,
-                required ValueChanged<String> onChanged,
-                required ValueChanged<String> onSubmitted,
-                required ValueChanged<String> onSuggestionTap,
-                required ValueChanged<String> onDelete,
-              }) {
-                final showSuggestions = _openSuggestField == suggestField;
-                final visibleSuggestions = showSuggestions
-                    ? suggestions
-                        .where(
-                          (s) => !selected.any(
-                            (sel) => sel.toLowerCase() == s.toLowerCase(),
-                          ),
-                        )
-                        .take(12)
-                        .toList()
-                    : const <String>[];
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.titleSmall),
-                    const SizedBox(height: 8),
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => focus.requestFocus(),
-                      child: InputDecorator(
-                        isFocused: focus.hasFocus,
-                        isEmpty: selected.isEmpty && input.text.isEmpty,
-                        decoration: InputDecoration(
-                          hintText: selected.isEmpty ? emptyHint : null,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (selected.isNotEmpty) ...[
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: selected
-                                    .map(
-                                      (item) => InputChip(
-                                        label: Text(
-                                          item,
-                                          style: const TextStyle(fontSize: 13),
-                                        ),
-                                        visualDensity: VisualDensity.compact,
-                                        materialTapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                        onDeleted: () => onDelete(item),
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                              const SizedBox(height: 4),
-                            ],
-                            TextField(
-                              controller: input,
-                              focusNode: focus,
-                              decoration: InputDecoration(
-                                isDense: true,
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                filled: false,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 2,
-                                  vertical: 4,
-                                ),
-                                hintText: selected.isEmpty ? null : 'Add another…',
-                              ),
-                              onChanged: (v) {
-                                setState(() {});
-                                onChanged(v);
-                              },
-                              onSubmitted: onSubmitted,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (visibleSuggestions.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: visibleSuggestions.map((c) {
-                            // onTapDown runs before TextField blur cancels the gesture.
-                            return GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTapDown: (_) => onSuggestionTap(c),
-                              child: Chip(
-                                label: Text(
-                                  c,
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                visualDensity: VisualDensity.compact,
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                  ],
-                );
-              }
-
-              final observationField = chipField(
-                title: 'Observation',
-                emptyHint: 'Search, pick, or type & press Enter',
-                suggestField: 'observation',
-                selected: _observations,
-                input: _observationInput,
-                focus: _observationFocus,
-                suggestions: _observationSuggestions,
-                onChanged: _onObservationChanged,
-                onSubmitted: _addObservation,
-                onSuggestionTap: _selectObservationSuggestion,
-                onDelete: (item) => setState(() => _observations.remove(item)),
-              );
-
-              final investigationField = chipField(
-                title: 'Investigation',
-                emptyHint: 'Search, pick, or type & press Enter',
-                suggestField: 'investigation',
-                selected: _investigations,
-                input: _investigationInput,
-                focus: _investigationFocus,
-                suggestions: _investigationSuggestions,
-                onChanged: _onInvestigationChanged,
-                onSubmitted: _addInvestigation,
-                onSuggestionTap: _selectInvestigationSuggestion,
-                onDelete: (item) => setState(() => _investigations.remove(item)),
-              );
-
-              final diagnosisVisibleSuggestions = _openSuggestField == 'diagnosis'
-                  ? _diagnosisSuggestions
-                      .where(
-                        (d) => !_diagnoses.any(
-                          (sel) =>
-                              sel.diagnosisName.toLowerCase() ==
-                              d.diagnosisName.toLowerCase(),
-                        ),
-                      )
-                      .take(12)
-                      .toList()
-                  : const <VisitDiagnosis>[];
-
-              final diagnosisField = Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Diagnoses', style: Theme.of(context).textTheme.titleSmall),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _diagnosisFocus.requestFocus(),
-                    child: InputDecorator(
-                      isFocused: _diagnosisFocus.hasFocus,
-                      isEmpty: _diagnoses.isEmpty && _diagnosisInput.text.isEmpty,
-                      decoration: InputDecoration(
-                        hintText: _diagnoses.isEmpty
-                            ? 'Search, pick, or type & press Enter'
-                            : null,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (_diagnoses.isNotEmpty) ...[
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: _diagnoses
-                                  .map(
-                                    (d) => InputChip(
-                                      label: Text(
-                                        d.diagnosisName,
-                                        style: const TextStyle(fontSize: 13),
-                                      ),
-                                      visualDensity: VisualDensity.compact,
-                                      materialTapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                      onDeleted: () =>
-                                          setState(() => _diagnoses.remove(d)),
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
-                            const SizedBox(height: 4),
-                          ],
-                          TextField(
-                            controller: _diagnosisInput,
-                            focusNode: _diagnosisFocus,
-                            decoration: InputDecoration(
-                              isDense: true,
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              filled: false,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 2,
-                                vertical: 4,
-                              ),
-                              hintText: _diagnoses.isEmpty ? null : 'Add another…',
-                            ),
-                            onChanged: _onDiagnosisChanged,
-                            onSubmitted: _addDiagnosis,
-                          ),
-                        ],
-                      ),
-                    ),
+          Text('Investigation', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _investigationFocus.requestFocus(),
+            child: InputDecorator(
+              isFocused: _investigationFocus.hasFocus,
+              isEmpty:
+                  _investigations.isEmpty && _investigationInput.text.isEmpty,
+              decoration: InputDecoration(
+                hintText: _investigations.isEmpty
+                    ? 'Search, pick, or type & press Enter'
+                    : null,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+              child: TextField(
+                controller: _investigationInput,
+                focusNode: _investigationFocus,
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 2,
+                    vertical: 4,
                   ),
-                  if (diagnosisVisibleSuggestions.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: diagnosisVisibleSuggestions
-                            .map(
-                              (d) => GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTapDown: (_) => _selectDiagnosisSuggestion(d),
-                                child: Chip(
-                                  label: Text(
-                                    d.icdCode != null
-                                        ? '${d.diagnosisName} (${d.icdCode})'
-                                        : d.diagnosisName,
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                  visualDensity: VisualDensity.compact,
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ),
-                ],
-              );
-
-              if (narrow) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    observationField,
-                    const SizedBox(height: 16),
-                    investigationField,
-                    const SizedBox(height: 16),
-                    diagnosisField,
-                  ],
-                );
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: observationField),
-                  const SizedBox(width: 12),
-                  Expanded(child: investigationField),
-                  const SizedBox(width: 12),
-                  Expanded(child: diagnosisField),
-                ],
-              );
-            },
+                  hintText: _investigations.isEmpty
+                      ? null
+                      : 'Add another…',
+                ),
+                onChanged: (v) {
+                  setState(() {});
+                  _onInvestigationChanged(v);
+                },
+                onSubmitted: _addInvestigation,
+              ),
+            ),
           ),
+          if (_openSuggestField == 'investigation' &&
+              _investigationSuggestions.any(
+                (s) => !_investigations.any(
+                  (sel) => sel.name.toLowerCase() == s.toLowerCase(),
+                ),
+              ))
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _investigationSuggestions
+                    .where(
+                      (s) => !_investigations.any(
+                        (sel) => sel.name.toLowerCase() == s.toLowerCase(),
+                      ),
+                    )
+                    .take(12)
+                    .map((c) {
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (_) => _selectInvestigationSuggestion(c),
+                    child: Chip(
+                      label: Text(
+                        c,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          if (_investigations.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Pick an investigation, then add notes against it',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+              ),
+            )
+          else
+            ..._investigations.asMap().entries.map((e) {
+              final i = e.key;
+              final row = e.value;
+              return Card(
+                margin: const EdgeInsets.only(top: 8),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 4, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          row.name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: TextField(
+                            controller: row.notesCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Notes',
+                              isDense: true,
+                            ),
+                            minLines: 1,
+                            maxLines: 3,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
+                        icon: const Icon(Icons.close, color: AppTheme.danger),
+                        onPressed: () => _removeInvestigationAt(i),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
           const SizedBox(height: 16),
           _responsiveSectionHeader(
             title: Wrap(
@@ -2273,7 +1871,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               spacing: 8,
               runSpacing: 4,
               children: [
-                Text('Treatments / Procedures',
+                Text('Treatments',
                     style: Theme.of(context).textTheme.titleSmall),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -2289,23 +1887,49 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ),
             actions: [
               TextButton.icon(
-                onPressed: _addProductsMulti,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add'),
-              ),
-              TextButton.icon(
                 onPressed: _addProcedureKit,
                 icon: const Icon(Icons.medical_services_outlined, size: 18),
                 label: const Text('Add kit'),
               ),
             ],
           ),
-          if (_treatments.isEmpty)
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final key in TreatmentUnderCategory.keys)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(
+                        _treatmentUnderCount(key) == 0
+                            ? TreatmentUnderCategory.labels[key]!
+                            : '${TreatmentUnderCategory.labels[key]} (${_treatmentUnderCount(key)})',
+                      ),
+                      selected: _treatmentUnderTab == key,
+                      onSelected: (_) async {
+                        setState(() => _treatmentUnderTab = key);
+                        await _addTreatmentUnderMedicine(key);
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (_treatments.isEmpty &&
+              !_medicines.any((m) =>
+                  m.treatmentUnderCategory != null &&
+                  TreatmentUnderCategory.forVisit(
+                        snapshot: m.treatmentUnderCategory,
+                      ) ==
+                      _treatmentUnderTab))
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                  'Add: search & pick one or many · Add kit: insert all kit products',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                'Tap a category to pick medicines · Add kit: insert all kit products',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+              ),
             ),
           ..._treatments.asMap().entries.map((e) {
             final i = e.key;
@@ -2476,258 +2100,44 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               ),
             );
           }),
+          ..._medicines.asMap().entries.where((e) =>
+              e.value.treatmentUnderCategory != null &&
+              TreatmentUnderCategory.forVisit(
+                    snapshot: e.value.treatmentUnderCategory,
+                  ) ==
+                  _treatmentUnderTab).map((e) {
+            return _buildMedicineCard(
+              index: e.key,
+              compact: compact,
+              treatmentUnderCategory: _treatmentUnderTab,
+            );
+          }),
           const SizedBox(height: 16),
           _responsiveSectionHeader(
-            title: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                Text('Prescriptions / Medicines',
-                    style: Theme.of(context).textTheme.titleSmall),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.warning.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text('Medicine product + stock',
-                      style: TextStyle(fontSize: 11)),
-                ),
-              ],
-            ),
+            title: Text('Prescriptions',
+                style: Theme.of(context).textTheme.titleSmall),
             actions: [
               TextButton.icon(
-                onPressed: () async {
-                  final p = await _pickProduct(type: 'medicine', requiredQty: 1);
-                  if (p == null) return;
-                  setState(() {
-                    final row = _MedicineRow(
-                      productId: p.id,
-                      name: p.name,
-                      unitPrice: p.sellingPrice,
-                    );
-                    _medicines.add(row);
-                  });
-                },
+                onPressed: () => setState(() => _medicines.add(_MedicineRow())),
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Add'),
               ),
             ],
           ),
-          if (_medicines.isEmpty)
+          if (!_medicines.any((m) => m.treatmentUnderCategory == null))
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('No medicines added — pick medicine products with stock',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-            ),
-          ..._medicines.asMap().entries.map((e) {
-            final i = e.key;
-            final m = e.value;
-            final showMedicineSuggestions =
-                _medicineSuggestForIndex == i && _medicineSuggestions.isNotEmpty;
-            final showFrequencySuggestions =
-                _medicineFrequencySuggestForIndex == i &&
-                    _frequencySuggestions.isNotEmpty;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _medicineFieldsLayout(
-                      compact: compact,
-                      nameField: Focus(
-                        onFocusChange: (hasFocus) {
-                          if (hasFocus) {
-                            _showMedicineSuggestionsFor(i);
-                          } else {
-                            Future.delayed(const Duration(milliseconds: 180), () {
-                              if (!mounted) return;
-                              _clearMedicineSuggestions(onlyIfIndex: i);
-                            });
-                          }
-                        },
-                        child: TextField(
-                          decoration: const InputDecoration(
-                            labelText: 'Medicine name',
-                            isDense: true,
-                          ),
-                          controller: m.nameCtrl,
-                          onChanged: (q) => _searchMedicines(q, forIndex: i),
-                        ),
-                      ),
-                      priceField: TextField(
-                        decoration: const InputDecoration(
-                          labelText: 'Price (₹)',
-                          isDense: true,
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        controller: m.priceCtrl,
-                      ),
-                      frequencyField: Focus(
-                        onFocusChange: (hasFocus) {
-                          if (hasFocus) {
-                            setState(() => _medicineFrequencySuggestForIndex = i);
-                          } else {
-                            Future.delayed(const Duration(milliseconds: 180), () {
-                              if (!mounted) return;
-                              if (_medicineFrequencySuggestForIndex == i) {
-                                setState(() => _medicineFrequencySuggestForIndex = null);
-                              }
-                            });
-                          }
-                        },
-                        child: TextField(
-                          decoration: const InputDecoration(
-                            labelText: 'Frequency',
-                            isDense: true,
-                          ),
-                          controller: m.freqCtrl,
-                        ),
-                      ),
-                      daysField: AppDropdownButtonFormField<int?>(
-                        value: m.durationDays,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Days',
-                          isDense: true,
-                        ),
-                        items: [
-                          const DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text('—'),
-                          ),
-                          ...List.generate(
-                            15,
-                            (i) => DropdownMenuItem<int?>(
-                              value: i + 1,
-                              child: Text('${i + 1}'),
-                            ),
-                          ),
-                        ],
-                        onChanged: (v) => setState(() => m.durationDays = v),
-                      ),
-                      qtyField: AppDropdownButtonFormField<int>(
-                        value: m.quantity,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Qty',
-                          isDense: true,
-                        ),
-                        items: List.generate(
-                          20,
-                          (i) => DropdownMenuItem(
-                            value: i + 1,
-                            child: Text('${i + 1}'),
-                          ),
-                        ),
-                        onChanged: (v) =>
-                            setState(() => m.quantity = v ?? 1),
-                      ),
-                      linkBtn: IconButton(
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                        icon: Icon(
-                          Icons.medication_outlined,
-                          size: 20,
-                          color: m.productId != null ? AppTheme.accent : AppTheme.primary,
-                        ),
-                        tooltip: m.productId != null
-                            ? 'Medicine product linked'
-                            : 'Link medicine product (stock checked)',
-                        onPressed: () async {
-                          final qty = m.quantity.toDouble();
-                          final p = await _pickProduct(
-                            initial: m.nameCtrl.text,
-                            type: 'medicine',
-                            requiredQty: qty,
-                          );
-                          if (p != null) {
-                            setState(() {
-                              m.productId = p.id;
-                              m.nameCtrl.text = p.name;
-                              m.priceCtrl.text = _formatAmount(p.sellingPrice);
-                            });
-                          }
-                        },
-                      ),
-                      removeBtn: IconButton(
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                        icon: const Icon(Icons.close, color: AppTheme.danger),
-                        onPressed: () {
-                          final row = _medicines.removeAt(i);
-                          _clearMedicineSuggestions();
-                          setState(() {
-                            if (_medicineFrequencySuggestForIndex == i) {
-                              _medicineFrequencySuggestForIndex = null;
-                            }
-                          });
-                          WidgetsBinding.instance
-                              .addPostFrameCallback((_) => row.dispose());
-                        },
-                      ),
-                    ),
-                    if (showMedicineSuggestions)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: _medicineSuggestions.take(6).map((s) {
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 6),
-                                child: ActionChip(
-                                  label: Text(s.name, style: const TextStyle(fontSize: 12)),
-                                  onPressed: () {
-                                    setState(() {
-                                      m.nameCtrl.text = s.name;
-                                      if (s.defaultFrequency != null &&
-                                          m.freqCtrl.text.isEmpty) {
-                                        m.freqCtrl.text = s.defaultFrequency!;
-                                      }
-                                      if (s.defaultDurationDays != null &&
-                                          m.durationDays == null) {
-                                        m.durationDays = s.defaultDurationDays!
-                                            .clamp(1, 15);
-                                      }
-                                      _medicineSuggestForIndex = null;
-                                      _medicineSuggestions = [];
-                                    });
-                                  },
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ),
-                    if (showFrequencySuggestions)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: _frequencySuggestions.take(6).map((f) {
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 6),
-                                child: ActionChip(
-                                  label: Text(f, style: const TextStyle(fontSize: 11)),
-                                  onPressed: () => setState(() {
-                                    m.freqCtrl.text = f;
-                                    _medicineFrequencySuggestForIndex = null;
-                                  }),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+              child: Text(
+                'No medicines added',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
               ),
+            ),
+          ..._medicines.asMap().entries
+              .where((e) => e.value.treatmentUnderCategory == null)
+              .map((e) {
+            return _buildMedicineCard(
+              index: e.key,
+              compact: compact,
             );
           }),
           const SizedBox(height: 16),
@@ -2830,8 +2240,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   Widget _responsiveSectionHeader({
     required Widget title,
-    required List<Widget> actions,
+    List<Widget> actions = const [],
   }) {
+    if (actions.isEmpty) return title;
     if (!_compactUi) {
       return Row(
         children: [
@@ -2847,6 +2258,229 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         const SizedBox(height: 4),
         Wrap(spacing: 4, runSpacing: 4, children: actions),
       ],
+    );
+  }
+
+  Widget _buildMedicineCard({
+    required int index,
+    required bool compact,
+    String? treatmentUnderCategory,
+  }) {
+    final m = _medicines[index];
+    final showMedicineSuggestions =
+        _medicineSuggestForIndex == index && _medicineSuggestions.isNotEmpty;
+    final showFrequencySuggestions =
+        _medicineFrequencySuggestForIndex == index &&
+            _frequencySuggestions.isNotEmpty;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _medicineFieldsLayout(
+              compact: compact,
+              nameField: Focus(
+                onFocusChange: (hasFocus) {
+                  if (hasFocus) {
+                    _showMedicineSuggestionsFor(index);
+                  } else {
+                    Future.delayed(const Duration(milliseconds: 180), () {
+                      if (!mounted) return;
+                      _clearMedicineSuggestions(onlyIfIndex: index);
+                    });
+                  }
+                },
+                child: TextField(
+                  decoration: const InputDecoration(
+                    labelText: 'Medicine name',
+                    isDense: true,
+                  ),
+                  controller: m.nameCtrl,
+                  onChanged: (q) => _searchMedicines(q, forIndex: index),
+                ),
+              ),
+              priceField: TextField(
+                decoration: const InputDecoration(
+                  labelText: 'Price (₹)',
+                  isDense: true,
+                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                controller: m.priceCtrl,
+              ),
+              frequencyField: Focus(
+                onFocusChange: (hasFocus) {
+                  if (hasFocus) {
+                    setState(() => _medicineFrequencySuggestForIndex = index);
+                  } else {
+                    Future.delayed(const Duration(milliseconds: 180), () {
+                      if (!mounted) return;
+                      if (_medicineFrequencySuggestForIndex == index) {
+                        setState(
+                            () => _medicineFrequencySuggestForIndex = null);
+                      }
+                    });
+                  }
+                },
+                child: TextField(
+                  decoration: const InputDecoration(
+                    labelText: 'Frequency',
+                    isDense: true,
+                  ),
+                  controller: m.freqCtrl,
+                ),
+              ),
+              daysField: AppDropdownButtonFormField<int?>(
+                value: m.durationDays,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Days',
+                  isDense: true,
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('—'),
+                  ),
+                  ...List.generate(
+                    15,
+                    (i) => DropdownMenuItem<int?>(
+                      value: i + 1,
+                      child: Text('${i + 1}'),
+                    ),
+                  ),
+                ],
+                onChanged: (v) => setState(() => m.durationDays = v),
+              ),
+              qtyField: AppDropdownButtonFormField<int>(
+                value: m.quantity,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Qty',
+                  isDense: true,
+                ),
+                items: List.generate(
+                  20,
+                  (i) => DropdownMenuItem(
+                    value: i + 1,
+                    child: Text('${i + 1}'),
+                  ),
+                ),
+                onChanged: (v) => setState(() => m.quantity = v ?? 1),
+              ),
+              linkBtn: IconButton(
+                visualDensity: VisualDensity.compact,
+                constraints:
+                    const BoxConstraints(minWidth: 40, minHeight: 40),
+                icon: Icon(
+                  Icons.medication_outlined,
+                  size: 20,
+                  color: m.productId != null
+                      ? AppTheme.accent
+                      : AppTheme.primary,
+                ),
+                tooltip: m.productId != null
+                    ? 'Medicine product linked'
+                    : 'Link medicine product (stock checked)',
+                onPressed: () async {
+                  final qty = m.quantity.toDouble();
+                  final p = await _pickProduct(
+                    initial: m.nameCtrl.text,
+                    type: 'medicine',
+                    requiredQty: qty,
+                    treatmentUnderCategory: treatmentUnderCategory,
+                  );
+                  if (p != null) {
+                    setState(() {
+                      m.productId = p.id;
+                      m.nameCtrl.text = p.name;
+                      m.priceCtrl.text = _formatAmount(p.sellingPrice);
+                      if (treatmentUnderCategory != null) {
+                        m.treatmentUnderCategory = treatmentUnderCategory;
+                      }
+                    });
+                  }
+                },
+              ),
+              removeBtn: IconButton(
+                visualDensity: VisualDensity.compact,
+                constraints:
+                    const BoxConstraints(minWidth: 40, minHeight: 40),
+                icon: const Icon(Icons.close, color: AppTheme.danger),
+                onPressed: () {
+                  final row = _medicines.removeAt(index);
+                  _clearMedicineSuggestions();
+                  setState(() {
+                    if (_medicineFrequencySuggestForIndex == index) {
+                      _medicineFrequencySuggestForIndex = null;
+                    }
+                  });
+                  WidgetsBinding.instance
+                      .addPostFrameCallback((_) => row.dispose());
+                },
+              ),
+            ),
+            if (showMedicineSuggestions)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _medicineSuggestions.take(6).map((s) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ActionChip(
+                          label: Text(s.name,
+                              style: const TextStyle(fontSize: 12)),
+                          onPressed: () {
+                            setState(() {
+                              m.nameCtrl.text = s.name;
+                              if (s.defaultFrequency != null &&
+                                  m.freqCtrl.text.isEmpty) {
+                                m.freqCtrl.text = s.defaultFrequency!;
+                              }
+                              if (s.defaultDurationDays != null &&
+                                  m.durationDays == null) {
+                                m.durationDays =
+                                    s.defaultDurationDays!.clamp(1, 15);
+                              }
+                              _medicineSuggestForIndex = null;
+                              _medicineSuggestions = [];
+                            });
+                          },
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            if (showFrequencySuggestions)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _frequencySuggestions.take(6).map((f) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: ActionChip(
+                          label:
+                              Text(f, style: const TextStyle(fontSize: 11)),
+                          onPressed: () => setState(() {
+                            m.freqCtrl.text = f;
+                            _medicineFrequencySuggestForIndex = null;
+                          }),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -3488,12 +3122,14 @@ class _ProductPickerDialog extends StatefulWidget {
     this.initialQuery,
     this.allowCreateService = false,
     this.requiredQty,
+    this.treatmentUnderCategory,
   });
 
   final String type;
   final String? initialQuery;
   final bool allowCreateService;
   final double? requiredQty;
+  final String? treatmentUnderCategory;
 
   @override
   State<_ProductPickerDialog> createState() => _ProductPickerDialogState();
@@ -3532,6 +3168,8 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
               'per_page': 500,
               'is_active': 1,
               'type': widget.type,
+              if (widget.treatmentUnderCategory != null)
+                'treatment_under_category': widget.treatmentUnderCategory,
             },
           );
       if (!mounted) return;
@@ -3556,6 +3194,8 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
             'per_page': 50,
             'is_active': 1,
             'type': widget.type,
+            if (widget.treatmentUnderCategory != null)
+              'treatment_under_category': widget.treatmentUnderCategory,
           },
         );
   }
@@ -3631,7 +3271,9 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
     };
     final subtitle = switch (type) {
       'service' => 'Link a billable service for GST and invoicing',
-      'medicine' => 'Link inventory so stock and billing stay in sync',
+      'medicine' => widget.treatmentUnderCategory != null
+          ? 'Link a ${TreatmentUnderCategory.labelOf(widget.treatmentUnderCategory).toLowerCase()} medicine'
+          : 'Link inventory so stock and billing stay in sync',
       _ => 'Search the catalog and pick an item',
     };
     final icon = switch (type) {
@@ -3649,7 +3291,9 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
         ? 'Could not load products.\n$_loadError'
         : (_search.text.trim().isEmpty
             ? (type == 'medicine'
-                ? 'No medicine products in catalog'
+                ? (widget.treatmentUnderCategory != null
+                    ? 'No ${TreatmentUnderCategory.labelOf(widget.treatmentUnderCategory).toLowerCase()} medicines mapped yet'
+                    : 'No medicine products in catalog')
                 : type == 'service'
                     ? 'No service products in catalog'
                     : 'No products in catalog')
@@ -4150,6 +3794,26 @@ class _SurgeryRow {
   }
 }
 
+class _InvestigationRow {
+  _InvestigationRow({required this.name, String notes = ''})
+      : notesCtrl = TextEditingController(text: notes);
+
+  factory _InvestigationRow.fromItem(VisitInvestigationItem item) =>
+      _InvestigationRow(name: item.name, notes: item.notes);
+
+  final String name;
+  final TextEditingController notesCtrl;
+
+  VisitInvestigationItem toItem() => VisitInvestigationItem(
+        name: name,
+        notes: notesCtrl.text,
+      );
+
+  void dispose() {
+    notesCtrl.dispose();
+  }
+}
+
 class _TreatmentRow {
   _TreatmentRow({
     this.productId,
@@ -4197,6 +3861,7 @@ class _MedicineRow {
     int? durationDays,
     int quantity = 1,
     double unitPrice = 0,
+    this.treatmentUnderCategory,
   })  : durationDays = durationDays?.clamp(1, 15),
         quantity = quantity.clamp(1, 20),
         nameCtrl = TextEditingController(text: name),
@@ -4212,9 +3877,16 @@ class _MedicineRow {
         durationDays: m.durationDays,
         quantity: m.quantity.round(),
         unitPrice: m.unitPrice,
+        treatmentUnderCategory: TreatmentUnderCategory.normalize(
+              m.treatmentUnderCategory,
+            ) ??
+            TreatmentUnderCategory.normalize(
+              m.product?.treatmentUnderCategory,
+            ),
       );
 
   int? productId;
+  String? treatmentUnderCategory;
   int? durationDays;
   int quantity;
   final TextEditingController nameCtrl;
@@ -4225,6 +3897,8 @@ class _MedicineRow {
   Map<String, dynamic> toJson() => {
         if (productId != null) 'product_id': productId,
         'medicine_name': nameCtrl.text.trim(),
+        if (treatmentUnderCategory != null)
+          'treatment_under_category': treatmentUnderCategory,
         if (dosageCtrl.text.isNotEmpty) 'dosage': dosageCtrl.text.trim(),
         if (freqCtrl.text.isNotEmpty) 'frequency': freqCtrl.text.trim(),
         if (durationDays != null) 'duration_days': durationDays,

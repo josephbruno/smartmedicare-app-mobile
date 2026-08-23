@@ -265,6 +265,58 @@ class PatientAppointment {
   }
 }
 
+/// One selected investigation on a visit, with optional notes.
+///
+/// Stored in [PetVisit.investigation] as one item per line:
+/// `Name` or `Name | notes`. Legacy comma-separated names (no notes) still parse.
+class VisitInvestigationItem {
+  const VisitInvestigationItem({required this.name, this.notes = ''});
+
+  final String name;
+  final String notes;
+
+  static const _noteSep = ' | ';
+
+  static List<VisitInvestigationItem> parse(String? raw) {
+    if (raw == null) return const [];
+    final text = raw.trim();
+    if (text.isEmpty) return const [];
+
+    final useLined = text.contains('\n') || text.contains(_noteSep);
+    final parts = useLined
+        ? text.split(RegExp(r'\r?\n'))
+        : text.split(',');
+
+    final items = <VisitInvestigationItem>[];
+    for (final part in parts) {
+      final line = part.trim();
+      if (line.isEmpty) continue;
+      final sep = line.indexOf(_noteSep);
+      if (sep >= 0) {
+        final name = line.substring(0, sep).trim();
+        final notes = line.substring(sep + _noteSep.length).trim();
+        if (name.isEmpty) continue;
+        items.add(VisitInvestigationItem(name: name, notes: notes));
+      } else {
+        items.add(VisitInvestigationItem(name: line));
+      }
+    }
+    return items;
+  }
+
+  static String? encode(Iterable<VisitInvestigationItem> items) {
+    final lines = <String>[];
+    for (final item in items) {
+      final name = item.name.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (name.isEmpty) continue;
+      final notes = item.notes.replaceAll(RegExp(r'\s+'), ' ').trim();
+      lines.add(notes.isEmpty ? name : '$name$_noteSep$notes');
+    }
+    if (lines.isEmpty) return null;
+    return lines.join('\n');
+  }
+}
+
 class VisitDiagnosis {
   VisitDiagnosis({
     required this.diagnosisName,
@@ -361,6 +413,9 @@ class PetVisit {
   final List<PetDeworming>? dewormings;
   final List<PetSurgery>? surgeries;
   final Map<String, dynamic>? invoice;
+
+  List<VisitInvestigationItem> get investigationItems =>
+      VisitInvestigationItem.parse(investigation);
 
   factory PetVisit.fromJson(Map<String, dynamic> j) {
     final petMap = mapOrNull(j['pet']);
@@ -567,6 +622,7 @@ class VisitMedicine {
     required this.medicineName,
     this.productId,
     this.product,
+    this.treatmentUnderCategory,
     this.dosage,
     this.frequency,
     this.durationDays,
@@ -578,6 +634,7 @@ class VisitMedicine {
   final String medicineName;
   final int? productId;
   final Product? product;
+  final String? treatmentUnderCategory;
   final String? dosage;
   final String? frequency;
   final int? durationDays;
@@ -593,6 +650,8 @@ class VisitMedicine {
       product: productMap != null
           ? Product.fromJson(Map<String, dynamic>.from(productMap))
           : null,
+      treatmentUnderCategory: j['treatment_under_category']?.toString() ??
+          productMap?['treatment_under_category']?.toString(),
       dosage: j['dosage']?.toString(),
       frequency: j['frequency']?.toString(),
       durationDays: intOrNull(j['duration_days']),
@@ -605,6 +664,8 @@ class VisitMedicine {
   Map<String, dynamic> toJson() => {
         if (productId != null) 'product_id': productId,
         'medicine_name': medicineName,
+        if (treatmentUnderCategory != null && treatmentUnderCategory!.isNotEmpty)
+          'treatment_under_category': treatmentUnderCategory,
         if (dosage != null && dosage!.isNotEmpty) 'dosage': dosage,
         if (frequency != null && frequency!.isNotEmpty) 'frequency': frequency,
         if (durationDays != null) 'duration_days': durationDays,

@@ -464,7 +464,7 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(title: const Text('New customer')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('New customer')),
       body: Form(
         key: _formKey,
         autovalidateMode: _autovalidateMode,

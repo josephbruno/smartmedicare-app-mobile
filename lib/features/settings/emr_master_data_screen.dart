@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/services/emr_master_data_service.dart';
 import 'procedure_kits_master_tab.dart';
+import 'treatment_under_master_tab.dart';
 import 'vaccination_master_tab.dart';
 
 class EmrMasterDataScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
   final _search = TextEditingController();
   final _kitsTabKey = GlobalKey<ProcedureKitsMasterTabState>();
   final _vaccinationsTabKey = GlobalKey<VaccinationMasterTabState>();
+  final _treatmentUnderTabKey = GlobalKey<TreatmentUnderMasterTabState>();
   bool _loading = false;
   List<EmrTemplateItem> _items = [];
 
@@ -30,6 +32,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     'diagnoses',
     'treatments',
     'medicines',
+    'treatment_under',
     'dosages',
     'frequencies',
     'observations',
@@ -43,6 +46,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     'Diagnoses',
     'Treatments',
     'Medicines',
+    'Treatment Under',
     'Dosages',
     'Frequencies',
     'Observations',
@@ -53,6 +57,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
 
   bool get _isKitsTab => _currentKey == 'service_kits';
   bool get _isVaccinationsTab => _currentKey == 'vaccinations';
+  bool get _isTreatmentUnderTab => _currentKey == 'treatment_under';
 
   @override
   void initState() {
@@ -66,6 +71,9 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
         } else if (_isVaccinationsTab) {
           setState(() {});
           _vaccinationsTabKey.currentState?.reload();
+        } else if (_isTreatmentUnderTab) {
+          setState(() {});
+          _treatmentUnderTabKey.currentState?.reload();
         } else {
           _load();
         }
@@ -90,6 +98,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     }
     if (_isVaccinationsTab) {
       await _vaccinationsTabKey.currentState?.reload();
+      return;
+    }
+    if (_isTreatmentUnderTab) {
+      await _treatmentUnderTabKey.currentState?.reload();
       return;
     }
     setState(() => _loading = true);
@@ -122,6 +134,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     }
     if (_isVaccinationsTab) {
       await _vaccinationsTabKey.currentState?.openForm();
+      return;
+    }
+    if (_isTreatmentUnderTab) {
+      await _treatmentUnderTabKey.currentState?.openAdd();
       return;
     }
     final isEdit = item != null;
@@ -362,6 +378,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('EMR Master Data'),
         actions: [
           IconButton(
@@ -404,11 +421,16 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
                         key: _vaccinationsTabKey,
                         searchQuery: _search.text.trim(),
                       )
-                : _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _items.isEmpty
-                        ? const Center(child: Text('No items yet'))
-                        : ListView.separated(
+                    : _isTreatmentUnderTab
+                        ? TreatmentUnderMasterTab(
+                            key: _treatmentUnderTabKey,
+                            searchQuery: _search.text.trim(),
+                          )
+                        : _loading
+                            ? const Center(child: CircularProgressIndicator())
+                            : _items.isEmpty
+                                ? const Center(child: Text('No items yet'))
+                                : ListView.separated(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             itemCount: _items.length,
                             separatorBuilder: (_, __) => const Divider(height: 1),

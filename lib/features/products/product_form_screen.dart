@@ -9,6 +9,7 @@ import '../../core/app_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/product.dart';
+import '../../data/models/treatment_under.dart';
 import '../../core/widgets/app_dropdown.dart';
 
 class ProductFormScreen extends StatefulWidget {
@@ -46,6 +47,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
   bool _isService = false;
   bool _isMedicine = false;
   bool _isActive = true;
+  String? _treatmentUnderCategory;
 
   String get _productType {
     if (_isService) return 'service';
@@ -59,8 +61,11 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       _isMedicine = type == 'medicine';
       if (_isService) {
         _trackInventory = false;
+        _treatmentUnderCategory = null;
       } else if (_isMedicine && !_trackInventory) {
         _trackInventory = true;
+      } else if (!_isMedicine) {
+        _treatmentUnderCategory = null;
       }
     });
   }
@@ -134,6 +139,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
     _isService = p.isService;
     _isMedicine = p.isMedicine;
     _isActive = p.isActive;
+    _treatmentUnderCategory = p.isMedicine ? p.treatmentUnderCategory : null;
   }
 
   String _fmtNum(double v) =>
@@ -224,6 +230,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         'is_service': _isService,
         'is_medicine': _isMedicine,
         'product_type': _productType,
+        'treatment_under_category': _isMedicine ? _treatmentUnderCategory : null,
         'is_active': _isActive,
       };
 
@@ -369,12 +376,34 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         const SizedBox(height: 6),
         Text(
           _productType == 'medicine'
-              ? 'Medicines track stock and are used on visit prescriptions.'
+              ? 'Medicines track stock and are used on visit Treatment Under tabs.'
               : _productType == 'service'
                   ? 'Services have no stock and can be billed on visits directly.'
                   : 'Standard sellable product.',
           style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
         ),
+        if (_isMedicine) ...[
+          const SizedBox(height: 12),
+          AppDropdownButtonFormField<String?>(
+            value: TreatmentUnderCategory.isValid(_treatmentUnderCategory)
+                ? _treatmentUnderCategory
+                : null,
+            decoration: _dec('Treatment Under', hint: 'Map to visit tab'),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Not mapped'),
+              ),
+              ...TreatmentUnderCategory.keys.map(
+                (key) => DropdownMenuItem<String?>(
+                  value: key,
+                  child: Text(TreatmentUnderCategory.labels[key]!),
+                ),
+              ),
+            ],
+            onChanged: (v) => setState(() => _treatmentUnderCategory = v),
+          ),
+        ],
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Pet food'),
@@ -540,6 +569,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Text(_isEdit ? 'Edit Product' : 'Add Product'),
         bottom: TabBar(
           controller: _tabs,

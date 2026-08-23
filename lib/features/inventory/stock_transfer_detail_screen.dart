@@ -142,7 +142,10 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
   Widget build(BuildContext context) {
     final t = _transfer;
     return Scaffold(
-      appBar: AppBar(title: Text(t?.transferNumber ?? 'Transfer')),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: Text(t?.transferNumber ?? 'Transfer'),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null

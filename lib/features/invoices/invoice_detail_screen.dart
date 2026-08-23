@@ -341,23 +341,6 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   Widget _buildPageHeader(Invoice inv) {
     return Row(
       children: [
-        IconButton(
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/invoices');
-            }
-          },
-          icon: const Icon(Icons.arrow_back_rounded),
-          tooltip: 'Back',
-          style: IconButton.styleFrom(
-            foregroundColor: AppTheme.textPrimary,
-            side: const BorderSide(color: Color(0xFFE2E8F0)),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-        const SizedBox(width: 8),
         const Expanded(
           child: Text(
             'Invoice Details',

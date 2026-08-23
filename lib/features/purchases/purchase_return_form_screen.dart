@@ -324,6 +324,7 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

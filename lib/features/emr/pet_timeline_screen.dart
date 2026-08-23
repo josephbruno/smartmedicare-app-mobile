@@ -124,7 +124,7 @@ class _PetTimelineScreenState extends State<PetTimelineScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(title: const Text('Pet timeline')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Pet timeline')),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -369,6 +369,7 @@ class _PetSpeciesBreedMasterScreenState extends State<PetSpeciesBreedMasterScree
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Species & Breeds'),
         actions: [
           IconButton(

@@ -212,6 +212,7 @@ class ProductLocalDao {
       isPetFood: product.isPetFood,
       isService: product.isService,
       isMedicine: product.isMedicine,
+      treatmentUnderCategory: product.treatmentUnderCategory,
       isActive: product.isActive,
       currentStock: next,
       categoryName: product.categoryName,
@@ -257,6 +258,8 @@ class ProductLocalDao {
         'is_pet_food': p.isPetFood,
         'is_service': p.isService,
         'is_medicine': p.isMedicine,
+        if (p.treatmentUnderCategory != null)
+          'treatment_under_category': p.treatmentUnderCategory,
         'is_active': p.isActive,
         if (p.currentStock != null) 'current_stock': p.currentStock,
         if (p.categoryName != null)

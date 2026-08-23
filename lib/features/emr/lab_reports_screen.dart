@@ -162,6 +162,7 @@ class _LabReportsScreenState extends State<LabReportsScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Lab reports'),
         actions: [
           if (canUpload)

@@ -5,6 +5,7 @@ import 'package:maran/data/models/emr.dart';
 import 'package:maran/data/models/inventory.dart';
 import 'package:maran/data/models/invoice.dart';
 import 'package:maran/data/models/product.dart';
+import 'package:maran/data/models/treatment_under.dart';
 
 void main() {
   group('formatApiDate', () {
@@ -359,6 +360,66 @@ void main() {
       });
 
       expect(product.currentStock, 100);
+    });
+
+    test('parses treatment under category on medicine products', () {
+      final product = Product.fromJson({
+        'id': 9,
+        'name': 'Amoxicillin',
+        'is_medicine': true,
+        'treatment_under_category': 'antibiotics',
+        'selling_price': 40,
+      });
+
+      expect(product.isMedicine, isTrue);
+      expect(product.treatmentUnderCategory, 'antibiotics');
+    });
+  });
+
+  group('TreatmentUnderCategory', () {
+    test('falls back to unique for unmapped visit lines', () {
+      expect(TreatmentUnderCategory.forVisit(), 'unique');
+      expect(
+        TreatmentUnderCategory.forVisit(fromProduct: 'fluids'),
+        'fluids',
+      );
+    });
+
+    test('groups medicines by category', () {
+      final groups = TreatmentUnderCategory.groupBy(
+        [
+          VisitMedicine(medicineName: 'Amox', treatmentUnderCategory: 'antibiotics'),
+          VisitMedicine(medicineName: 'RL', treatmentUnderCategory: 'fluids'),
+          VisitMedicine(medicineName: 'Cef', treatmentUnderCategory: 'antibiotics'),
+        ],
+        (m) => m.treatmentUnderCategory,
+      );
+
+      expect(groups.map((e) => e.key).toList(), ['antibiotics', 'fluids']);
+      expect(groups.first.value.map((m) => m.medicineName).toList(), ['Amox', 'Cef']);
+    });
+  });
+
+  group('VisitMedicine', () {
+    test('reads treatment under from line or nested product', () {
+      final fromLine = VisitMedicine.fromJson({
+        'medicine_name': 'Meloxicam',
+        'treatment_under_category': 'nsaids',
+        'quantity': 1,
+        'unit_price': 20,
+      });
+      expect(fromLine.treatmentUnderCategory, 'nsaids');
+
+      final fromProduct = VisitMedicine.fromJson({
+        'medicine_name': 'Isoflurane',
+        'product': {
+          'id': 3,
+          'name': 'Isoflurane',
+          'treatment_under_category': 'anesthetics',
+          'selling_price': 90,
+        },
+      });
+      expect(fromProduct.treatmentUnderCategory, 'anesthetics');
     });
   });
 }

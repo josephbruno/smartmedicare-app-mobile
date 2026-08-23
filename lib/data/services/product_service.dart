@@ -26,6 +26,7 @@ class ProductService {
       search: query?['search']?.toString(),
       type: query?['type']?.toString(),
       isActive: isActive,
+      treatmentUnderCategory: query?['treatment_under_category']?.toString(),
     );
     return result.items;
   }
@@ -37,6 +38,7 @@ class ProductService {
     String? type,
     int? categoryId,
     bool? isActive,
+    String? treatmentUnderCategory,
   }) async {
     try {
       final res = await _client.get('/products', queryParameters: {
@@ -46,6 +48,8 @@ class ProductService {
         if (type != null && type.isNotEmpty) 'type': type,
         if (categoryId != null) 'category_id': categoryId,
         if (isActive != null) 'is_active': isActive,
+        if (treatmentUnderCategory != null && treatmentUnderCategory.isNotEmpty)
+          'treatment_under_category': treatmentUnderCategory,
       });
       return parseEnvelopeList(res, Product.fromJson);
     } on DioException catch (e) {

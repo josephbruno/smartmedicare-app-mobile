@@ -130,6 +130,7 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('New Stock Transfer'),
         elevation: 1,
         backgroundColor: Colors.white,

@@ -6,6 +6,7 @@ import '../../core/services/receipt_branch_store.dart';
 import '../../core/session/auth_session.dart';
 import '../../data/models/emr.dart';
 import '../../data/models/shop.dart';
+import '../../data/models/treatment_under.dart';
 import '../../data/services/settings_service.dart';
 
 /// Clinic header info for visit print/download (A5 landscape).
@@ -151,16 +152,14 @@ class VisitPdf {
                                   ? _t(visit.chiefComplaint)
                                   : _empty,
                             ),
-                            _divider(),
-                            _sectionTitle('Observation'),
-                            _observationBody(visit),
+                            if (_visitVitals(visit).isNotEmpty) ...[
+                              _divider(),
+                              _sectionTitle('Vitals'),
+                              _bodyText(_join(_visitVitals(visit)), muted: true),
+                            ],
                             _divider(),
                             _sectionTitle('Investigation'),
-                            _bodyText(
-                              visit.investigation?.trim().isNotEmpty == true
-                                  ? _t(visit.investigation)
-                                  : _empty,
-                            ),
+                            _investigationBody(visit),
                             _divider(),
                             _sectionTitle('Follow-up'),
                             if (visit.followUpDate != null) ...[
@@ -180,10 +179,10 @@ class VisitPdf {
                         child: pw.Column(
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           children: [
-                            _sectionTitle('Procedures'),
+                            _sectionTitle('Treatments'),
                             _proceduresBody(visit),
                             _divider(),
-                            _sectionTitle('Treatment'),
+                            _sectionTitle('Prescriptions'),
                             _medicinesBody(visit),
                             if ((visit.serviceCharge) > 0) ...[
                               _divider(),
@@ -361,10 +360,7 @@ class VisitPdf {
     );
   }
 
-  static pw.Widget _observationBody(PetVisit visit) {
-    final notes = visit.observation?.trim().isNotEmpty == true
-        ? visit.observation!.trim()
-        : (visit.clinicalNotes?.trim() ?? '');
+  static List<String> _visitVitals(PetVisit visit) {
     final vitals = <String>[];
     if (visit.temperature != null) {
       final f = (visit.temperature! * 9 / 5) + 32;
@@ -375,26 +371,32 @@ class VisitPdf {
     if (visit.respiratoryRate != null) {
       vitals.add('RR ${visit.respiratoryRate} /min');
     }
-    final diagnoses = visit.diagnoses ?? const <VisitDiagnosis>[];
+    return vitals;
+  }
 
-    if (notes.isEmpty && vitals.isEmpty && diagnoses.isEmpty) {
-      return _bodyText(_empty);
-    }
+  static pw.Widget _investigationBody(PetVisit visit) {
+    final items = visit.investigationItems;
+    if (items.isEmpty) return _bodyText(_empty);
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        if (notes.isNotEmpty) _bodyText(_t(notes)),
-        if (vitals.isNotEmpty) _bodyText(_join(vitals), muted: true),
-        for (final d in diagnoses)
-          _bodyText(
-            _join([
-              if (d.isPrimary) '[P]',
-              d.diagnosisName,
-              if (d.icdCode != null && d.icdCode!.isNotEmpty) '(${d.icdCode})',
-              _titleCase(d.severity),
-            ]),
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) pw.SizedBox(height: 2),
+          pw.Text(
+            _t(items[i].name),
+            style: pw.TextStyle(
+              fontSize: _fsBody,
+              fontWeight: pw.FontWeight.bold,
+              color: _text,
+            ),
           ),
+          if (items[i].notes.trim().isNotEmpty)
+            pw.Text(
+              _t(items[i].notes),
+              style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
+            ),
+        ],
       ],
     );
   }
@@ -403,41 +405,58 @@ class VisitPdf {
     final meds = visit.medicines ?? const <VisitMedicine>[];
     if (meds.isEmpty) return _bodyText(_empty);
 
+    final groups = TreatmentUnderCategory.groupBy(
+      meds,
+      (m) => m.treatmentUnderCategory ?? m.product?.treatmentUnderCategory,
+    );
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < meds.length; i++) ...[
-          if (i > 0) pw.SizedBox(height: 2),
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      _t(meds[i].medicineName),
-                      style: pw.TextStyle(
-                        fontSize: _fsBody,
-                        fontWeight: pw.FontWeight.bold,
-                        color: _text,
-                      ),
-                    ),
-                    if (_medicineMeta(meds[i]).isNotEmpty)
-                      pw.Text(
-                        _medicineMeta(meds[i]),
-                        style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
-                      ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(width: 4),
-              pw.Text(
-                'x ${meds[i].quantity}',
-                style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
-              ),
-            ],
+        for (var g = 0; g < groups.length; g++) ...[
+          if (g > 0) pw.SizedBox(height: 4),
+          pw.Text(
+            TreatmentUnderCategory.labelOf(groups[g].key),
+            style: pw.TextStyle(
+              fontSize: _fsMeta,
+              fontWeight: pw.FontWeight.bold,
+              color: _muted,
+            ),
           ),
+          pw.SizedBox(height: 2),
+          for (var i = 0; i < groups[g].value.length; i++) ...[
+            if (i > 0) pw.SizedBox(height: 2),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        _t(groups[g].value[i].medicineName),
+                        style: pw.TextStyle(
+                          fontSize: _fsBody,
+                          fontWeight: pw.FontWeight.bold,
+                          color: _text,
+                        ),
+                      ),
+                      if (_medicineMeta(groups[g].value[i]).isNotEmpty)
+                        pw.Text(
+                          _medicineMeta(groups[g].value[i]),
+                          style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
+                        ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 4),
+                pw.Text(
+                  'x ${groups[g].value[i].quantity}',
+                  style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
+                ),
+              ],
+            ),
+          ],
         ],
       ],
     );

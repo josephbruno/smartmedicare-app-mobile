@@ -7,6 +7,7 @@ import '../../app_services.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
+import '../../data/models/treatment_under.dart';
 import 'visit_pdf.dart';
 
 /// All visit records for one pet, laid out like the visit print summary.
@@ -572,9 +573,6 @@ class _ClinicalColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final notes = visit.observation?.trim().isNotEmpty == true
-        ? visit.observation!.trim()
-        : (visit.clinicalNotes?.trim() ?? '');
     final vitals = <String>[];
     if (visit.temperature != null) {
       final f = (visit.temperature! * 9 / 5) + 32;
@@ -585,7 +583,6 @@ class _ClinicalColumn extends StatelessWidget {
     if (visit.respiratoryRate != null) {
       vitals.add('RR ${visit.respiratoryRate} /min');
     }
-    final diagnoses = visit.diagnoses ?? const <VisitDiagnosis>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -596,30 +593,22 @@ class _ClinicalColumn extends StatelessWidget {
               ? visit.chiefComplaint!
               : '—',
         ),
-        const _DividerLine(),
-        const _SectionTitle('Observation'),
-        if (notes.isEmpty && vitals.isEmpty && diagnoses.isEmpty)
-          const _BodyText('—')
-        else ...[
-          if (notes.isNotEmpty) _BodyText(notes),
-          if (vitals.isNotEmpty) _BodyText(vitals.join(' · '), muted: true),
-          for (final d in diagnoses)
-            _BodyText(
-              [
-                if (d.isPrimary) '[P]',
-                d.diagnosisName,
-                if (d.icdCode != null && d.icdCode!.isNotEmpty) '(${d.icdCode})',
-                '· ${_titleCase(d.severity)}',
-              ].join(' '),
-            ),
+        if (vitals.isNotEmpty) ...[
+          const _DividerLine(),
+          const _SectionTitle('Vitals'),
+          _BodyText(vitals.join(' · '), muted: true),
         ],
         const _DividerLine(),
         const _SectionTitle('Investigation'),
-        _BodyText(
-          visit.investigation?.trim().isNotEmpty == true
-              ? visit.investigation!
-              : '—',
-        ),
+        if (visit.investigationItems.isEmpty)
+          const _BodyText('—')
+        else
+          for (var i = 0; i < visit.investigationItems.length; i++) ...[
+            if (i > 0) const SizedBox(height: 6),
+            _BodyText(visit.investigationItems[i].name, bold: true),
+            if (visit.investigationItems[i].notes.trim().isNotEmpty)
+              _BodyText(visit.investigationItems[i].notes, muted: true),
+          ],
         const _DividerLine(),
         const _SectionTitle('Follow-up'),
         if (visit.followUpDate != null) ...[
@@ -630,14 +619,6 @@ class _ClinicalColumn extends StatelessWidget {
           const _BodyText('—'),
       ],
     );
-  }
-
-  static String _titleCase(String value) {
-    if (value.isEmpty) return value;
-    return value
-        .split('_')
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
   }
 }
 
@@ -654,7 +635,7 @@ class _ProceduresColumn extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle('Procedures'),
+        const _SectionTitle('Treatments'),
         if (items.isEmpty)
           const _BodyText('—')
         else
@@ -682,32 +663,40 @@ class _ProceduresColumn extends StatelessWidget {
             ),
           ],
         const _DividerLine(),
-        const _SectionTitle('Treatment'),
+        const _SectionTitle('Prescriptions'),
         if (meds.isEmpty)
           const _BodyText('—')
         else
-          for (var i = 0; i < meds.length; i++) ...[
-            if (i > 0) const SizedBox(height: 6),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _BodyText(meds[i].medicineName, bold: true),
-                      if (_medicineMeta(meds[i]).isNotEmpty)
-                        _BodyText(_medicineMeta(meds[i]), muted: true),
-                    ],
+          for (final entry in TreatmentUnderCategory.groupBy(
+            meds,
+            (m) => m.treatmentUnderCategory ?? m.product?.treatmentUnderCategory,
+          ).asMap().entries) ...[
+            if (entry.key > 0) const SizedBox(height: 8),
+            _BodyText(TreatmentUnderCategory.labelOf(entry.value.key), muted: true),
+            const SizedBox(height: 4),
+            for (var i = 0; i < entry.value.value.length; i++) ...[
+              if (i > 0) const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _BodyText(entry.value.value[i].medicineName, bold: true),
+                        if (_medicineMeta(entry.value.value[i]).isNotEmpty)
+                          _BodyText(_medicineMeta(entry.value.value[i]), muted: true),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '× ${meds[i].quantity}',
-                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '× ${entry.value.value[i].quantity}',
+                    style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
+                  ),
+                ],
+              ),
+            ],
           ],
         if (visit.serviceCharge > 0) ...[
           const _DividerLine(),
