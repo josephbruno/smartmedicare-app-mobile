@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -111,12 +112,14 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
   static EdgeInsetsGeometry _contentPadding(EdgeInsetsGeometry? padding) {
     final resolved = padding?.resolve(TextDirection.ltr) ??
         const EdgeInsets.fromLTRB(16, 20, 16, 20);
-    // Slightly less bottom padding so closed-button glyphs aren't clipped.
+    // Keep top/bottom balanced so closed-button text stays vertically centered
+    // under FloatingLabelBehavior.always.
+    final vertical = math.max(resolved.top, resolved.bottom);
     return EdgeInsets.fromLTRB(
       resolved.left,
-      math.max(resolved.top, 18),
+      math.max(vertical, 16),
       math.max(resolved.right, 8),
-      math.max(resolved.bottom - 4, 14),
+      math.max(vertical, 16),
     );
   }
 
@@ -219,6 +222,7 @@ class AppSearchableDropdownField<T> extends StatelessWidget {
     this.isDense = true,
     this.decoration,
     this.hint,
+    this.asyncSearch,
   });
 
   final String label;
@@ -232,6 +236,9 @@ class AppSearchableDropdownField<T> extends StatelessWidget {
   final bool isDense;
   final InputDecoration? decoration;
   final String? hint;
+
+  /// When set, typed queries also search remotely (full catalog), not only [options].
+  final Future<List<AppSearchableOption<T>>> Function(String query)? asyncSearch;
 
   String _labelFor(T v) {
     if (displayText != null) return displayText!(v);
@@ -251,6 +258,7 @@ class AppSearchableDropdownField<T> extends StatelessWidget {
         clearLabel: clearLabel,
         allowClear: allowClear,
         searchHint: searchHint,
+        asyncSearch: asyncSearch,
       ),
     );
     if (result == null) return;
@@ -276,7 +284,8 @@ class AppSearchableDropdownField<T> extends StatelessWidget {
           isDense: isDense,
           contentPadding:
               AppDropdownButtonFormField._contentPadding(resolvedPadding),
-          suffixIcon: base.suffixIcon ?? const Icon(Icons.arrow_drop_down),
+          suffixIcon: base.suffixIcon ??
+              const Icon(Icons.search, size: 20),
         ),
         child: Text(
           text ?? '',
@@ -290,10 +299,15 @@ class AppSearchableDropdownField<T> extends StatelessWidget {
 }
 
 class AppSearchableOption<T> {
-  const AppSearchableOption({required this.value, required this.label});
+  const AppSearchableOption({
+    required this.value,
+    required this.label,
+    this.subtitle,
+  });
 
   final T value;
   final String label;
+  final String? subtitle;
 }
 
 class _SearchPickResult<T> {
@@ -309,6 +323,7 @@ class _SearchablePickerDialog<T> extends StatefulWidget {
     required this.clearLabel,
     required this.allowClear,
     required this.searchHint,
+    this.asyncSearch,
   });
 
   final String title;
@@ -317,6 +332,7 @@ class _SearchablePickerDialog<T> extends StatefulWidget {
   final String clearLabel;
   final bool allowClear;
   final String searchHint;
+  final Future<List<AppSearchableOption<T>>> Function(String query)? asyncSearch;
 
   @override
   State<_SearchablePickerDialog<T>> createState() =>
@@ -326,6 +342,10 @@ class _SearchablePickerDialog<T> extends StatefulWidget {
 class _SearchablePickerDialogState<T> extends State<_SearchablePickerDialog<T>> {
   final _query = TextEditingController();
   final _focus = FocusNode();
+  Timer? _debounce;
+  int _seq = 0;
+  bool _searching = false;
+  List<AppSearchableOption<T>>? _remote;
 
   @override
   void initState() {
@@ -337,29 +357,83 @@ class _SearchablePickerDialogState<T> extends State<_SearchablePickerDialog<T>> 
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _query.dispose();
     _focus.dispose();
     super.dispose();
   }
 
-  List<AppSearchableOption<T>> get _filtered {
-    final q = _query.text.trim().toLowerCase();
+  List<AppSearchableOption<T>> _localMatches(String raw) {
+    final q = raw.trim().toLowerCase();
     if (q.isEmpty) return widget.options;
-    return widget.options
-        .where((o) => o.label.toLowerCase().contains(q))
-        .toList(growable: false);
+    final tokens = q.split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
+    return widget.options.where((o) {
+      final hay = '${o.label} ${o.subtitle ?? ''}'.toLowerCase();
+      return tokens.every((t) => hay.contains(t));
+    }).toList(growable: false);
+  }
+
+  List<AppSearchableOption<T>> get _filtered {
+    final local = _localMatches(_query.text);
+    final remote = _remote;
+    if (remote == null) return local;
+
+    final seen = <T>{};
+    final out = <AppSearchableOption<T>>[];
+    for (final o in [...remote, ...local]) {
+      if (seen.add(o.value)) out.add(o);
+    }
+    return out;
+  }
+
+  void _onQueryChanged(String raw) {
+    setState(() {});
+    _debounce?.cancel();
+    if (widget.asyncSearch == null) return;
+
+    final q = raw.trim();
+    if (q.isEmpty) {
+      _seq++;
+      setState(() {
+        _remote = null;
+        _searching = false;
+      });
+      return;
+    }
+
+    _debounce = Timer(const Duration(milliseconds: 220), () => _runSearch(q));
+  }
+
+  Future<void> _runSearch(String q) async {
+    final search = widget.asyncSearch;
+    if (search == null) return;
+    final seq = ++_seq;
+    setState(() => _searching = true);
+    try {
+      final hits = await search(q);
+      if (!mounted || seq != _seq) return;
+      setState(() {
+        _remote = hits;
+        _searching = false;
+      });
+    } catch (_) {
+      if (!mounted || seq != _seq) return;
+      setState(() => _searching = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
-    final maxH = MediaQuery.sizeOf(context).height * 0.55;
+    final size = MediaQuery.sizeOf(context);
+    final maxH = size.height * 0.55;
+    final dialogW = math.min(520.0, size.width - 48);
 
     return AlertDialog(
       title: Text(widget.title),
       contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       content: SizedBox(
-        width: 360,
+        width: dialogW,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -370,23 +444,38 @@ class _SearchablePickerDialogState<T> extends State<_SearchablePickerDialog<T>> 
                 hintText: widget.searchHint,
                 prefixIcon: const Icon(Icons.search, size: 20),
                 isDense: true,
-                suffixIcon: _query.text.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: 'Clear',
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () => setState(() => _query.clear()),
-                      ),
+                suffixIcon: _searching
+                    ? const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : (_query.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear',
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _query.clear();
+                              _onQueryChanged('');
+                            },
+                          )),
               ),
-              onChanged: (_) => setState(() {}),
+              onChanged: _onQueryChanged,
             ),
             const SizedBox(height: 8),
             ConstrainedBox(
               constraints: BoxConstraints(maxHeight: maxH),
               child: filtered.isEmpty
-                  ? const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Text('No matches'),
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(
+                        _searching ? 'Searching…' : 'No matches',
+                        textAlign: TextAlign.center,
+                      ),
                     )
                   : ListView.builder(
                       shrinkWrap: true,
@@ -408,7 +497,18 @@ class _SearchablePickerDialogState<T> extends State<_SearchablePickerDialog<T>> 
                         final selected = widget.selected == o.value;
                         return ListTile(
                           dense: true,
-                          title: Text(o.label),
+                          title: Text(
+                            o.label,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: (o.subtitle == null || o.subtitle!.isEmpty)
+                              ? null
+                              : Text(
+                                  o.subtitle!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                           selected: selected,
                           trailing: selected
                               ? const Icon(Icons.check, size: 18)
@@ -421,6 +521,17 @@ class _SearchablePickerDialogState<T> extends State<_SearchablePickerDialog<T>> 
                       },
                     ),
             ),
+            if (filtered.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${filtered.length} match${filtered.length == 1 ? '' : 'es'}',
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

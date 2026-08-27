@@ -31,6 +31,33 @@ class ProductService {
     return result.items;
   }
 
+  /// Loads every page of matching products (the index API is paginated).
+  Future<List<Product>> listAll({
+    String? search,
+    String? type,
+    bool? isActive,
+    int perPage = 100,
+  }) async {
+    final all = <Product>[];
+    var page = 1;
+    var lastPage = 1;
+    const maxPages = 100;
+    do {
+      final result = await listPaginated(
+        page: page,
+        perPage: perPage,
+        search: search,
+        type: type,
+        isActive: isActive,
+      );
+      all.addAll(result.items);
+      lastPage = result.meta?.lastPage ?? 1;
+      if (result.items.isEmpty) break;
+      page++;
+    } while (page <= lastPage && page <= maxPages);
+    return all;
+  }
+
   Future<({List<Product> items, PaginationMeta? meta})> listPaginated({
     int page = 1,
     int perPage = 20,

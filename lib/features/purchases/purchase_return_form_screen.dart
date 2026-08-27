@@ -96,7 +96,8 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
 
       final futures = <Future>[
         svc.suppliers.list(query: {'per_page': 200}),
-        svc.products.list(query: {'per_page': 200, 'is_active': true}),
+        svc.products.listAll(isActive: true, type: 'product'),
+        svc.products.listAll(isActive: true, type: 'medicine'),
       ];
       if (_isSuperAdmin) {
         futures.add(svc.branches.list());
@@ -106,11 +107,17 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
       if (!mounted) return;
       setState(() {
         _suppliers = (results[0] as List<Supplier>).where((s) => s.isActive).toList();
-        _products = (results[1] as List<Product>)
-            .where((p) => p.isActive && !p.isService)
-            .toList();
-        if (_isSuperAdmin && results.length > 2) {
-          _branches = (results[2] as List<Branch>).where((b) => b.isActive).toList();
+        final goods = <int, Product>{};
+        for (final p in [
+          ...(results[1] as List<Product>),
+          ...(results[2] as List<Product>),
+        ]) {
+          if (p.isActive && !p.isService) goods[p.id] = p;
+        }
+        _products = goods.values.toList()
+          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        if (_isSuperAdmin && results.length > 3) {
+          _branches = (results[3] as List<Branch>).where((b) => b.isActive).toList();
           if (_branchId != null && !_branches.any((b) => b.id == _branchId)) {
             _branchId = _branches.isNotEmpty ? _branches.first.id : null;
           }
@@ -147,6 +154,64 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
   String _productLabel(Product p) {
     final code = p.sku ?? p.barcode;
     return code == null || code.isEmpty ? p.name : '${p.name} ($code)';
+  }
+
+  String? _productSubtitle(Product p) {
+    final parts = <String>[
+      if (p.brandName != null && p.brandName!.trim().isNotEmpty) p.brandName!.trim(),
+      if (p.mrp > 0) 'MRP ₹${p.mrp.toStringAsFixed(0)}',
+      if (p.purchasePrice > 0) 'Rate ₹${p.purchasePrice.toStringAsFixed(2)}',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  AppSearchableOption<int> _optionFor(Product p) {
+    return AppSearchableOption(
+      value: p.id,
+      label: _productLabel(p),
+      subtitle: _productSubtitle(p),
+    );
+  }
+
+  void _mergeProducts(Iterable<Product> incoming) {
+    final byId = {for (final p in _products) p.id: p};
+    var changed = false;
+    for (final p in incoming) {
+      if (!p.isActive || p.isService) continue;
+      if (byId.containsKey(p.id)) continue;
+      byId[p.id] = p;
+      changed = true;
+    }
+    if (!changed) return;
+    _products = byId.values.toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
+  Future<List<AppSearchableOption<int>>> _searchCatalog(int rowIdx, String query) async {
+    final q = query.trim().replaceAll('%', '').replaceAll('_', ' ').trim();
+    if (q.isEmpty) {
+      return [for (final p in _productsForRow(rowIdx)) _optionFor(p)];
+    }
+    final result = await context.read<AppServices>().products.listPaginated(
+      page: 1,
+      perPage: 80,
+      search: q,
+      isActive: true,
+    );
+    final currentId = _items[rowIdx].productId;
+    final used = _items
+        .asMap()
+        .entries
+        .where((e) => e.key != rowIdx && e.value.productId != null)
+        .map((e) => e.value.productId!)
+        .toSet();
+    final goods = result.items
+        .where((p) => p.isActive && !p.isService)
+        .where((p) => !used.contains(p.id) || p.id == currentId)
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    _mergeProducts(goods);
+    return [for (final p in goods) _optionFor(p)];
   }
 
   List<Product> _productsForRow(int rowIdx) {
@@ -681,15 +746,19 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
       key: ValueKey('product-$idx-${item.productId}'),
       label: 'Product',
       value: item.productId,
-      searchHint: 'Search product…',
-      hint: 'Select product',
+      searchHint: 'Search name, SKU or barcode…',
+      hint: 'Search item',
       decoration: wide
-          ? _cellDec(hint: 'Select product')
+          ? _cellDec(hint: 'Search item')
           : _fieldDec('Product *'),
       options: [
-        for (final p in options)
-          AppSearchableOption(value: p.id, label: _productLabel(p)),
+        for (final p in options) _optionFor(p),
       ],
+      displayText: (id) {
+        final match = _products.where((p) => p.id == id);
+        return match.isEmpty ? 'Product #$id' : _productLabel(match.first);
+      },
+      asyncSearch: (q) => _searchCatalog(idx, q),
       onChanged: (v) => _onProductSelect(idx, v),
     );
 
