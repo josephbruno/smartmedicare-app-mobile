@@ -623,6 +623,7 @@ class VisitMedicine {
     this.productId,
     this.product,
     this.treatmentUnderCategory,
+    this.prescriptionUnderCategory,
     this.dosage,
     this.frequency,
     this.durationDays,
@@ -635,6 +636,7 @@ class VisitMedicine {
   final int? productId;
   final Product? product;
   final String? treatmentUnderCategory;
+  final String? prescriptionUnderCategory;
   final String? dosage;
   final String? frequency;
   final int? durationDays;
@@ -652,6 +654,8 @@ class VisitMedicine {
           : null,
       treatmentUnderCategory: j['treatment_under_category']?.toString() ??
           productMap?['treatment_under_category']?.toString(),
+      prescriptionUnderCategory: j['prescription_under_category']?.toString() ??
+          productMap?['prescription_under_category']?.toString(),
       dosage: j['dosage']?.toString(),
       frequency: j['frequency']?.toString(),
       durationDays: intOrNull(j['duration_days']),
@@ -666,6 +670,8 @@ class VisitMedicine {
         'medicine_name': medicineName,
         if (treatmentUnderCategory != null && treatmentUnderCategory!.isNotEmpty)
           'treatment_under_category': treatmentUnderCategory,
+        if (prescriptionUnderCategory != null && prescriptionUnderCategory!.isNotEmpty)
+          'prescription_under_category': prescriptionUnderCategory,
         if (dosage != null && dosage!.isNotEmpty) 'dosage': dosage,
         if (frequency != null && frequency!.isNotEmpty) 'frequency': frequency,
         if (durationDays != null) 'duration_days': durationDays,

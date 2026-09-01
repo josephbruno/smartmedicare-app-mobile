@@ -16,9 +16,13 @@ import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/emr.dart';
 import '../../data/models/product.dart';
+import '../../data/models/prescription_under.dart';
 import '../../data/models/treatment_under.dart';
 import '../../data/models/vaccination_category.dart';
 import '../../data/services/emr_master_data_service.dart';
+
+/// Which visit form section owns a medicine row (not persisted to API).
+enum _MedicineContext { treatmentUnder, prescription, freeForm }
 
 class VisitFormScreen extends StatefulWidget {
   const VisitFormScreen({super.key, this.visitId, this.appointmentId, this.petId});
@@ -70,7 +74,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   int? _vaccinationSuggestForIndex;
   String? _vaccinationTab;
   String? _treatmentUnderTab;
+  String? _prescriptionTab;
   List<TreatmentUnderCategoryItem> _treatmentUnderCategories = [];
+  List<PrescriptionUnderCategoryItem> _prescriptionUnderCategories = [];
+  final Map<String, List<Product>> _treatmentUnderMapped = {};
+  final Map<String, List<Product>> _prescriptionUnderMapped = {};
+  bool _loadingTreatmentUnderMapped = false;
+  bool _loadingPrescriptionUnderMapped = false;
   PetSummary? _petSummary;
   int? _serviceChargeProductId;
   String? _serviceChargeProductName;
@@ -365,7 +375,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       }
 
       await _loadVaccinationSuggestions();
-      await _loadTreatmentUnderCategories();
+      await _loadCategoryCatalogs();
 
       // Doctor login: bind doctor_id from session (Doctor UI is hidden).
       // Admin / branch manager: no doctor_id.
@@ -442,6 +452,26 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _medicines
       ..clear()
       ..addAll((visit.medicines ?? []).map(_MedicineRow.fromModel));
+    final firstUnder = _medicines.where(
+      (m) =>
+          m.context == _MedicineContext.treatmentUnder &&
+          m.treatmentUnderCategory != null,
+    );
+    if (firstUnder.isNotEmpty) {
+      _treatmentUnderTab = TreatmentUnderCategory.forVisit(
+        snapshot: firstUnder.first.treatmentUnderCategory,
+      );
+    }
+    final firstRx = _medicines.where(
+      (m) =>
+          m.context == _MedicineContext.prescription &&
+          m.prescriptionUnderCategory != null,
+    );
+    if (firstRx.isNotEmpty) {
+      _prescriptionTab = PrescriptionUnderCategory.forVisit(
+        snapshot: firstRx.first.prescriptionUnderCategory,
+      );
+    }
     for (final r in _vaccinations) {
       r.dispose();
     }
@@ -1159,13 +1189,33 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
   }
 
-  int _treatmentUnderCount(String category) {
+  int _categoryMedicineCount(String category, _MedicineContext context) {
     return _medicines
-        .where((m) =>
-            m.treatmentUnderCategory != null &&
-            TreatmentUnderCategory.forVisit(snapshot: m.treatmentUnderCategory) ==
-                category)
+        .where((m) => m.context == context && _medicineMatchesCategory(m, category, context))
         .length;
+  }
+
+  bool _medicineMatchesCategory(
+    _MedicineRow m,
+    String category,
+    _MedicineContext context,
+  ) {
+    if (m.context != context) return false;
+    if (context == _MedicineContext.prescription) {
+      final slug = m.prescriptionUnderCategory;
+      if (slug == null) return false;
+      return PrescriptionUnderCategory.forVisit(snapshot: slug) == category;
+    }
+    final slug = m.treatmentUnderCategory;
+    if (slug == null) return false;
+    return TreatmentUnderCategory.forVisit(snapshot: slug) == category;
+  }
+
+  Future<void> _loadCategoryCatalogs() async {
+    await Future.wait([
+      _loadTreatmentUnderCategories(),
+      _loadPrescriptionUnderCategories(),
+    ]);
   }
 
   Future<void> _loadTreatmentUnderCategories() async {
@@ -1176,37 +1226,387 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           .listTreatmentUnderCategories();
       if (!mounted) return;
       setState(() => _treatmentUnderCategories = list);
+      // Prefetch mapped medicines for every active tab.
+      await Future.wait([
+        for (final c in list) _loadMappedMedicinesFor(c.slug, _MedicineContext.treatmentUnder),
+      ]);
+      if (!mounted) return;
+      if (_treatmentUnderTab == null && list.isNotEmpty) {
+        setState(() => _treatmentUnderTab = list.first.slug);
+      }
     } catch (_) {
-      // Fallback to hardcoded keys via empty catalog in UI.
+      await Future.wait([
+        for (final key in TreatmentUnderCategory.keys) _loadMappedMedicinesFor(key, _MedicineContext.treatmentUnder),
+      ]);
+      if (!mounted) return;
+      if (_treatmentUnderTab == null) {
+        setState(() => _treatmentUnderTab = TreatmentUnderCategory.antibiotics);
+      }
     }
   }
 
-  List<String> get _treatmentUnderKeys {
+  Future<void> _loadPrescriptionUnderCategories() async {
+    try {
+      final list = await context
+          .read<AppServices>()
+          .emrMasterData
+          .listPrescriptionUnderCategories();
+      if (!mounted) return;
+      setState(() => _prescriptionUnderCategories = list);
+      await Future.wait([
+        for (final c in list) _loadMappedMedicinesFor(c.slug, _MedicineContext.prescription),
+      ]);
+      if (!mounted) return;
+      if (_prescriptionTab == null && list.isNotEmpty) {
+        setState(() => _prescriptionTab = list.first.slug);
+      }
+    } catch (_) {
+      await Future.wait([
+        for (final key in PrescriptionUnderCategory.keys)
+          _loadMappedMedicinesFor(key, _MedicineContext.prescription),
+      ]);
+      if (!mounted) return;
+      if (_prescriptionTab == null) {
+        setState(() => _prescriptionTab = PrescriptionUnderCategory.oral);
+      }
+    }
+  }
+
+  List<String> _categoryKeys(_MedicineContext context) {
+    if (context == _MedicineContext.prescription) {
+      final keys = PrescriptionUnderCategory.keysOf(_prescriptionUnderCategories);
+      return keys.isNotEmpty ? keys : PrescriptionUnderCategory.keys;
+    }
     final keys = TreatmentUnderCategory.keysOf(_treatmentUnderCategories);
     return keys.isNotEmpty ? keys : TreatmentUnderCategory.keys;
   }
 
-  String _treatmentUnderLabel(String key) =>
-      TreatmentUnderCategory.labelOf(key, _treatmentUnderCategories);
+  String _categoryLabel(String key, _MedicineContext context) {
+    if (context == _MedicineContext.prescription) {
+      return PrescriptionUnderCategory.labelOf(key, _prescriptionUnderCategories);
+    }
+    return TreatmentUnderCategory.labelOf(key, _treatmentUnderCategories);
+  }
 
-  Future<void> _addTreatmentUnderMedicine(String category) async {
-    final p = await _pickProduct(
-      type: 'medicine',
-      requiredQty: 1,
-      treatmentUnderCategory: category,
+  List<Product> _mappedForTab(String tab, _MedicineContext context) {
+    final map = context == _MedicineContext.prescription
+        ? _prescriptionUnderMapped
+        : _treatmentUnderMapped;
+    return List<Product>.from(map[tab] ?? const []);
+  }
+
+  bool _isCategoryLoading(_MedicineContext context) =>
+      context == _MedicineContext.prescription
+          ? _loadingPrescriptionUnderMapped
+          : _loadingTreatmentUnderMapped;
+
+  List<String> get _treatmentUnderKeys => _categoryKeys(_MedicineContext.treatmentUnder);
+
+  String _treatmentUnderLabel(String key) =>
+      _categoryLabel(key, _MedicineContext.treatmentUnder);
+
+  List<Product> _mappedForTreatmentTab(String tab) =>
+      _mappedForTab(tab, _MedicineContext.treatmentUnder);
+
+  bool _isMappedMedicineSelected(
+    Product p,
+    String category,
+    _MedicineContext context,
+  ) {
+    return _medicines.any(
+      (m) =>
+          m.context == context &&
+          m.productId == p.id &&
+          _medicineMatchesCategory(m, category, context),
     );
-    if (p == null || !mounted) return;
+  }
+
+  Future<void> _loadMappedMedicinesFor(
+    String category,
+    _MedicineContext section,
+  ) async {
+    try {
+      List<Product> list = [];
+      try {
+        list = section == _MedicineContext.prescription
+            ? await context
+                .read<AppServices>()
+                .emrMasterData
+                .listPrescriptionUnderProducts(category: category)
+            : await context
+                .read<AppServices>()
+                .emrMasterData
+                .listTreatmentUnderProducts(category: category);
+      } catch (_) {}
+      if (list.isEmpty) {
+        final filterKey = section == _MedicineContext.prescription
+            ? 'prescription_under_category'
+            : 'treatment_under_category';
+        list = await context.read<AppServices>().products.list(
+              query: {
+                'type': 'medicine',
+                'per_page': 200,
+                'is_active': 1,
+                filterKey: category,
+              },
+            );
+      }
+      if (!mounted) return;
+      final target = section == _MedicineContext.prescription
+          ? _prescriptionUnderMapped
+          : _treatmentUnderMapped;
+      setState(() => target[category] = list);
+    } catch (_) {
+      if (!mounted) return;
+      if (section == _MedicineContext.prescription) {
+        setState(() => _prescriptionUnderMapped[category] = []);
+      } else {
+        setState(() => _treatmentUnderMapped[category] = []);
+      }
+    }
+  }
+
+  Future<void> _selectCategoryTab(
+    String category,
+    _MedicineContext section,
+  ) async {
+    final map = section == _MedicineContext.prescription
+        ? _prescriptionUnderMapped
+        : _treatmentUnderMapped;
     setState(() {
-      _treatmentUnderTab = category;
+      if (section == _MedicineContext.treatmentUnder) {
+        _treatmentUnderTab = category;
+        _loadingTreatmentUnderMapped = !map.containsKey(category);
+      } else {
+        _prescriptionTab = category;
+        _loadingPrescriptionUnderMapped = !map.containsKey(category);
+      }
+    });
+    if (!map.containsKey(category)) {
+      await _loadMappedMedicinesFor(category, section);
+    }
+    if (!mounted) return;
+    setState(() {
+      if (section == _MedicineContext.treatmentUnder) {
+        _loadingTreatmentUnderMapped = false;
+      } else {
+        _loadingPrescriptionUnderMapped = false;
+      }
+    });
+  }
+
+  void _toggleMappedMedicine(
+    Product p,
+    String category,
+    _MedicineContext section,
+  ) {
+    final existing = _medicines.indexWhere(
+      (m) =>
+          m.context == section &&
+          m.productId == p.id &&
+          _medicineMatchesCategory(m, category, section),
+    );
+    if (existing >= 0) {
+      final row = _medicines.removeAt(existing);
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
+      return;
+    }
+    setState(() {
+      if (section == _MedicineContext.treatmentUnder) {
+        _treatmentUnderTab = category;
+      } else {
+        _prescriptionTab = category;
+      }
       _medicines.add(
         _MedicineRow(
           productId: p.id,
           name: p.name,
           unitPrice: p.sellingPrice,
-          treatmentUnderCategory: category,
+          treatmentUnderCategory:
+              section == _MedicineContext.treatmentUnder ? category : null,
+          prescriptionUnderCategory:
+              section == _MedicineContext.prescription ? category : null,
+          context: section,
         ),
       );
     });
+  }
+
+  Future<void> _addCategoryMedicine(
+    String category,
+    _MedicineContext section,
+  ) async {
+    final p = await _pickProduct(
+      type: 'medicine',
+      requiredQty: 1,
+      treatmentUnderCategory:
+          section == _MedicineContext.treatmentUnder ? category : null,
+      prescriptionUnderCategory:
+          section == _MedicineContext.prescription ? category : null,
+    );
+    if (p == null || !mounted) return;
+    setState(() {
+      if (section == _MedicineContext.treatmentUnder) {
+        _treatmentUnderTab = category;
+      } else {
+        _prescriptionTab = category;
+      }
+      _medicines.add(
+        _MedicineRow(
+          productId: p.id,
+          name: p.name,
+          unitPrice: p.sellingPrice,
+          treatmentUnderCategory:
+              section == _MedicineContext.treatmentUnder ? category : null,
+          prescriptionUnderCategory:
+              section == _MedicineContext.prescription ? category : null,
+          context: section,
+        ),
+      );
+    });
+    final map = section == _MedicineContext.prescription
+        ? _prescriptionUnderMapped
+        : _treatmentUnderMapped;
+    final cached = map[category];
+    if (cached != null && !cached.any((x) => x.id == p.id)) {
+      setState(() => map[category] = [...cached, p]);
+    }
+  }
+
+  /// Category chips + settings-mapped medicines + selected rows for the active tab.
+  Widget _buildCategoryMedicineBlock({
+    required bool compact,
+    required String? activeTab,
+    required _MedicineContext context,
+    required ValueChanged<String> onSelectTab,
+  }) {
+    final tab = activeTab;
+    final mapped = tab == null ? const <Product>[] : _mappedForTab(tab, context);
+    final selectedUnder = tab == null
+        ? const <MapEntry<int, _MedicineRow>>[]
+        : _medicines.asMap().entries
+            .where(
+              (e) =>
+                  e.value.context == context &&
+                  _medicineMatchesCategory(e.value, tab, context),
+            )
+            .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final key in _categoryKeys(context))
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    avatar: Icon(
+                      _categoryIcon(key, context),
+                      size: 14,
+                      color: activeTab == key
+                          ? AppTheme.primary
+                          : AppTheme.textSecondary,
+                    ),
+                    label: Text(
+                      _categoryMedicineCount(key, context) == 0
+                          ? _categoryLabel(key, context)
+                          : '${_categoryLabel(key, context)} (${_categoryMedicineCount(key, context)})',
+                      style: const TextStyle(fontSize: 14.5),
+                    ),
+                    selected: activeTab == key,
+                    showCheckmark: false,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    side: BorderSide(
+                      color: activeTab == key
+                          ? AppTheme.primary
+                          : const Color(0xFFCBD5E1),
+                    ),
+                    selectedColor: AppTheme.primary.withValues(alpha: 0.12),
+                    backgroundColor: Colors.white,
+                    onSelected: (_) => onSelectTab(key),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (tab != null) ...[
+          const SizedBox(height: 8),
+          if (_isCategoryLoading(context))
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (mapped.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'No medicines mapped to ${_categoryLabel(tab, context).toLowerCase()} in settings',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final p in mapped)
+                    FilterChip(
+                      label: Text(p.name, style: const TextStyle(fontSize: 12)),
+                      selected: _isMappedMedicineSelected(p, tab, context),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onSelected: (_) => _toggleMappedMedicine(p, tab, context),
+                    ),
+                ],
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => _addCategoryMedicine(tab, context),
+              icon: const Icon(Icons.search, size: 16),
+              label: Text(
+                'Browse ${_categoryLabel(tab, context).toLowerCase()}',
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ),
+        ] else
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 6),
+            child: Text(
+              'Tap a category to see mapped medicines',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 14.5),
+            ),
+          ),
+        ...selectedUnder.map(
+          (e) => _buildMedicineCard(
+            index: e.key,
+            compact: compact,
+            treatmentUnderCategory:
+                context == _MedicineContext.treatmentUnder ? tab : null,
+            prescriptionUnderCategory:
+                context == _MedicineContext.prescription ? tab : null,
+          ),
+        ),
+      ],
+    );
   }
 
   Future<Product?> _pickProduct({
@@ -1215,6 +1615,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     bool allowCreateService = false,
     double? requiredQty,
     String? treatmentUnderCategory,
+    String? prescriptionUnderCategory,
   }) {
     if (!mounted) return Future.value(null);
     return showAppDialog<Product>(
@@ -1225,6 +1626,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         allowCreateService: allowCreateService,
         requiredQty: requiredQty,
         treatmentUnderCategory: treatmentUnderCategory,
+        prescriptionUnderCategory: prescriptionUnderCategory,
       ),
     );
   }
@@ -2149,59 +2551,18 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final key in _treatmentUnderKeys)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ChoiceChip(
-                      avatar: Icon(
-                        _treatmentUnderIcon(key),
-                        size: 14,
-                        color: _treatmentUnderTab == key
-                            ? AppTheme.primary
-                            : AppTheme.textSecondary,
-                      ),
-                      label: Text(
-                        _treatmentUnderCount(key) == 0
-                            ? _treatmentUnderLabel(key)
-                            : '${_treatmentUnderLabel(key)} (${_treatmentUnderCount(key)})',
-                        style: const TextStyle(fontSize: 14.5),
-                      ),
-                      selected: _treatmentUnderTab == key,
-                      showCheckmark: false,
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      side: BorderSide(
-                        color: _treatmentUnderTab == key
-                            ? AppTheme.primary
-                            : const Color(0xFFCBD5E1),
-                      ),
-                      selectedColor: AppTheme.primary.withValues(alpha: 0.12),
-                      backgroundColor: Colors.white,
-                      onSelected: (_) async {
-                        setState(() => _treatmentUnderTab = key);
-                        await _addTreatmentUnderMedicine(key);
-                      },
-                    ),
-                  ),
-              ],
-            ),
+          _buildCategoryMedicineBlock(
+            compact: compact,
+            activeTab: _treatmentUnderTab,
+            context: _MedicineContext.treatmentUnder,
+            onSelectTab: (key) =>
+                _selectCategoryTab(key, _MedicineContext.treatmentUnder),
           ),
-          if (_treatments.isEmpty &&
-              (_treatmentUnderTab == null ||
-                  !_medicines.any((m) =>
-                      m.treatmentUnderCategory != null &&
-                      TreatmentUnderCategory.forVisit(
-                            snapshot: m.treatmentUnderCategory,
-                          ) ==
-                          _treatmentUnderTab)))
+          if (_treatments.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 6),
               child: Text(
-                'Tap a category to pick medicines · Add kit: insert all kit products',
+                'Add kit: insert all kit products as billable treatment lines',
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 14.5),
               ),
             ),
@@ -2374,19 +2735,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               ),
             );
           }),
-          if (_treatmentUnderTab != null)
-            ..._medicines.asMap().entries.where((e) =>
-                e.value.treatmentUnderCategory != null &&
-                TreatmentUnderCategory.forVisit(
-                      snapshot: e.value.treatmentUnderCategory,
-                    ) ==
-                    _treatmentUnderTab).map((e) {
-              return _buildMedicineCard(
-                index: e.key,
-                compact: compact,
-                treatmentUnderCategory: _treatmentUnderTab,
-              );
-            }),
           const SizedBox(height: 12),
           _responsiveSectionHeader(
             title: _formSectionHeader(
@@ -2395,7 +2743,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ),
             actions: [
               TextButton.icon(
-                onPressed: () => setState(() => _medicines.add(_MedicineRow())),
+                onPressed: () => setState(
+                  () => _medicines.add(
+                    _MedicineRow(context: _MedicineContext.freeForm),
+                  ),
+                ),
                 icon: const Icon(Icons.add, size: 16),
                 label: const Text(
                   'Add',
@@ -2404,16 +2756,24 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               ),
             ],
           ),
-          if (!_medicines.any((m) => m.treatmentUnderCategory == null))
+          const SizedBox(height: 6),
+          _buildCategoryMedicineBlock(
+            compact: compact,
+            activeTab: _prescriptionTab,
+            context: _MedicineContext.prescription,
+            onSelectTab: (key) =>
+                _selectCategoryTab(key, _MedicineContext.prescription),
+          ),
+          if (!_medicines.any((m) => m.context == _MedicineContext.freeForm))
             const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
+              padding: EdgeInsets.symmetric(vertical: 6),
               child: Text(
-                'No medicines added',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+                'Or tap Add for a free-form prescription',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 14.5),
               ),
             ),
           ..._medicines.asMap().entries
-              .where((e) => e.value.treatmentUnderCategory == null)
+              .where((e) => e.value.context == _MedicineContext.freeForm)
               .map((e) {
             return _buildMedicineCard(
               index: e.key,
@@ -2546,6 +2906,28 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     );
   }
 
+  IconData _categoryIcon(String key, _MedicineContext context) {
+    if (context == _MedicineContext.prescription) {
+      switch (key) {
+        case PrescriptionUnderCategory.oral:
+          return Icons.medication_liquid_outlined;
+        case PrescriptionUnderCategory.topical:
+          return Icons.spa_outlined;
+        case PrescriptionUnderCategory.injectable:
+          return Icons.vaccines_outlined;
+        case PrescriptionUnderCategory.supplements:
+          return Icons.eco_outlined;
+        case PrescriptionUnderCategory.chronic:
+          return Icons.schedule_outlined;
+        case PrescriptionUnderCategory.unique:
+          return Icons.star_outline_rounded;
+        default:
+          return Icons.category_outlined;
+      }
+    }
+    return _treatmentUnderIcon(key);
+  }
+
   IconData _treatmentUnderIcon(String key) {
     switch (key) {
       case TreatmentUnderCategory.antibiotics:
@@ -2592,6 +2974,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     required int index,
     required bool compact,
     String? treatmentUnderCategory,
+    String? prescriptionUnderCategory,
   }) {
     final m = _medicines[index];
     final showMedicineSuggestions =
@@ -2642,6 +3025,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           type: 'medicine',
           requiredQty: qty,
           treatmentUnderCategory: treatmentUnderCategory,
+          prescriptionUnderCategory: prescriptionUnderCategory,
         );
         if (p != null) {
           setState(() {
@@ -2650,6 +3034,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             m.priceCtrl.text = _formatAmount(p.sellingPrice);
             if (treatmentUnderCategory != null) {
               m.treatmentUnderCategory = treatmentUnderCategory;
+            }
+            if (prescriptionUnderCategory != null) {
+              m.prescriptionUnderCategory = prescriptionUnderCategory;
             }
           });
         }
@@ -3190,6 +3577,7 @@ class _ProductPickerDialog extends StatefulWidget {
     this.allowCreateService = false,
     this.requiredQty,
     this.treatmentUnderCategory,
+    this.prescriptionUnderCategory,
   });
 
   final String type;
@@ -3197,6 +3585,7 @@ class _ProductPickerDialog extends StatefulWidget {
   final bool allowCreateService;
   final double? requiredQty;
   final String? treatmentUnderCategory;
+  final String? prescriptionUnderCategory;
 
   @override
   State<_ProductPickerDialog> createState() => _ProductPickerDialogState();
@@ -3237,6 +3626,8 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
               'type': widget.type,
               if (widget.treatmentUnderCategory != null)
                 'treatment_under_category': widget.treatmentUnderCategory,
+              if (widget.prescriptionUnderCategory != null)
+                'prescription_under_category': widget.prescriptionUnderCategory,
             },
           );
       if (!mounted) return;
@@ -3263,6 +3654,8 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
             'type': widget.type,
             if (widget.treatmentUnderCategory != null)
               'treatment_under_category': widget.treatmentUnderCategory,
+            if (widget.prescriptionUnderCategory != null)
+              'prescription_under_category': widget.prescriptionUnderCategory,
           },
         );
   }
@@ -3837,6 +4230,8 @@ class _MedicineRow {
     int quantity = 1,
     double unitPrice = 0,
     this.treatmentUnderCategory,
+    this.prescriptionUnderCategory,
+    this.context = _MedicineContext.freeForm,
   })  : durationDays = durationDays?.clamp(1, 15),
         quantity = quantity.clamp(1, 20),
         nameCtrl = TextEditingController(text: name),
@@ -3845,7 +4240,10 @@ class _MedicineRow {
         priceCtrl = TextEditingController(text: unitPrice.toString());
 
   factory _MedicineRow.fromModel(VisitMedicine m) {
-    final raw = m.treatmentUnderCategory ?? m.product?.treatmentUnderCategory;
+    final tuRaw = m.treatmentUnderCategory ?? m.product?.treatmentUnderCategory;
+    final puRaw = m.prescriptionUnderCategory ?? m.product?.prescriptionUnderCategory;
+    final hasTu = tuRaw != null && tuRaw.isNotEmpty;
+    final hasPu = puRaw != null && puRaw.isNotEmpty;
     return _MedicineRow(
       productId: m.productId,
       name: m.medicineName,
@@ -3854,13 +4252,20 @@ class _MedicineRow {
       durationDays: m.durationDays,
       quantity: m.quantity.round(),
       unitPrice: m.unitPrice,
-      treatmentUnderCategory:
-          (raw != null && raw.isNotEmpty) ? raw : null,
+      treatmentUnderCategory: hasTu ? tuRaw : null,
+      prescriptionUnderCategory: hasPu ? puRaw : null,
+      context: hasPu
+          ? _MedicineContext.prescription
+          : hasTu
+              ? _MedicineContext.treatmentUnder
+              : _MedicineContext.freeForm,
     );
   }
 
   int? productId;
   String? treatmentUnderCategory;
+  String? prescriptionUnderCategory;
+  _MedicineContext context;
   int? durationDays;
   int quantity;
   final TextEditingController nameCtrl;
@@ -3873,6 +4278,8 @@ class _MedicineRow {
         'medicine_name': nameCtrl.text.trim(),
         if (treatmentUnderCategory != null)
           'treatment_under_category': treatmentUnderCategory,
+        if (prescriptionUnderCategory != null)
+          'prescription_under_category': prescriptionUnderCategory,
         if (dosageCtrl.text.isNotEmpty) 'dosage': dosageCtrl.text.trim(),
         if (freqCtrl.text.isNotEmpty) 'frequency': freqCtrl.text.trim(),
         if (durationDays != null) 'duration_days': durationDays,

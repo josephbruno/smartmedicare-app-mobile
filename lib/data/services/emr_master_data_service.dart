@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
 import '../models/product.dart';
+import '../models/prescription_under.dart';
 import '../models/treatment_under.dart';
 import '../models/vaccination_category.dart';
 
@@ -557,6 +558,123 @@ class EmrMasterDataService {
       final res = await _client.put(
         '$_base/treatment-under-products/$productId',
         data: {'treatment_under_category': category},
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => Product.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<PrescriptionUnderCategoryItem>> listPrescriptionUnderCategories({
+    bool includeInactive = false,
+  }) async {
+    try {
+      final res = await _client.get(
+        '$_base/prescription-under-categories',
+        queryParameters: {
+          if (includeInactive) 'include_inactive': true,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, PrescriptionUnderCategoryItem.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PrescriptionUnderCategoryItem> createPrescriptionUnderCategory({
+    required String label,
+    int? sortOrder,
+    bool? isActive,
+  }) async {
+    try {
+      final res = await _client.post(
+        '$_base/prescription-under-categories',
+        data: {
+          'label': label,
+          if (sortOrder != null) 'sort_order': sortOrder,
+          if (isActive != null) 'is_active': isActive,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => PrescriptionUnderCategoryItem.fromJson(
+          Map<String, dynamic>.from(data as Map),
+        ),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<PrescriptionUnderCategoryItem> updatePrescriptionUnderCategory(
+    int id, {
+    String? label,
+    int? sortOrder,
+    bool? isActive,
+  }) async {
+    try {
+      final res = await _client.put(
+        '$_base/prescription-under-categories/$id',
+        data: {
+          if (label != null) 'label': label,
+          if (sortOrder != null) 'sort_order': sortOrder,
+          if (isActive != null) 'is_active': isActive,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => PrescriptionUnderCategoryItem.fromJson(
+          Map<String, dynamic>.from(data as Map),
+        ),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deletePrescriptionUnderCategory(int id) async {
+    try {
+      await _client.delete('$_base/prescription-under-categories/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<List<Product>> listPrescriptionUnderProducts({
+    String? search,
+    String? category,
+  }) async {
+    try {
+      final res = await _client.get(
+        '$_base/prescription-under-products',
+        queryParameters: {
+          if (search != null && search.isNotEmpty) 'search': search,
+          if (category != null && category.isNotEmpty) 'category': category,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, Product.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Product> assignPrescriptionUnderProduct(
+    int productId,
+    String? category,
+  ) async {
+    try {
+      final res = await _client.put(
+        '$_base/prescription-under-products/$productId',
+        data: {'prescription_under_category': category},
       );
       return parseEnvelopeData(
         res,

@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/services/emr_master_data_service.dart';
 import 'procedure_kits_master_tab.dart';
+import 'prescription_under_master_tab.dart';
 import 'treatment_under_master_tab.dart';
 import 'vaccination_master_tab.dart';
 
@@ -24,17 +25,14 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
   final _kitsTabKey = GlobalKey<ProcedureKitsMasterTabState>();
   final _vaccinationsTabKey = GlobalKey<VaccinationMasterTabState>();
   final _treatmentUnderTabKey = GlobalKey<TreatmentUnderMasterTabState>();
+  final _prescriptionUnderTabKey = GlobalKey<PrescriptionUnderMasterTabState>();
   bool _loading = false;
   List<EmrTemplateItem> _items = [];
 
   static const _tabKeys = [
     'complaints',
-    'diagnoses',
-    'treatments',
-    'medicines',
     'treatment_under',
-    'dosages',
-    'frequencies',
+    'prescription_under',
     'observations',
     'investigations',
     'vaccinations',
@@ -43,12 +41,8 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
 
   static const _tabLabels = [
     'Complaints',
-    'Diagnoses',
-    'Treatments',
-    'Medicines',
     'Treatment Under',
-    'Dosages',
-    'Frequencies',
+    'Prescriptions Under',
     'Observations',
     'Investigations',
     'Vaccinations',
@@ -58,6 +52,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
   bool get _isKitsTab => _currentKey == 'service_kits';
   bool get _isVaccinationsTab => _currentKey == 'vaccinations';
   bool get _isTreatmentUnderTab => _currentKey == 'treatment_under';
+  bool get _isPrescriptionUnderTab => _currentKey == 'prescription_under';
 
   @override
   void initState() {
@@ -74,6 +69,9 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
         } else if (_isTreatmentUnderTab) {
           setState(() {});
           _treatmentUnderTabKey.currentState?.reload();
+        } else if (_isPrescriptionUnderTab) {
+          setState(() {});
+          _prescriptionUnderTabKey.currentState?.reload();
         } else {
           _load();
         }
@@ -104,17 +102,16 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
       await _treatmentUnderTabKey.currentState?.reload();
       return;
     }
+    if (_isPrescriptionUnderTab) {
+      await _prescriptionUnderTabKey.currentState?.reload();
+      return;
+    }
     setState(() => _loading = true);
     try {
       final svc = context.read<AppServices>().emrMasterData;
       final q = _search.text.trim();
       final list = switch (_currentKey) {
         'complaints' => await svc.listComplaints(search: q.isEmpty ? null : q),
-        'diagnoses' => await svc.listDiagnoses(search: q.isEmpty ? null : q),
-        'treatments' => await svc.listTreatments(search: q.isEmpty ? null : q),
-        'medicines' => await svc.listMedicines(search: q.isEmpty ? null : q),
-        'dosages' => await svc.listDosages(search: q.isEmpty ? null : q),
-        'frequencies' => await svc.listFrequencies(search: q.isEmpty ? null : q),
         'observations' => await svc.listObservations(search: q.isEmpty ? null : q),
         'investigations' => await svc.listInvestigations(search: q.isEmpty ? null : q),
         _ => <EmrTemplateItem>[],
@@ -140,93 +137,17 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
       await _treatmentUnderTabKey.currentState?.openAdd();
       return;
     }
+    if (_isPrescriptionUnderTab) {
+      await _prescriptionUnderTabKey.currentState?.openAdd();
+      return;
+    }
     final isEdit = item != null;
     final name = TextEditingController(text: item?.name ?? '');
-    final label = TextEditingController(text: item?.label ?? '');
-    final icd = TextEditingController(text: item?.icdCode ?? '');
-    final code = TextEditingController(text: item?.procedureCode ?? '');
-    final price = TextEditingController(
-      text: item?.defaultPrice?.toString() ?? '',
-    );
-    final category = TextEditingController(text: item?.category ?? '');
-    final dosage = TextEditingController(text: item?.defaultDosage ?? '');
-    final frequency = TextEditingController(text: item?.defaultFrequency ?? '');
-    final days = TextEditingController(
-      text: item?.defaultDurationDays?.toString() ?? '',
-    );
-    var isActive = item?.isActive ?? true;
 
     final title =
         isEdit ? 'Edit ${_tabLabels[_tabs.index]}' : 'Add ${_tabLabels[_tabs.index]}';
 
-    Widget buildFields(void Function(VoidCallback) setLocal) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_currentKey == 'dosages' || _currentKey == 'frequencies')
-            TextField(
-              controller: label,
-              decoration: appFormFieldDecoration('Label *'),
-            )
-          else
-            TextField(
-              controller: name,
-              decoration: appFormFieldDecoration('Name *'),
-            ),
-          if (_currentKey == 'diagnoses') ...[
-            const SizedBox(height: 16),
-            TextField(
-              controller: icd,
-              decoration: appFormFieldDecoration('ICD Code'),
-            ),
-          ],
-          if (_currentKey == 'treatments') ...[
-            const SizedBox(height: 16),
-            TextField(
-              controller: code,
-              decoration: appFormFieldDecoration('Procedure code'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: price,
-              keyboardType: TextInputType.number,
-              decoration: appFormFieldDecoration('Default price'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: category,
-              decoration: appFormFieldDecoration('Category'),
-            ),
-          ],
-          if (_currentKey == 'medicines') ...[
-            const SizedBox(height: 16),
-            TextField(
-              controller: dosage,
-              decoration: appFormFieldDecoration('Default dosage'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: frequency,
-              decoration: appFormFieldDecoration('Default frequency'),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: days,
-              keyboardType: TextInputType.number,
-              decoration: appFormFieldDecoration('Default days'),
-            ),
-          ],
-          const SizedBox(height: 8),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Active'),
-            value: isActive,
-            onChanged: (v) => setLocal(() => isActive = v),
-          ),
-        ],
-      );
-    }
+    var isActive = item?.isActive ?? true;
 
     final bool? saved;
     if (useCenteredFormDialog(context)) {
@@ -234,7 +155,23 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
         context: context,
         title: title,
         content: StatefulBuilder(
-          builder: (ctx, setLocal) => buildFields(setLocal),
+          builder: (ctx, setLocal) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: name,
+                decoration: appFormFieldDecoration('Name *'),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Active'),
+                value: isActive,
+                onChanged: (v) => setLocal(() => isActive = v),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -258,7 +195,23 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
             title: title,
             icon: Icons.medical_information_outlined,
             onClose: () => Navigator.pop(ctx, false),
-            body: buildFields(setSheet),
+            body: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: name,
+                  decoration: appFormFieldDecoration('Name *'),
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Active'),
+                  value: isActive,
+                  onChanged: (v) => setSheet(() => isActive = v),
+                ),
+              ],
+            ),
             footer: AppFormFooter(
               primaryLabel: isEdit ? 'Save' : 'Add',
               onCancel: () => Navigator.pop(ctx, false),
@@ -271,23 +224,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
 
     if (saved != true || !mounted) return;
 
-    final body = <String, dynamic>{'is_active': isActive};
-    if (_currentKey == 'dosages' || _currentKey == 'frequencies') {
-      body['label'] = label.text.trim();
-    } else {
-      body['name'] = name.text.trim();
-    }
-    if (_currentKey == 'diagnoses') body['icd_code'] = icd.text.trim().isEmpty ? null : icd.text.trim();
-    if (_currentKey == 'treatments') {
-      body['procedure_code'] = code.text.trim().isEmpty ? null : code.text.trim();
-      body['default_price'] = double.tryParse(price.text);
-      body['category'] = category.text.trim().isEmpty ? null : category.text.trim();
-    }
-    if (_currentKey == 'medicines') {
-      body['default_dosage'] = dosage.text.trim().isEmpty ? null : dosage.text.trim();
-      body['default_frequency'] = frequency.text.trim().isEmpty ? null : frequency.text.trim();
-      body['default_duration_days'] = int.tryParse(days.text);
-    }
+    final body = <String, dynamic>{
+      'is_active': isActive,
+      'name': name.text.trim(),
+    };
 
     try {
       final svc = context.read<AppServices>().emrMasterData;
@@ -295,16 +235,6 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
         switch (_currentKey) {
           case 'complaints':
             await svc.updateComplaint(item!.id, body);
-          case 'diagnoses':
-            await svc.updateDiagnosis(item!.id, body);
-          case 'treatments':
-            await svc.updateTreatment(item!.id, body);
-          case 'medicines':
-            await svc.updateMedicine(item!.id, body);
-          case 'dosages':
-            await svc.updateDosage(item!.id, body);
-          case 'frequencies':
-            await svc.updateFrequency(item!.id, body);
           case 'observations':
             await svc.updateObservation(item!.id, body);
           case 'investigations':
@@ -314,16 +244,6 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
         switch (_currentKey) {
           case 'complaints':
             await svc.createComplaint(body);
-          case 'diagnoses':
-            await svc.createDiagnosis(body);
-          case 'treatments':
-            await svc.createTreatment(body);
-          case 'medicines':
-            await svc.createMedicine(body);
-          case 'dosages':
-            await svc.createDosage(body);
-          case 'frequencies':
-            await svc.createFrequency(body);
           case 'observations':
             await svc.createObservation(body);
           case 'investigations':
@@ -353,16 +273,6 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
       switch (_currentKey) {
         case 'complaints':
           await svc.deleteComplaint(item.id);
-        case 'diagnoses':
-          await svc.deleteDiagnosis(item.id);
-        case 'treatments':
-          await svc.deleteTreatment(item.id);
-        case 'medicines':
-          await svc.deleteMedicine(item.id);
-        case 'dosages':
-          await svc.deleteDosage(item.id);
-        case 'frequencies':
-          await svc.deleteFrequency(item.id);
         case 'observations':
           await svc.deleteObservation(item.id);
         case 'investigations':
@@ -426,6 +336,11 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
                             key: _treatmentUnderTabKey,
                             searchQuery: _search.text.trim(),
                           )
+                        : _isPrescriptionUnderTab
+                            ? PrescriptionUnderMasterTab(
+                                key: _prescriptionUnderTabKey,
+                                searchQuery: _search.text.trim(),
+                              )
                         : _loading
                             ? const Center(child: CircularProgressIndicator())
                             : _items.isEmpty
@@ -436,10 +351,8 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
                             separatorBuilder: (_, __) => const Divider(height: 1),
                             itemBuilder: (ctx, i) {
                               final item = _items[i];
-                              final subtitle = _subtitleFor(item);
                               return ListTile(
                                 title: Text(item.displayName),
-                                subtitle: subtitle != null ? Text(subtitle) : null,
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -471,34 +384,5 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
         ],
       ),
     );
-  }
-
-  String? _subtitleFor(EmrTemplateItem item) {
-    return switch (_currentKey) {
-      'diagnoses' => item.icdCode,
-      'treatments' => [
-          if (item.procedureCode != null) item.procedureCode,
-          if (item.defaultPrice != null) '₹${item.defaultPrice}',
-          if (item.category != null) item.category,
-        ].whereType<String>().join(' · ').isEmpty
-          ? null
-          : [
-              if (item.procedureCode != null) item.procedureCode,
-              if (item.defaultPrice != null) '₹${item.defaultPrice}',
-              if (item.category != null) item.category,
-            ].join(' · '),
-      'medicines' => [
-          if (item.defaultDosage != null) item.defaultDosage,
-          if (item.defaultFrequency != null) item.defaultFrequency,
-          if (item.defaultDurationDays != null) '${item.defaultDurationDays}d',
-        ].whereType<String>().join(' · ').isEmpty
-          ? null
-          : [
-              if (item.defaultDosage != null) item.defaultDosage,
-              if (item.defaultFrequency != null) item.defaultFrequency,
-              if (item.defaultDurationDays != null) '${item.defaultDurationDays}d',
-            ].join(' · '),
-      _ => null,
-    };
   }
 }
