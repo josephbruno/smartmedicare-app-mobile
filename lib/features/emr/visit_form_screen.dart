@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/app_config.dart';
+import '../../core/navigation/shell_back.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
@@ -69,7 +70,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   List<VaccinationTemplate> _defaultVaccinationSuggestions = [];
   List<VaccinationTemplate> _vaccinationSuggestions = [];
   int? _vaccinationSuggestForIndex;
-  String _vaccinationTab = VaccinationCategory.annual;
+  String? _vaccinationTab;
   String? _treatmentUnderTab;
   PetSummary? _petSummary;
   int? _serviceChargeProductId;
@@ -448,9 +449,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _vaccinations
       ..clear()
       ..addAll((visit.vaccinations ?? []).map(_VaccinationRow.fromModel));
-    if (_vaccinations.isNotEmpty) {
-      _vaccinationTab = _rowCategory(_vaccinations.first);
-    }
+    _vaccinationTab = null;
     if (visit.serviceCharge > 0) {
       _serviceCharge.text = visit.serviceCharge.toString();
     } else {
@@ -810,8 +809,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     VaccinationTemplate? any;
     for (final t in _defaultVaccinationSuggestions) {
       if (t.name.toLowerCase() != n) continue;
-      if (VaccinationCategory.forVisit(snapshot: t.category, name: t.name) ==
-          _vaccinationTab) {
+      if (_vaccinationTab != null &&
+          VaccinationCategory.forVisit(snapshot: t.category, name: t.name) ==
+              _vaccinationTab) {
         return t;
       }
       any ??= t;
@@ -868,7 +868,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   void _showVaccinationSuggestionsFor(int index, {String? query}) {
     final q = (query ?? _vaccinations[index].nameCtrl.text).trim();
-    final tabVaccines = _vaccinesForTab(_vaccinationTab);
+    final tabVaccines = _vaccinationTab == null
+        ? List<VaccinationTemplate>.from(_defaultVaccinationSuggestions)
+        : _vaccinesForTab(_vaccinationTab!);
     setState(() {
       _vaccinationSuggestForIndex = index;
       if (q.length < 2) {
@@ -914,10 +916,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         _dateOnly(row.administeredDate ?? _visitDate).add(Duration(days: days));
   }
 
-  void _toggleVaccineTemplate(VaccinationTemplate t) {
-    final existing = _vaccinations.indexWhere((r) => r.templateId == t.id);
-    if (existing >= 0) {
-      setState(() => _removeVaccinationAt(existing));
+  void _addVaccineTemplate(VaccinationTemplate t) {
+    if (_isVaccineSelected(t)) {
+      AppMessenger.show(
+        context,
+        SnackBar(content: Text('${t.name} is already added')),
+      );
       return;
     }
     setState(() {
@@ -926,11 +930,53 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         templateId: t.id,
         template: t,
         category: t.category,
+        doseNumber: t.nextDoseNumber,
         administeredDate: _dateOnly(_visitDate),
       );
       _fillVaccinationNextDue(row);
       _vaccinations.add(row);
     });
+  }
+
+  Future<void> _pickVaccinationFromEmr(String category) async {
+    if (_petVaccinationSpecies == null) {
+      AppMessenger.show(
+        context,
+        const SnackBar(
+          content: Text('Select a pet first to load dog or cat vaccines'),
+        ),
+      );
+      return;
+    }
+    if (_defaultVaccinationSuggestions.isEmpty) {
+      await _loadVaccinationSuggestions();
+      if (!mounted) return;
+    }
+    final templates = _vaccinesForTab(category);
+    if (templates.isEmpty) {
+      AppMessenger.show(
+        context,
+        SnackBar(
+          content: Text(
+            'No ${VaccinationCategory.labelOf(category)} items in EMR master data',
+          ),
+        ),
+      );
+      return;
+    }
+    final picked = await showAppDialog<VaccinationTemplate>(
+      context: context,
+      builder: (ctx) => _VaccinationTemplatePickerDialog(
+        category: category,
+        templates: templates,
+        selectedIds: {
+          for (final r in _vaccinations)
+            if (r.templateId != null) r.templateId!,
+        },
+      ),
+    );
+    if (picked == null || !mounted) return;
+    _addVaccineTemplate(picked);
   }
 
   void _addCustomVaccination() {
@@ -949,7 +995,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         ),
       );
       _vaccinationSuggestForIndex = _vaccinations.length - 1;
-      _vaccinationSuggestions = _vaccinesForTab(_vaccinationTab);
+      _vaccinationSuggestions = _vaccinationTab == null
+          ? List<VaccinationTemplate>.from(_defaultVaccinationSuggestions)
+          : _vaccinesForTab(_vaccinationTab!);
     });
   }
 
@@ -975,7 +1023,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     row.status = 'completed';
     row.administeredDate = _dateOnly(_visitDate);
     row.nextDueManual = false;
-    row.doseNumber = 1;
+    row.doseNumber = t.nextDoseNumber;
     _fillVaccinationNextDue(row);
   }
 
@@ -1370,21 +1418,142 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     final compact = _compactUi;
     final listPadding = compact
         ? EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            16 + MediaQuery.viewInsetsOf(context).bottom,
+            12,
+            10,
+            12,
+            12 + MediaQuery.viewInsetsOf(context).bottom,
           )
-        : const EdgeInsets.all(16);
+        : const EdgeInsets.fromLTRB(14, 10, 14, 14);
 
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: Text(_isEdit ? 'Edit visit' : 'New visit'),
+    // Desktop uses a global 1.35× text scale — cap this dense clinical form
+    // so fields and tabs fit like the screenshot layout.
+    final media = MediaQuery.of(context);
+    final baseScale = media.textScaler.scale(1);
+    final formScale = AppConfig.usesLargeUiScale
+        ? (baseScale / AppConfig.desktopTextScale).clamp(0.9, 1.0)
+        : baseScale.clamp(0.9, 1.05);
+
+    final denseTheme = Theme.of(context).copyWith(
+      visualDensity: VisualDensity.compact,
+      textTheme: Theme.of(context).textTheme.copyWith(
+            titleLarge: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+            titleSmall: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+            bodyMedium: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: 16,
+                ),
+            bodySmall: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 14.5,
+                ),
+            labelLarge: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+      inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
+            isDense: true,
+            contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            hintStyle: const TextStyle(
+              fontSize: 15.5,
+              fontWeight: FontWeight.w400,
+              color: AppTheme.textSecondary,
+            ),
+            labelStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.textSecondary,
+            ),
+            floatingLabelStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+      chipTheme: Theme.of(context).chipTheme.copyWith(
+            labelStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
+            ),
+            secondaryLabelStyle: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+          ),
+    );
+
+    return MediaQuery(
+      data: media.copyWith(textScaler: TextScaler.linear(formScale)),
+      child: Theme(
+        data: denseTheme,
+        child: Scaffold(
+          backgroundColor: AppTheme.background,
+          appBar: AppBar(
+            automaticallyImplyLeading: false,
+            titleSpacing: 12,
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isEdit ? 'Edit visit' : 'New visit',
+                  style: const TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
+                    height: 1.15,
+                  ),
+                ),
+                Text(
+                  _isEdit
+                      ? 'Update the details of this visit'
+                      : 'Create a new visit record',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    color: AppTheme.textSecondary,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton.icon(
+                onPressed: () => navigateShellBack(
+                  context,
+                  GoRouterState.of(context).uri.path,
+                ),
+                icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                label: const Text(
+                  'Back to visits',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+          ),
+          body: ListView(
+            padding: listPadding,
+            children: [
+              _buildVisitFormBody(compact: compact),
+            ],
+          ),
+        ),
       ),
-      body: ListView(
-        padding: listPadding,
-        children: [
+    );
+  }
+
+  Widget _buildVisitFormBody({required bool compact}) {
+    // Body content continues with the previous ListView children.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
           LayoutBuilder(
             builder: (context, constraints) {
               final narrow = compact || constraints.maxWidth < 640;
@@ -1411,7 +1580,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         suffixIcon: _isEdit
                             ? null
                             : IconButton(
-                                icon: const Icon(Icons.close, size: 20),
+                                icon: const Icon(Icons.close, size: 18),
                                 tooltip: 'Clear patient',
                                 onPressed: () {
                                   setState(() {
@@ -1426,14 +1595,17 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.pets, size: 18, color: AppTheme.primary),
+                          const Icon(Icons.pets, size: 16, color: AppTheme.primary),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               _selectedPet!.displayLabel,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
                             ),
                           ),
                         ],
@@ -1443,14 +1615,28 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               final visitTypeField = AppDropdownButtonFormField<String>(
                 value: _visitType,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Visit type'),
+                isDense: true,
+                alignment: AlignmentDirectional.centerStart,
+                decoration: const InputDecoration(
+                  labelText: 'Visit type',
+                  contentPadding: EdgeInsets.fromLTRB(12, 18, 12, 18),
+                ),
                 selectedItemBuilder: (context) => _visitTypes
                     .map(
-                      (t) => Text(
-                        t,
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.ellipsis,
+                      (t) => Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          t,
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            height: 1.2,
+                            fontWeight: FontWeight.w500,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
                       ),
                     )
                     .toList(),
@@ -1458,7 +1644,15 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     .map(
                       (t) => DropdownMenuItem(
                         value: t,
-                        child: Text(t, overflow: TextOverflow.ellipsis, maxLines: 1),
+                        child: Text(
+                          t,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
                       ),
                     )
                     .toList(),
@@ -1601,10 +1795,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          Text('Chief complaint',
-              style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          _formSectionHeader(
+            'Chief complaint',
+            Icons.chat_bubble_outline_rounded,
+          ),
+          const SizedBox(height: 6),
           Focus(
             onKeyEvent: (node, event) {
               if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -1627,21 +1823,52 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ),
           ),
           if (_complaintSuggestions.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
+            const Text(
+              'Quick add',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 4),
             Wrap(
               spacing: 6,
               runSpacing: 6,
               children: _complaintSuggestions.take(12).map((c) {
                 return ActionChip(
-                  label: Text(c, style: const TextStyle(fontSize: 12)),
+                  avatar: const Icon(
+                    Icons.add,
+                    size: 14,
+                    color: AppTheme.primaryDark,
+                  ),
+                  label: Text(
+                    c,
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  labelStyle: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  backgroundColor: const Color(0xFFEFF6FF),
+                  surfaceTintColor: Colors.transparent,
+                  side: const BorderSide(color: Color(0xFFBFDBFE)),
                   onPressed: () => _applyComplaintSuggestion(c),
                 );
               }).toList(),
             ),
           ],
-          const SizedBox(height: 16),
-          Text('Vitals', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          _formSectionHeader('Vitals', Icons.monitor_heart_outlined),
+          const SizedBox(height: 6),
           LayoutBuilder(
             builder: (context, constraints) {
               final narrow = compact || constraints.maxWidth < 520;
@@ -1734,9 +1961,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               );
             },
           ),
-          const SizedBox(height: 16),
-          Text('Investigation', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          _formSectionHeader('Investigation', Icons.biotech_outlined),
+          const SizedBox(height: 6),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => _investigationFocus.requestFocus(),
@@ -1869,50 +2096,71 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 ),
               );
             }),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           _responsiveSectionHeader(
-            title: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                Text('Treatments',
-                    style: Theme.of(context).textTheme.titleSmall),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.warning.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text('Billable',
-                      style: TextStyle(fontSize: 11)),
+            title: _formSectionHeader(
+              'Treatments',
+              Icons.all_inclusive_rounded,
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(6),
                 ),
-              ],
+                child: const Text(
+                  'Billable',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF15803D),
+                  ),
+                ),
+              ),
             ),
             actions: [
               TextButton.icon(
                 onPressed: _addProcedureKit,
-                icon: const Icon(Icons.medical_services_outlined, size: 18),
-                label: const Text('Add kit'),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text(
+                  'Add kit',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
                 for (final key in TreatmentUnderCategory.keys)
                   Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.only(right: 6),
                     child: ChoiceChip(
+                      avatar: Icon(
+                        _treatmentUnderIcon(key),
+                        size: 14,
+                        color: _treatmentUnderTab == key
+                            ? AppTheme.primary
+                            : AppTheme.textSecondary,
+                      ),
                       label: Text(
                         _treatmentUnderCount(key) == 0
                             ? TreatmentUnderCategory.labels[key]!
                             : '${TreatmentUnderCategory.labels[key]} (${_treatmentUnderCount(key)})',
+                        style: const TextStyle(fontSize: 14.5),
                       ),
                       selected: _treatmentUnderTab == key,
+                      showCheckmark: false,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      side: BorderSide(
+                        color: _treatmentUnderTab == key
+                            ? AppTheme.primary
+                            : const Color(0xFFCBD5E1),
+                      ),
+                      selectedColor: AppTheme.primary.withValues(alpha: 0.12),
+                      backgroundColor: Colors.white,
                       onSelected: (_) async {
                         setState(() => _treatmentUnderTab = key);
                         await _addTreatmentUnderMedicine(key);
@@ -1931,10 +2179,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                           ) ==
                           _treatmentUnderTab)))
             const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
+              padding: EdgeInsets.symmetric(vertical: 6),
               child: Text(
                 'Tap a category to pick medicines · Add kit: insert all kit products',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 14.5),
               ),
             ),
           ..._treatments.asMap().entries.map((e) {
@@ -2119,15 +2367,20 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 treatmentUnderCategory: _treatmentUnderTab,
               );
             }),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           _responsiveSectionHeader(
-            title: Text('Prescriptions',
-                style: Theme.of(context).textTheme.titleSmall),
+            title: _formSectionHeader(
+              'Prescriptions',
+              Icons.medication_outlined,
+            ),
             actions: [
               TextButton.icon(
                 onPressed: () => setState(() => _medicines.add(_MedicineRow())),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add'),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text(
+                  'Add',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),
@@ -2136,7 +2389,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 'No medicines added',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
               ),
             ),
           ..._medicines.asMap().entries
@@ -2155,9 +2408,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ),
           const SizedBox(height: 20),
           _buildVaccinationSection(),
-          const SizedBox(height: 16),
-          Text('Follow-up', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          _formSectionHeader('Follow-up', Icons.event_outlined),
+          const SizedBox(height: 6),
           OutlinedButton.icon(
             onPressed: () async {
               final d = await showDatePicker(
@@ -2236,9 +2489,60 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                   color: AppTheme.textSecondary,
                 ),
           ),
-        ],
-      ),
+      ],
     );
+  }
+
+  Widget _formSectionHeader(
+    String title,
+    IconData icon, {
+    Widget? trailing,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 15, color: AppTheme.primary),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        if (trailing != null) ...[
+          const SizedBox(width: 8),
+          trailing,
+        ],
+      ],
+    );
+  }
+
+  IconData _treatmentUnderIcon(String key) {
+    switch (key) {
+      case TreatmentUnderCategory.antibiotics:
+        return Icons.shield_outlined;
+      case TreatmentUnderCategory.fluids:
+        return Icons.water_drop_outlined;
+      case TreatmentUnderCategory.nsaids:
+        return Icons.medication_outlined;
+      case TreatmentUnderCategory.supportive:
+        return Icons.health_and_safety_outlined;
+      case TreatmentUnderCategory.anesthetics:
+        return Icons.vaccines_outlined;
+      case TreatmentUnderCategory.unique:
+        return Icons.star_outline_rounded;
+      default:
+        return Icons.category_outlined;
+    }
   }
 
   Widget _responsiveSectionHeader({
@@ -2585,13 +2889,22 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   }
 
   Widget _sectionHeader(String title, VoidCallback onAdd) {
+    final icon = switch (title) {
+      'Vaccinations' => Icons.vaccines_outlined,
+      'Deworming' => Icons.bug_report_outlined,
+      'Surgery' => Icons.local_hospital_outlined,
+      _ => Icons.medical_services_outlined,
+    };
     return _responsiveSectionHeader(
-      title: Text(title, style: Theme.of(context).textTheme.titleSmall),
+      title: _formSectionHeader(title, icon),
       actions: [
         TextButton.icon(
           onPressed: onAdd,
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Add'),
+          icon: const Icon(Icons.add, size: 16),
+          label: const Text(
+            'Add',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     );
@@ -2617,18 +2930,18 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   Widget _buildVaccinationSection() {
     final species = _petVaccinationSpecies;
-    final tabVaccines = _vaccinesForTab(_vaccinationTab);
-    final selected = _vaccinations.asMap().entries
-        .where((e) => _rowCategory(e.value) == _vaccinationTab)
-        .toList();
+    final selected = _vaccinations.asMap().entries.where((e) {
+      if (_vaccinationTab == null) return true;
+      return _rowCategory(e.value) == _vaccinationTab;
+    }).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _sectionHeader('Vaccinations', _addCustomVaccination),
         Text(
           species == null
-              ? 'Select a pet to load that species vaccination list'
-              : 'Tap a vaccine to add it. Next reminder is set from the duration.',
+              ? 'Select a pet to load that species vaccination list from EMR'
+              : 'Tap a category to pick vaccines from EMR master data',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: AppTheme.textSecondary,
               ),
@@ -2640,51 +2953,44 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             children: [
               for (final key in VaccinationCategory.keys)
                 Padding(
-                  padding: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.only(right: 6),
                   child: ChoiceChip(
                     label: Text(
                       _vaccinationCount(key) == 0
                           ? VaccinationCategory.labelOf(key)
                           : '${VaccinationCategory.labelOf(key)} (${_vaccinationCount(key)})',
+                      style: const TextStyle(fontSize: 14.5),
                     ),
                     selected: _vaccinationTab == key,
-                    onSelected: (_) => setState(() {
-                      _vaccinationTab = key;
-                      _vaccinationSuggestForIndex = null;
-                      _vaccinationSuggestions = [];
-                    }),
+                    showCheckmark: false,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    side: BorderSide(
+                      color: _vaccinationTab == key
+                          ? AppTheme.primary
+                          : const Color(0xFFCBD5E1),
+                    ),
+                    selectedColor: AppTheme.primary.withValues(alpha: 0.12),
+                    backgroundColor: Colors.white,
+                    onSelected: (_) async {
+                      setState(() {
+                        _vaccinationTab = key;
+                        _vaccinationSuggestForIndex = null;
+                        _vaccinationSuggestions = [];
+                      });
+                      await _pickVaccinationFromEmr(key);
+                    },
                   ),
                 ),
             ],
           ),
         ),
-        if (species != null) ...[
-          const SizedBox(height: 10),
-          if (tabVaccines.isEmpty)
-            Text(
-              'No ${VaccinationCategory.labelOf(_vaccinationTab).toLowerCase()}s in master data',
-              style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-            )
-          else
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final t in tabVaccines)
-                  FilterChip(
-                    label: Text(t.name, style: const TextStyle(fontSize: 12)),
-                    selected: _isVaccineSelected(t),
-                    visualDensity: VisualDensity.compact,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    onSelected: (_) => _toggleVaccineTemplate(t),
-                  ),
-              ],
-            ),
-        ],
         const SizedBox(height: 8),
         if (selected.isEmpty)
           Text(
-            'No ${VaccinationCategory.labelOf(_vaccinationTab).toLowerCase()}s selected',
+            _vaccinationTab == null
+                ? 'No vaccines selected'
+                : 'No ${VaccinationCategory.labelOf(_vaccinationTab)} selected',
             style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
           )
         else
@@ -2841,6 +3147,134 @@ String _formatYmd(DateTime d) {
 String _formatAmount(double value) {
   if (value == value.roundToDouble()) return value.toInt().toString();
   return value.toString();
+}
+
+class _VaccinationTemplatePickerDialog extends StatefulWidget {
+  const _VaccinationTemplatePickerDialog({
+    required this.category,
+    required this.templates,
+    required this.selectedIds,
+  });
+
+  final String category;
+  final List<VaccinationTemplate> templates;
+  final Set<int> selectedIds;
+
+  @override
+  State<_VaccinationTemplatePickerDialog> createState() =>
+      _VaccinationTemplatePickerDialogState();
+}
+
+class _VaccinationTemplatePickerDialogState
+    extends State<_VaccinationTemplatePickerDialog> {
+  late final TextEditingController _search;
+  late List<VaccinationTemplate> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _search = TextEditingController();
+    _filtered = List<VaccinationTemplate>.from(widget.templates);
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _applyFilter(String q) {
+    final lower = q.trim().toLowerCase();
+    setState(() {
+      if (lower.isEmpty) {
+        _filtered = List<VaccinationTemplate>.from(widget.templates);
+      } else {
+        _filtered = widget.templates
+            .where((t) => t.name.toLowerCase().contains(lower))
+            .toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        'Pick ${VaccinationCategory.labelOf(widget.category)}',
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+      ),
+      content: SizedBox(
+        width: 420,
+        height: 420,
+        child: Column(
+          children: [
+            TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                hintText: 'Search EMR vaccines…',
+                prefixIcon: Icon(Icons.search, size: 20),
+                isDense: true,
+              ),
+              onChanged: _applyFilter,
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _filtered.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No matching vaccines in EMR master data',
+                        style: TextStyle(color: AppTheme.textSecondary),
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: _filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final t = _filtered[i];
+                        final already = widget.selectedIds.contains(t.id);
+                        return ListTile(
+                          dense: true,
+                          enabled: !already,
+                          title: Text(
+                            t.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: already ? AppTheme.textSecondary : null,
+                            ),
+                          ),
+                          subtitle: Text(
+                            already
+                                ? 'Already added'
+                                : [
+                                    t.speciesLabel,
+                                    if (t.durationDays != null)
+                                      'Next due ${t.durationDays}d',
+                                    if (t.nextDoseNumber > 1)
+                                      'Dose ${t.nextDoseNumber}',
+                                  ].join(' · '),
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing: already
+                              ? const Icon(Icons.check, color: AppTheme.accent)
+                              : const Icon(Icons.add_circle_outline),
+                          onTap: already
+                              ? null
+                              : () => Navigator.of(context).pop(t),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
 }
 
 class _ProductPickerDialog extends StatefulWidget {
@@ -3384,7 +3818,6 @@ class _VaccinationRow {
     this.templateId,
     this.doseNumber = 1,
     this.template,
-    this.nextDueManual = false,
     this.status = 'completed',
     this.administeredDate,
     this.category,
@@ -3408,13 +3841,10 @@ class _VaccinationRow {
   int? templateId;
   int doseNumber;
   VaccinationTemplate? template;
-  bool nextDueManual;
+  bool nextDueManual = false;
   String status;
   DateTime? administeredDate;
   String? category;
-
-  bool get isScheduled => status == 'scheduled';
-  bool get isGiven => status == 'completed';
 
   Map<String, dynamic> toJson() => {
         'vaccine_name': nameCtrl.text.trim(),
