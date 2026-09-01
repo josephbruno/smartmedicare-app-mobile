@@ -40,6 +40,38 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
     super.dispose();
   }
 
+  int? get _branchId => context.read<AuthSession>().currentBranchId;
+
+  bool get _isSource =>
+      _transfer != null && _transfer!.fromBranchId == _branchId;
+
+  bool get _isDest =>
+      _transfer != null && _transfer!.toBranchId == _branchId;
+
+  bool get _canApprove =>
+      _transfer != null && _transfer!.isRequested && _isSource;
+
+  bool get _canComplete =>
+      _transfer != null && _transfer!.isApproved && _isSource;
+
+  bool get _canReceive =>
+      _transfer != null && _transfer!.isDispatched && _isDest;
+
+  bool get _canCancel =>
+      _transfer != null && _transfer!.isRequested && _isDest;
+
+  String? get _waitingHint {
+    final t = _transfer;
+    if (t == null) return null;
+    if (_isDest && t.isApproved) {
+      return 'Waiting for the sending branch to dispatch.';
+    }
+    if (_isSource && t.isDispatched) {
+      return 'Waiting for the receiving branch to confirm.';
+    }
+    return null;
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -47,9 +79,15 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
     });
     try {
       final t = await context.read<AppServices>().inventory.getTransfer(widget.id);
+      for (final c in _acceptQty.values) {
+        c.dispose();
+      }
+      _acceptQty.clear();
       for (final item in t.items) {
         _acceptQty[item.id] = TextEditingController(
-          text: (item.acceptedQuantity ?? item.requestedQuantity)
+          text: (item.acceptedQuantity ??
+                  item.dispatchedQuantity ??
+                  item.requestedQuantity)
               .toString(),
         );
       }
@@ -65,18 +103,28 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
     }
   }
 
-  bool get _canVerify {
-    final t = _transfer;
-    if (t == null) return false;
-    final branchId = context.read<AuthSession>().currentBranchId;
-    return t.status == 'pending' && t.toBranchId == branchId;
+  Future<void> _approve() async {
+    setState(() => _busy = true);
+    try {
+      await context.read<AppServices>().inventory.approveTransfer(widget.id);
+      _done('Request approved. Complete the transfer when ready to ship.');
+    } catch (e) {
+      _snack('$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
-  bool get _canCancel {
-    final t = _transfer;
-    if (t == null) return false;
-    final branchId = context.read<AuthSession>().currentBranchId;
-    return t.status == 'pending' && t.fromBranchId == branchId;
+  Future<void> _complete() async {
+    setState(() => _busy = true);
+    try {
+      await context.read<AppServices>().inventory.completeTransfer(widget.id);
+      _done('Stock dispatched. Awaiting receiving branch approval.');
+    } catch (e) {
+      _snack('$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _accept() async {
@@ -92,7 +140,7 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
           'review_notes': _reviewNotes.text.trim(),
         'items': items,
       });
-      _done('Transfer accepted and stock moved.');
+      _done('Transfer received and stock added to this branch.');
     } catch (e) {
       _snack('$e');
     } finally {
@@ -107,7 +155,7 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
         if (_reviewNotes.text.trim().isNotEmpty)
           'review_notes': _reviewNotes.text.trim(),
       });
-      _done('Transfer rejected. Reserved stock released.');
+      _done('Transfer rejected.');
     } catch (e) {
       _snack('$e');
     } finally {
@@ -119,7 +167,7 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
     setState(() => _busy = true);
     try {
       await context.read<AppServices>().inventory.cancelTransfer(widget.id);
-      _done('Transfer cancelled. Reserved stock released.');
+      _done('Transfer request cancelled.');
     } catch (e) {
       _snack('$e');
     } finally {
@@ -135,7 +183,7 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
 
   void _snack(String msg) {
     if (!mounted) return;
-    AppMessenger.show(context,SnackBar(content: Text(msg)));
+    AppMessenger.show(context, SnackBar(content: Text(msg)));
   }
 
   @override
@@ -156,6 +204,12 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
                     _info('From', t!.fromBranchName ?? 'Branch #${t.fromBranchId}'),
                     _info('To', t.toBranchName ?? 'Branch #${t.toBranchId}'),
                     _info('Requested by', t.requestedByName ?? '—'),
+                    if (t.approvedByName != null)
+                      _info('Approved by', t.approvedByName!),
+                    if (t.dispatchedByName != null)
+                      _info('Dispatched by', t.dispatchedByName!),
+                    if (t.reviewedByName != null)
+                      _info('Received by', t.reviewedByName!),
                     _info('Status', t.status),
                     if (t.notes != null && t.notes!.isNotEmpty)
                       _info('Notes', t.notes!),
@@ -166,7 +220,38 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
                         style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     for (final item in t.items) _itemRow(item),
-                    if (_canVerify) ...[
+                    if (_canApprove) ...[
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _reviewNotes,
+                        decoration: const InputDecoration(
+                            labelText: 'Review notes (optional)'),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _busy ? null : _reject,
+                              child: const Text('Reject'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: _busy ? null : _approve,
+                              child: const Text('Approve'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else if (_canComplete) ...[
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: _busy ? null : _complete,
+                        child: const Text('Complete & Dispatch'),
+                      ),
+                    ] else if (_canReceive) ...[
                       const SizedBox(height: 16),
                       TextField(
                         controller: _reviewNotes,
@@ -186,7 +271,7 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
                           Expanded(
                             child: FilledButton(
                               onPressed: _busy ? null : _accept,
-                              child: const Text('Accept & Transfer'),
+                              child: const Text('Approve & Receive'),
                             ),
                           ),
                         ],
@@ -196,6 +281,12 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
                       OutlinedButton(
                         onPressed: _busy ? null : _cancel,
                         child: const Text('Cancel Request'),
+                      ),
+                    ] else if (_waitingHint != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        _waitingHint!,
+                        style: const TextStyle(color: Colors.grey),
                       ),
                     ],
                   ],
@@ -236,7 +327,7 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
           const SizedBox(width: 8),
           Expanded(
             flex: 2,
-            child: _canVerify
+            child: _canReceive
                 ? TextField(
                     controller: _acceptQty[item.id],
                     keyboardType:
@@ -247,7 +338,11 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
                     ),
                   )
                 : Text(
-                    'Acc: ${item.acceptedQuantity ?? '—'}',
+                    [
+                      if (item.dispatchedQuantity != null)
+                        'Sent: ${item.dispatchedQuantity}',
+                      'Acc: ${item.acceptedQuantity ?? '—'}',
+                    ].join('  '),
                     textAlign: TextAlign.right,
                   ),
           ),

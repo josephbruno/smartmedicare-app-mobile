@@ -21,15 +21,17 @@ class StockTransferListScreen extends StatefulWidget {
 class _StockTransferListScreenState extends State<StockTransferListScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
-  String _direction = 'outgoing';
+  String _direction = 'request';
+
+  static const _tabDirections = ['request', 'outgoing', 'incoming'];
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _tabs.addListener(() {
       if (_tabs.indexIsChanging) return;
-      setState(() => _direction = _tabs.index == 0 ? 'outgoing' : 'incoming');
+      setState(() => _direction = _tabDirections[_tabs.index]);
     });
   }
 
@@ -41,8 +43,13 @@ class _StockTransferListScreenState extends State<StockTransferListScreen>
 
   Color _statusColor(String s) {
     switch (s) {
+      case 'received':
       case 'accepted':
         return AppTheme.accent;
+      case 'approved':
+      case 'dispatched':
+        return AppTheme.primary;
+      case 'requested':
       case 'pending':
         return AppTheme.warning;
       case 'rejected':
@@ -50,6 +57,21 @@ class _StockTransferListScreenState extends State<StockTransferListScreen>
       default:
         return AppTheme.textSecondary;
     }
+  }
+
+  String _otherBranchLabel() {
+    switch (_direction) {
+      case 'outgoing':
+        return 'To';
+      default:
+        return 'From';
+    }
+  }
+
+  String _otherBranchName(StockTransfer t) {
+    return _direction == 'outgoing'
+        ? (t.toBranchName ?? '—')
+        : (t.fromBranchName ?? '—');
   }
 
   @override
@@ -77,7 +99,7 @@ class _StockTransferListScreenState extends State<StockTransferListScreen>
                       await context.push('/stock-transfers/new');
                     },
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('New Transfer'),
+                    label: const Text('New Request'),
                   ),
               ],
             ),
@@ -85,6 +107,7 @@ class _StockTransferListScreenState extends State<StockTransferListScreen>
           TabBar(
             controller: _tabs,
             tabs: const [
+              Tab(text: 'Request'),
               Tab(text: 'Outgoing'),
               Tab(text: 'Incoming'),
             ],
@@ -111,14 +134,9 @@ class _StockTransferListScreenState extends State<StockTransferListScreen>
                   ),
                 ),
                 TableColumnDef(
-                  label: 'From',
+                  label: _otherBranchLabel(),
                   flex: 1.3,
-                  cellBuilder: (c, t) => Text(t.fromBranchName ?? '—'),
-                ),
-                TableColumnDef(
-                  label: 'To',
-                  flex: 1.3,
-                  cellBuilder: (c, t) => Text(t.toBranchName ?? '—'),
+                  cellBuilder: (c, t) => Text(_otherBranchName(t)),
                 ),
                 TableColumnDef(
                   label: 'Items',
@@ -128,7 +146,7 @@ class _StockTransferListScreenState extends State<StockTransferListScreen>
                 ),
                 TableColumnDef(
                   label: 'Status',
-                  flex: 0.9,
+                  flex: 1.1,
                   align: TextAlign.center,
                   cellBuilder: (c, t) {
                     final color = _statusColor(t.status);

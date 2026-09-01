@@ -210,6 +210,22 @@ class InventoryService {
     }
   }
 
+  Future<void> approveTransfer(int id) async {
+    try {
+      await _client.post('/inventory/transfers/$id/approve');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> completeTransfer(int id, [Map<String, dynamic>? body]) async {
+    try {
+      await _client.post('/inventory/transfers/$id/complete', data: body ?? {});
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
   Future<void> acceptTransfer(int id, Map<String, dynamic> body) async {
     try {
       await _client.post('/inventory/transfers/$id/accept', data: body);

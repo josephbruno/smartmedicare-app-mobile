@@ -77,8 +77,13 @@ class _StockTransferReportScreenState extends State<StockTransferReportScreen> {
 
   Color _statusColor(String s) {
     switch (s) {
+      case 'received':
       case 'accepted':
         return AppTheme.accent;
+      case 'approved':
+      case 'dispatched':
+        return AppTheme.primary;
+      case 'requested':
       case 'pending':
         return AppTheme.warning;
       case 'rejected':
@@ -106,8 +111,10 @@ class _StockTransferReportScreenState extends State<StockTransferReportScreen> {
                 runSpacing: 10,
                 children: [
                   _SummaryChip(label: 'Total', value: '${_summary!.total}', color: AppTheme.primary),
-                  _SummaryChip(label: 'Pending', value: '${_summary!.pending}', color: AppTheme.warning),
-                  _SummaryChip(label: 'Accepted', value: '${_summary!.accepted}', color: AppTheme.accent),
+                  _SummaryChip(label: 'Requested', value: '${_summary!.requested}', color: AppTheme.warning),
+                  _SummaryChip(label: 'Approved', value: '${_summary!.approved}', color: AppTheme.primary),
+                  _SummaryChip(label: 'Dispatched', value: '${_summary!.dispatched}', color: AppTheme.primary),
+                  _SummaryChip(label: 'Received', value: '${_summary!.received}', color: AppTheme.accent),
                   _SummaryChip(label: 'Rejected', value: '${_summary!.rejected}', color: AppTheme.danger),
                   _SummaryChip(label: 'Cancelled', value: '${_summary!.cancelled}', color: AppTheme.textSecondary),
                   _SummaryChip(
@@ -257,8 +264,10 @@ class _StockTransferReportScreenState extends State<StockTransferReportScreen> {
                 hint: const Text('All statuses'),
                 items: const [
                   DropdownMenuItem(value: null, child: Text('All statuses')),
-                  DropdownMenuItem(value: 'pending', child: Text('Pending')),
-                  DropdownMenuItem(value: 'accepted', child: Text('Accepted')),
+                  DropdownMenuItem(value: 'requested', child: Text('Requested')),
+                  DropdownMenuItem(value: 'approved', child: Text('Approved')),
+                  DropdownMenuItem(value: 'dispatched', child: Text('Dispatched')),
+                  DropdownMenuItem(value: 'received', child: Text('Received')),
                   DropdownMenuItem(value: 'rejected', child: Text('Rejected')),
                   DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
                 ],

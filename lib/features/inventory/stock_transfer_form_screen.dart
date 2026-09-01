@@ -6,9 +6,10 @@ import 'package:provider/provider.dart';
 import '../../app_services.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/models/inventory.dart';
+import '../../data/models/product.dart';
 import '../../data/models/shop.dart';
 import '../../core/widgets/app_dropdown.dart';
+
 class _LineRow {
   int? productId;
   final TextEditingController qty = TextEditingController();
@@ -28,8 +29,8 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
   String? _error;
 
   List<Branch> _branches = [];
-  List<InventoryItem> _stock = [];
-  int? _toBranchId;
+  List<Product> _products = [];
+  int? _fromBranchId;
   final TextEditingController _notes = TextEditingController();
   final List<_LineRow> _rows = [_LineRow()];
 
@@ -58,13 +59,16 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
       final branchId = context.read<AuthSession>().currentBranchId;
       final results = await Future.wait([
         services.branches.list(),
-        services.inventory.listSimple(query: {'per_page': 500}),
+        services.products.listAll(isActive: true),
       ]);
+      final products = (results[1] as List<Product>)
+          .where((p) => !p.isService && p.trackInventory)
+          .toList();
       setState(() {
         _branches = (results[0] as List<Branch>)
             .where((b) => b.id != branchId)
             .toList();
-        _stock = results[1] as List<InventoryItem>;
+        _products = products;
         _loading = false;
       });
     } catch (e) {
@@ -75,28 +79,15 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
     }
   }
 
-  int _availableFor(int? productId) {
-    if (productId == null) return 0;
-    final item =
-        _stock.where((s) => s.productId == productId).cast<InventoryItem?>();
-    final first = item.isEmpty ? null : item.first;
-    if (first == null) return 0;
-    return first.availableQuantity > 0 ? first.availableQuantity.floor() : first.quantity.floor();
-  }
-
   Future<void> _submit() async {
-    if (_toBranchId == null) {
-      _snack('Select a target branch');
+    if (_fromBranchId == null) {
+      _snack('Select the branch to request from');
       return;
     }
     final items = <Map<String, dynamic>>[];
     for (final r in _rows) {
       final qty = double.tryParse(r.qty.text.trim()) ?? 0;
       if (r.productId == null || qty <= 0) continue;
-      if (qty > _availableFor(r.productId)) {
-        _snack('Quantity exceeds available stock for one of the items');
-        return;
-      }
       items.add({'product_id': r.productId, 'quantity': qty});
     }
     if (items.isEmpty) {
@@ -107,12 +98,12 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
     setState(() => _saving = true);
     try {
       await context.read<AppServices>().inventory.createTransfer({
-        'to_branch_id': _toBranchId,
+        'from_branch_id': _fromBranchId,
         if (_notes.text.trim().isNotEmpty) 'notes': _notes.text.trim(),
         'items': items,
       });
       if (!mounted) return;
-      _snack('Transfer request sent. Awaiting receiver acceptance.');
+      _snack('Transfer request sent. Awaiting source branch approval.');
       context.pop();
     } catch (e) {
       _snack('$e');
@@ -123,7 +114,7 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
 
   void _snack(String msg) {
     if (!mounted) return;
-    AppMessenger.show(context,SnackBar(content: Text(msg)));
+    AppMessenger.show(context, SnackBar(content: Text(msg)));
   }
 
   @override
@@ -131,7 +122,7 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('New Stock Transfer'),
+        title: const Text('New Stock Request'),
         elevation: 1,
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.textPrimary,
@@ -178,14 +169,14 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Transfer Details',
+            'Request Details',
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
           ),
           const SizedBox(height: 16),
           AppDropdownButtonFormField<int>(
-            value: _toBranchId,
+            value: _fromBranchId,
             decoration: InputDecoration(
-              labelText: 'Send to branch *',
+              labelText: 'Request from branch *',
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -218,7 +209,7 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
                   ),
                 ),
             ],
-            onChanged: (v) => setState(() => _toBranchId = v),
+            onChanged: (v) => setState(() => _fromBranchId = v),
           ),
           const SizedBox(height: 14),
           TextField(
@@ -318,12 +309,9 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
         .where((e) => e.key != i)
         .map((e) => e.value.productId)
         .toSet();
-    final options = _stock
-        .where((s) =>
-            (_availableFor(s.productId) > 0) &&
-            (!chosen.contains(s.productId) || s.productId == row.productId))
+    final options = _products
+        .where((p) => !chosen.contains(p.id) || p.id == row.productId)
         .toList();
-    final available = row.productId != null ? _availableFor(row.productId) : 0;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -360,11 +348,11 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
                 fontWeight: FontWeight.w500,
               ),
               items: [
-                for (final s in options)
+                for (final p in options)
                   DropdownMenuItem(
-                    value: s.productId,
+                    value: p.id,
                     child: Text(
-                      '${s.product?.name ?? 'Product #${s.productId}'} (Avail: ${_availableFor(s.productId)})',
+                      p.name,
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                       style: const TextStyle(
@@ -389,7 +377,6 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: 'Qty',
-                helperText: available > 0 ? 'Max: $available' : '',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               ),

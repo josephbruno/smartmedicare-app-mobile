@@ -12,8 +12,10 @@ import '../models/visit_report.dart';
 class StockTransferReportSummary {
   StockTransferReportSummary({
     required this.total,
-    required this.pending,
-    required this.accepted,
+    required this.requested,
+    required this.approved,
+    required this.dispatched,
+    required this.received,
     required this.rejected,
     required this.cancelled,
     required this.requestedQty,
@@ -21,8 +23,10 @@ class StockTransferReportSummary {
   });
 
   final int total;
-  final int pending;
-  final int accepted;
+  final int requested;
+  final int approved;
+  final int dispatched;
+  final int received;
   final int rejected;
   final int cancelled;
   final double requestedQty;
@@ -31,8 +35,10 @@ class StockTransferReportSummary {
   factory StockTransferReportSummary.fromJson(Map<String, dynamic> j) {
     return StockTransferReportSummary(
       total: intOrNull(j['total']) ?? 0,
-      pending: intOrNull(j['pending']) ?? 0,
-      accepted: intOrNull(j['accepted']) ?? 0,
+      requested: intOrNull(j['requested']) ?? intOrNull(j['pending']) ?? 0,
+      approved: intOrNull(j['approved']) ?? 0,
+      dispatched: intOrNull(j['dispatched']) ?? 0,
+      received: intOrNull(j['received']) ?? intOrNull(j['accepted']) ?? 0,
       rejected: intOrNull(j['rejected']) ?? 0,
       cancelled: intOrNull(j['cancelled']) ?? 0,
       requestedQty: numOrNull(j['requested_qty']) ?? 0,
