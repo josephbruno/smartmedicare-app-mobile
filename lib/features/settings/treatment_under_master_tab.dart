@@ -8,7 +8,7 @@ import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/product.dart';
 import '../../data/models/treatment_under.dart';
 
-/// Super admin: map medicine products to Treatment Under visit tabs.
+/// Super admin: manage Treatment Under tabs and map medicines into them.
 class TreatmentUnderMasterTab extends StatefulWidget {
   const TreatmentUnderMasterTab({super.key, this.searchQuery = ''});
 
@@ -18,56 +18,77 @@ class TreatmentUnderMasterTab extends StatefulWidget {
   State<TreatmentUnderMasterTab> createState() => TreatmentUnderMasterTabState();
 }
 
-class TreatmentUnderMasterTabState extends State<TreatmentUnderMasterTab>
-    with SingleTickerProviderStateMixin {
+class TreatmentUnderMasterTabState extends State<TreatmentUnderMasterTab> {
   static const _unmapped = 'unmapped';
-  static const _innerKeys = [_unmapped, ...TreatmentUnderCategory.keys];
-  static const _innerLabels = [
-    'Unmapped',
-    'Antibiotics',
-    'Fluids',
-    'NSAIDS',
-    'Supportive',
-    'Anesthetics',
-    'Unique',
-  ];
 
-  late final TabController _tabs;
-  bool _loading = false;
+  bool _loadingCats = true;
+  bool _loadingProducts = false;
+  List<TreatmentUnderCategoryItem> _categories = [];
   List<Product> _items = [];
+  String _currentKey = _unmapped;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: _innerKeys.length, vsync: this);
-    _tabs.addListener(() {
-      if (!_tabs.indexIsChanging) _load();
-    });
-    _load();
+    _bootstrap();
   }
 
   @override
   void didUpdateWidget(covariant TreatmentUnderMasterTab oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.searchQuery != widget.searchQuery) {
-      _load();
+      _loadProducts();
     }
   }
 
-  @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
-  }
-
-  String get _currentKey => _innerKeys[_tabs.index];
-
   bool get _isUnmapped => _currentKey == _unmapped;
 
-  Future<void> reload() => _load();
+  TreatmentUnderCategoryItem? get _currentCategory {
+    for (final c in _categories) {
+      if (c.slug == _currentKey) return c;
+    }
+    return null;
+  }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  Future<void> reload() async {
+    await _loadCategories(keepSelection: true);
+    await _loadProducts();
+  }
+
+  Future<void> _bootstrap() async {
+    await _loadCategories();
+    await _loadProducts();
+  }
+
+  Future<void> _loadCategories({bool keepSelection = false}) async {
+    setState(() => _loadingCats = true);
+    try {
+      final list = await context
+          .read<AppServices>()
+          .emrMasterData
+          .listTreatmentUnderCategories(includeInactive: true);
+      if (!mounted) return;
+      final active = list.where((c) => c.isActive).toList();
+      final prev = keepSelection ? _currentKey : _unmapped;
+      var next = prev;
+      if (next != _unmapped && !active.any((c) => c.slug == next)) {
+        next = active.isNotEmpty ? active.first.slug : _unmapped;
+      }
+      setState(() {
+        _categories = list;
+        _currentKey = next;
+        _loadingCats = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingCats = false);
+        AppMessenger.show(context, SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  Future<void> _loadProducts() async {
+    setState(() => _loadingProducts = true);
     try {
       final q = widget.searchQuery.trim();
       final list = await context.read<AppServices>().emrMasterData.listTreatmentUnderProducts(
@@ -78,28 +99,208 @@ class TreatmentUnderMasterTabState extends State<TreatmentUnderMasterTab>
     } catch (e) {
       if (mounted) AppMessenger.show(context, SnackBar(content: Text('$e')));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _loadingProducts = false);
     }
   }
 
   Future<void> openAdd() async {
-    if (_isUnmapped) {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.tab),
+              title: const Text('Add category tab'),
+              onTap: () => Navigator.pop(ctx, 'category'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.medication_outlined),
+              title: const Text('Map medicine'),
+              subtitle: Text(
+                _isUnmapped
+                    ? 'Open a category tab first'
+                    : 'Map to ${TreatmentUnderCategory.labelOf(_currentKey, _categories)}',
+              ),
+              enabled: !_isUnmapped,
+              onTap: _isUnmapped ? null : () => Navigator.pop(ctx, 'medicine'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'category') {
+      await openAddCategory();
+    } else {
+      await _pickAndAssign(_currentKey);
+    }
+  }
+
+  Future<void> openAddCategory() async {
+    final labelCtrl = TextEditingController();
+    final ok = await showAppDialog<bool>(
+      context: context,
+      builder: (ctx) => AppFormDialogShell(
+        title: 'Add Treatment Under tab',
+        subtitle: 'Creates a new category chip on the visit form',
+        icon: Icons.tab,
+        maxWidth: 420,
+        onClose: () => Navigator.pop(ctx, false),
+        body: TextField(
+          controller: labelCtrl,
+          autofocus: true,
+          decoration: appFormFieldDecoration('Label *'),
+          textCapitalization: TextCapitalization.words,
+        ),
+        footer: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Create'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    final label = labelCtrl.text.trim();
+    labelCtrl.dispose();
+    if (ok != true || label.isEmpty || !mounted) return;
+
+    try {
+      final created = await context
+          .read<AppServices>()
+          .emrMasterData
+          .createTreatmentUnderCategory(label: label);
+      if (!mounted) return;
       AppMessenger.show(
         context,
-        const SnackBar(
-          content: Text('Open a category tab, then tap Add to map a medicine.'),
+        SnackBar(content: Text('Added ${created.label}')),
+      );
+      await _loadCategories();
+      setState(() => _currentKey = created.slug);
+      await _loadProducts();
+    } catch (e) {
+      if (mounted) AppMessenger.show(context, SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _editCategory(TreatmentUnderCategoryItem cat) async {
+    final labelCtrl = TextEditingController(text: cat.label);
+    var isActive = cat.isActive;
+    final ok = await showAppDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AppFormDialogShell(
+          title: 'Edit ${cat.label}',
+          subtitle: 'Slug stays "${cat.slug}" (visit history safe)',
+          icon: Icons.edit_outlined,
+          maxWidth: 420,
+          onClose: () => Navigator.pop(ctx, false),
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: labelCtrl,
+                decoration: appFormFieldDecoration('Label *'),
+                textCapitalization: TextCapitalization.words,
+              ),
+              if (cat.slug != TreatmentUnderCategory.unique)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Active'),
+                  subtitle: const Text('Inactive tabs hide on the visit form'),
+                  value: isActive,
+                  onChanged: (v) => setLocal(() => isActive = v),
+                ),
+            ],
+          ),
+          footer: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+    final label = labelCtrl.text.trim();
+    labelCtrl.dispose();
+    if (ok != true || label.isEmpty || !mounted) return;
+
+    try {
+      await context.read<AppServices>().emrMasterData.updateTreatmentUnderCategory(
+            cat.id,
+            label: label,
+            isActive: isActive,
+          );
+      if (!mounted) return;
+      AppMessenger.show(context, const SnackBar(content: Text('Category updated')));
+      await _loadCategories(keepSelection: true);
+      await _loadProducts();
+    } catch (e) {
+      if (mounted) AppMessenger.show(context, SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _deactivateCategory(TreatmentUnderCategoryItem cat) async {
+    if (cat.slug == TreatmentUnderCategory.unique) {
+      AppMessenger.show(
+        context,
+        const SnackBar(content: Text('Unique cannot be deactivated')),
       );
       return;
     }
-    await _pickAndAssign(_currentKey);
+    try {
+      await context
+          .read<AppServices>()
+          .emrMasterData
+          .deleteTreatmentUnderCategory(cat.id);
+      if (!mounted) return;
+      AppMessenger.show(
+        context,
+        SnackBar(content: Text('${cat.label} deactivated')),
+      );
+      await _loadCategories();
+      await _loadProducts();
+    } catch (e) {
+      if (mounted) AppMessenger.show(context, SnackBar(content: Text('$e')));
+    }
   }
 
   Future<void> _pickAndAssign(String category) async {
     final selected = await showAppDialog<Product>(
       context: context,
       builder: (ctx) => _UnmappedMedicinePicker(
-        title: 'Map to ${TreatmentUnderCategory.labelOf(category)}',
+        title: 'Map to ${TreatmentUnderCategory.labelOf(category, _categories)}',
       ),
     );
     if (selected == null || !mounted) return;
@@ -119,27 +320,99 @@ class TreatmentUnderMasterTabState extends State<TreatmentUnderMasterTab>
           content: Text(
             category == null
                 ? 'Medicine unmapped'
-                : 'Mapped to ${TreatmentUnderCategory.labelOf(category)}',
+                : 'Mapped to ${TreatmentUnderCategory.labelOf(category, _categories)}',
           ),
         ),
       );
-      await _load();
+      await _loadProducts();
     } catch (e) {
       if (mounted) AppMessenger.show(context, SnackBar(content: Text('$e')));
     }
   }
 
+  List<TreatmentUnderCategoryItem> get _activeCategories =>
+      _categories.where((c) => c.isActive).toList();
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        TabBar(
-          controller: _tabs,
-          isScrollable: true,
-          tabs: _innerLabels.map((l) => Tab(text: l)).toList(),
+    if (_loadingCats) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final chips = [
+      ChoiceChip(
+        label: const Text('Unmapped'),
+        selected: _isUnmapped,
+        onSelected: (_) {
+          setState(() => _currentKey = _unmapped);
+          _loadProducts();
+        },
+      ),
+      for (final c in _activeCategories)
+        ChoiceChip(
+          label: Text(c.label),
+          selected: _currentKey == c.slug,
+          onSelected: (_) {
+            setState(() => _currentKey = c.slug);
+            _loadProducts();
+          },
         ),
+    ];
+
+    final current = _currentCategory;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              for (final chip in chips)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: chip,
+                ),
+              ActionChip(
+                avatar: const Icon(Icons.add, size: 16),
+                label: const Text('Add tab'),
+                onPressed: openAddCategory,
+              ),
+            ],
+          ),
+        ),
+        if (current != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Slug: ${current.slug}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => _editCategory(current),
+                  child: const Text('Edit tab'),
+                ),
+                if (current.slug != TreatmentUnderCategory.unique)
+                  TextButton(
+                    onPressed: () => _deactivateCategory(current),
+                    child: const Text(
+                      'Deactivate',
+                      style: TextStyle(color: AppTheme.danger),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         Expanded(
-          child: _loading
+          child: _loadingProducts
               ? const Center(child: CircularProgressIndicator())
               : _items.isEmpty
                   ? Center(
@@ -166,6 +439,7 @@ class TreatmentUnderMasterTabState extends State<TreatmentUnderMasterTab>
                               if (p.treatmentUnderCategory != null)
                                 TreatmentUnderCategory.labelOf(
                                   p.treatmentUnderCategory,
+                                  _categories,
                                 ),
                             ].join(' · '),
                           ),
@@ -183,10 +457,10 @@ class TreatmentUnderMasterTabState extends State<TreatmentUnderMasterTab>
                                 value: _unmapped,
                                 child: Text('Unmapped'),
                               ),
-                              ...TreatmentUnderCategory.keys.map(
-                                (key) => PopupMenuItem(
-                                  value: key,
-                                  child: Text(TreatmentUnderCategory.labels[key]!),
+                              ..._activeCategories.map(
+                                (c) => PopupMenuItem(
+                                  value: c.slug,
+                                  child: Text(c.label),
                                 ),
                               ),
                             ],

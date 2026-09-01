@@ -73,6 +73,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
   List<Category> _categories = [];
   List<Brand> _brands = [];
   List<Unit> _units = [];
+  List<TreatmentUnderCategoryItem> _treatmentUnderCategories = [];
 
   bool _loading = true;
   bool _saving = false;
@@ -92,15 +93,18 @@ class _ProductFormScreenState extends State<ProductFormScreen>
     setState(() => _loading = true);
     try {
       final products = context.read<AppServices>().products;
+      final emrMaster = context.read<AppServices>().emrMasterData;
       final results = await Future.wait([
         products.listCategories(),
         products.listBrands(),
         products.listUnits(),
+        emrMaster.listTreatmentUnderCategories(),
       ]);
       if (!mounted) return;
       _categories = (results[0] as List<Category>).where((c) => c.isActive).toList();
       _brands = (results[1] as List<Brand>).where((b) => b.isActive).toList();
       _units = (results[2] as List<Unit>).where((u) => u.isActive).toList();
+      _treatmentUnderCategories = results[3] as List<TreatmentUnderCategoryItem>;
 
       final id = widget.productId;
       if (id != null) {
@@ -385,7 +389,10 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         if (_isMedicine) ...[
           const SizedBox(height: 12),
           AppDropdownButtonFormField<String?>(
-            value: TreatmentUnderCategory.isValid(_treatmentUnderCategory)
+            value: TreatmentUnderCategory.isValid(
+                  _treatmentUnderCategory,
+                  _treatmentUnderCategories,
+                )
                 ? _treatmentUnderCategory
                 : null,
             decoration: _dec('Treatment Under', hint: 'Map to visit tab'),
@@ -394,10 +401,19 @@ class _ProductFormScreenState extends State<ProductFormScreen>
                 value: null,
                 child: Text('Not mapped'),
               ),
-              ...TreatmentUnderCategory.keys.map(
-                (key) => DropdownMenuItem<String?>(
-                  value: key,
-                  child: Text(TreatmentUnderCategory.labels[key]!),
+              ...(_treatmentUnderCategories.isNotEmpty
+                      ? _treatmentUnderCategories
+                      : TreatmentUnderCategory.keys.map(
+                          (k) => TreatmentUnderCategoryItem(
+                            id: 0,
+                            slug: k,
+                            label: TreatmentUnderCategory.labels[k]!,
+                          ),
+                        ))
+                  .map(
+                (c) => DropdownMenuItem<String?>(
+                  value: c.slug,
+                  child: Text(c.label),
                 ),
               ),
             ],

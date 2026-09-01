@@ -65,13 +65,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   List<MedicineSuggestion> _defaultMedicineSuggestions = [];
   List<MedicineSuggestion> _medicineSuggestions = [];
   int? _medicineSuggestForIndex;
-  int? _medicineFrequencySuggestForIndex;
-  List<String> _frequencySuggestions = [];
   List<VaccinationTemplate> _defaultVaccinationSuggestions = [];
   List<VaccinationTemplate> _vaccinationSuggestions = [];
   int? _vaccinationSuggestForIndex;
   String? _vaccinationTab;
   String? _treatmentUnderTab;
+  List<TreatmentUnderCategoryItem> _treatmentUnderCategories = [];
   PetSummary? _petSummary;
   int? _serviceChargeProductId;
   String? _serviceChargeProductName;
@@ -354,7 +353,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
       _defaultTreatmentSuggestions = await emr.getTreatmentSuggestions();
       _defaultMedicineSuggestions = await emr.getMedicineSuggestions();
-      _frequencySuggestions = await emr.getFrequencySuggestions();
 
       if (_isEdit) {
         final visit = await emr.getVisit(widget.visitId!);
@@ -367,6 +365,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       }
 
       await _loadVaccinationSuggestions();
+      await _loadTreatmentUnderCategories();
 
       // Doctor login: bind doctor_id from session (Doctor UI is hidden).
       // Admin / branch manager: no doctor_id.
@@ -1168,6 +1167,27 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 category)
         .length;
   }
+
+  Future<void> _loadTreatmentUnderCategories() async {
+    try {
+      final list = await context
+          .read<AppServices>()
+          .emrMasterData
+          .listTreatmentUnderCategories();
+      if (!mounted) return;
+      setState(() => _treatmentUnderCategories = list);
+    } catch (_) {
+      // Fallback to hardcoded keys via empty catalog in UI.
+    }
+  }
+
+  List<String> get _treatmentUnderKeys {
+    final keys = TreatmentUnderCategory.keysOf(_treatmentUnderCategories);
+    return keys.isNotEmpty ? keys : TreatmentUnderCategory.keys;
+  }
+
+  String _treatmentUnderLabel(String key) =>
+      TreatmentUnderCategory.labelOf(key, _treatmentUnderCategories);
 
   Future<void> _addTreatmentUnderMedicine(String category) async {
     final p = await _pickProduct(
@@ -2133,7 +2153,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                for (final key in TreatmentUnderCategory.keys)
+                for (final key in _treatmentUnderKeys)
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
                     child: ChoiceChip(
@@ -2146,8 +2166,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                       ),
                       label: Text(
                         _treatmentUnderCount(key) == 0
-                            ? TreatmentUnderCategory.labels[key]!
-                            : '${TreatmentUnderCategory.labels[key]} (${_treatmentUnderCount(key)})',
+                            ? _treatmentUnderLabel(key)
+                            : '${_treatmentUnderLabel(key)} (${_treatmentUnderCount(key)})',
                         style: const TextStyle(fontSize: 14.5),
                       ),
                       selected: _treatmentUnderTab == key,
@@ -2576,9 +2596,76 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     final m = _medicines[index];
     final showMedicineSuggestions =
         _medicineSuggestForIndex == index && _medicineSuggestions.isNotEmpty;
-    final showFrequencySuggestions =
-        _medicineFrequencySuggestForIndex == index &&
-            _frequencySuggestions.isNotEmpty;
+    final nameField = Focus(
+      onFocusChange: (hasFocus) {
+        if (hasFocus) {
+          _showMedicineSuggestionsFor(index);
+        } else {
+          Future.delayed(const Duration(milliseconds: 180), () {
+            if (!mounted) return;
+            _clearMedicineSuggestions(onlyIfIndex: index);
+          });
+        }
+      },
+      child: TextField(
+        decoration: const InputDecoration(
+          labelText: 'Medicine name',
+          isDense: true,
+        ),
+        controller: m.nameCtrl,
+        onChanged: (q) => _searchMedicines(q, forIndex: index),
+      ),
+    );
+    final priceField = TextField(
+      decoration: const InputDecoration(
+        labelText: 'Price (₹)',
+        isDense: true,
+      ),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      controller: m.priceCtrl,
+    );
+    final linkBtn = IconButton(
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      icon: Icon(
+        Icons.medication_outlined,
+        size: 20,
+        color: m.productId != null ? AppTheme.accent : AppTheme.primary,
+      ),
+      tooltip: m.productId != null
+          ? 'Medicine product linked'
+          : 'Link medicine product (stock checked)',
+      onPressed: () async {
+        final qty = m.quantity.toDouble();
+        final p = await _pickProduct(
+          initial: m.nameCtrl.text,
+          type: 'medicine',
+          requiredQty: qty,
+          treatmentUnderCategory: treatmentUnderCategory,
+        );
+        if (p != null) {
+          setState(() {
+            m.productId = p.id;
+            m.nameCtrl.text = p.name;
+            m.priceCtrl.text = _formatAmount(p.sellingPrice);
+            if (treatmentUnderCategory != null) {
+              m.treatmentUnderCategory = treatmentUnderCategory;
+            }
+          });
+        }
+      },
+    );
+    final removeBtn = IconButton(
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      icon: const Icon(Icons.close, color: AppTheme.danger),
+      onPressed: () {
+        final row = _medicines.removeAt(index);
+        _clearMedicineSuggestions();
+        setState(() {});
+        WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
+      },
+    );
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -2588,146 +2675,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           children: [
             _medicineFieldsLayout(
               compact: compact,
-              nameField: Focus(
-                onFocusChange: (hasFocus) {
-                  if (hasFocus) {
-                    _showMedicineSuggestionsFor(index);
-                  } else {
-                    Future.delayed(const Duration(milliseconds: 180), () {
-                      if (!mounted) return;
-                      _clearMedicineSuggestions(onlyIfIndex: index);
-                    });
-                  }
-                },
-                child: TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Medicine name',
-                    isDense: true,
-                  ),
-                  controller: m.nameCtrl,
-                  onChanged: (q) => _searchMedicines(q, forIndex: index),
-                ),
-              ),
-              priceField: TextField(
-                decoration: const InputDecoration(
-                  labelText: 'Price (₹)',
-                  isDense: true,
-                ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                controller: m.priceCtrl,
-              ),
-              frequencyField: Focus(
-                onFocusChange: (hasFocus) {
-                  if (hasFocus) {
-                    setState(() => _medicineFrequencySuggestForIndex = index);
-                  } else {
-                    Future.delayed(const Duration(milliseconds: 180), () {
-                      if (!mounted) return;
-                      if (_medicineFrequencySuggestForIndex == index) {
-                        setState(
-                            () => _medicineFrequencySuggestForIndex = null);
-                      }
-                    });
-                  }
-                },
-                child: TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Frequency',
-                    isDense: true,
-                  ),
-                  controller: m.freqCtrl,
-                ),
-              ),
-              daysField: AppDropdownButtonFormField<int?>(
-                value: m.durationDays,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Days',
-                  isDense: true,
-                ),
-                items: [
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text('—'),
-                  ),
-                  ...List.generate(
-                    15,
-                    (i) => DropdownMenuItem<int?>(
-                      value: i + 1,
-                      child: Text('${i + 1}'),
-                    ),
-                  ),
-                ],
-                onChanged: (v) => setState(() => m.durationDays = v),
-              ),
-              qtyField: AppDropdownButtonFormField<int>(
-                value: m.quantity,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Qty',
-                  isDense: true,
-                ),
-                items: List.generate(
-                  20,
-                  (i) => DropdownMenuItem(
-                    value: i + 1,
-                    child: Text('${i + 1}'),
-                  ),
-                ),
-                onChanged: (v) => setState(() => m.quantity = v ?? 1),
-              ),
-              linkBtn: IconButton(
-                visualDensity: VisualDensity.compact,
-                constraints:
-                    const BoxConstraints(minWidth: 40, minHeight: 40),
-                icon: Icon(
-                  Icons.medication_outlined,
-                  size: 20,
-                  color: m.productId != null
-                      ? AppTheme.accent
-                      : AppTheme.primary,
-                ),
-                tooltip: m.productId != null
-                    ? 'Medicine product linked'
-                    : 'Link medicine product (stock checked)',
-                onPressed: () async {
-                  final qty = m.quantity.toDouble();
-                  final p = await _pickProduct(
-                    initial: m.nameCtrl.text,
-                    type: 'medicine',
-                    requiredQty: qty,
-                    treatmentUnderCategory: treatmentUnderCategory,
-                  );
-                  if (p != null) {
-                    setState(() {
-                      m.productId = p.id;
-                      m.nameCtrl.text = p.name;
-                      m.priceCtrl.text = _formatAmount(p.sellingPrice);
-                      if (treatmentUnderCategory != null) {
-                        m.treatmentUnderCategory = treatmentUnderCategory;
-                      }
-                    });
-                  }
-                },
-              ),
-              removeBtn: IconButton(
-                visualDensity: VisualDensity.compact,
-                constraints:
-                    const BoxConstraints(minWidth: 40, minHeight: 40),
-                icon: const Icon(Icons.close, color: AppTheme.danger),
-                onPressed: () {
-                  final row = _medicines.removeAt(index);
-                  _clearMedicineSuggestions();
-                  setState(() {
-                    if (_medicineFrequencySuggestForIndex == index) {
-                      _medicineFrequencySuggestForIndex = null;
-                    }
-                  });
-                  WidgetsBinding.instance
-                      .addPostFrameCallback((_) => row.dispose());
-                },
-              ),
+              nameField: nameField,
+              priceField: priceField,
+              linkBtn: linkBtn,
+              removeBtn: removeBtn,
             ),
             if (showMedicineSuggestions)
               Padding(
@@ -2763,42 +2714,17 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                   ),
                 ),
               ),
-            if (showFrequencySuggestions)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _frequencySuggestions.take(6).map((f) {
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: ActionChip(
-                          label:
-                              Text(f, style: const TextStyle(fontSize: 11)),
-                          onPressed: () => setState(() {
-                            m.freqCtrl.text = f;
-                            _medicineFrequencySuggestForIndex = null;
-                          }),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
     );
   }
 
-  /// Desktop keeps a single wide row. Mobile stacks so fields stay tappable.
+  /// Desktop: name + price in one row. Mobile stacks price under name.
   Widget _medicineFieldsLayout({
     required bool compact,
     required Widget nameField,
     required Widget priceField,
-    required Widget frequencyField,
-    required Widget daysField,
-    required Widget qtyField,
     required Widget linkBtn,
     required Widget removeBtn,
   }) {
@@ -2809,12 +2735,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           Expanded(flex: 3, child: nameField),
           const SizedBox(width: 8),
           Expanded(flex: 2, child: priceField),
-          const SizedBox(width: 8),
-          Expanded(flex: 2, child: frequencyField),
-          const SizedBox(width: 8),
-          Expanded(child: daysField),
-          const SizedBox(width: 8),
-          Expanded(child: qtyField),
           linkBtn,
           removeBtn,
         ],
@@ -2832,21 +2752,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: priceField),
-            const SizedBox(width: 8),
-            Expanded(child: frequencyField),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: daysField),
-            const SizedBox(width: 8),
-            Expanded(child: qtyField),
-          ],
-        ),
+        priceField,
       ],
     );
   }
@@ -3938,21 +3844,20 @@ class _MedicineRow {
         freqCtrl = TextEditingController(text: frequency),
         priceCtrl = TextEditingController(text: unitPrice.toString());
 
-  factory _MedicineRow.fromModel(VisitMedicine m) => _MedicineRow(
-        productId: m.productId,
-        name: m.medicineName,
-        dosage: m.dosage ?? '',
-        frequency: m.frequency ?? '',
-        durationDays: m.durationDays,
-        quantity: m.quantity.round(),
-        unitPrice: m.unitPrice,
-        treatmentUnderCategory: TreatmentUnderCategory.normalize(
-              m.treatmentUnderCategory,
-            ) ??
-            TreatmentUnderCategory.normalize(
-              m.product?.treatmentUnderCategory,
-            ),
-      );
+  factory _MedicineRow.fromModel(VisitMedicine m) {
+    final raw = m.treatmentUnderCategory ?? m.product?.treatmentUnderCategory;
+    return _MedicineRow(
+      productId: m.productId,
+      name: m.medicineName,
+      dosage: m.dosage ?? '',
+      frequency: m.frequency ?? '',
+      durationDays: m.durationDays,
+      quantity: m.quantity.round(),
+      unitPrice: m.unitPrice,
+      treatmentUnderCategory:
+          (raw != null && raw.isNotEmpty) ? raw : null,
+    );
+  }
 
   int? productId;
   String? treatmentUnderCategory;

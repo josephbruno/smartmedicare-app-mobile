@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../core/network/api_client.dart';
 import '../json_helpers.dart';
 import '../models/product.dart';
+import '../models/treatment_under.dart';
 import '../models/vaccination_category.dart';
 
 class EmrTemplateItem {
@@ -448,6 +449,84 @@ class EmrMasterDataService {
       _update('$_base/investigations/$id', body);
 
   Future<void> deleteInvestigation(int id) => _delete('$_base/investigations/$id');
+
+  Future<List<TreatmentUnderCategoryItem>> listTreatmentUnderCategories({
+    bool includeInactive = false,
+  }) async {
+    try {
+      final res = await _client.get(
+        '$_base/treatment-under-categories',
+        queryParameters: {
+          if (includeInactive) 'include_inactive': true,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => listFromData(data, TreatmentUnderCategoryItem.fromJson),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<TreatmentUnderCategoryItem> createTreatmentUnderCategory({
+    required String label,
+    int? sortOrder,
+    bool? isActive,
+  }) async {
+    try {
+      final res = await _client.post(
+        '$_base/treatment-under-categories',
+        data: {
+          'label': label,
+          if (sortOrder != null) 'sort_order': sortOrder,
+          if (isActive != null) 'is_active': isActive,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => TreatmentUnderCategoryItem.fromJson(
+          Map<String, dynamic>.from(data as Map),
+        ),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<TreatmentUnderCategoryItem> updateTreatmentUnderCategory(
+    int id, {
+    String? label,
+    int? sortOrder,
+    bool? isActive,
+  }) async {
+    try {
+      final res = await _client.put(
+        '$_base/treatment-under-categories/$id',
+        data: {
+          if (label != null) 'label': label,
+          if (sortOrder != null) 'sort_order': sortOrder,
+          if (isActive != null) 'is_active': isActive,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => TreatmentUnderCategoryItem.fromJson(
+          Map<String, dynamic>.from(data as Map),
+        ),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deleteTreatmentUnderCategory(int id) async {
+    try {
+      await _client.delete('$_base/treatment-under-categories/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
 
   Future<List<Product>> listTreatmentUnderProducts({
     String? search,
