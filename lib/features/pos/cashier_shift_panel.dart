@@ -54,9 +54,12 @@ class CashierShiftPanel extends StatelessWidget {
     final valueFs = compact ? 12.0 : 13.0;
     final actionIconSize = compact ? 18.0 : 20.0;
 
+    // Compact labels avoid ellipsis in the narrow Windows cart column.
     final statusLabel = open
-        ? 'Shift open'
-        : (dayClosed ? 'Day closed' : 'Not started');
+        ? (compact ? 'Open' : 'Shift open')
+        : (dayClosed
+            ? (compact ? 'Closed' : 'Day closed')
+            : (compact ? 'Idle' : 'Not started'));
     final statusColor = open
         ? AppTheme.accent
         : (dayClosed ? AppTheme.textSecondary : AppTheme.warning);
@@ -104,6 +107,37 @@ class CashierShiftPanel extends StatelessWidget {
       ],
     ];
 
+    Widget metricContent(_ShiftMetric m) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            m.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: headFs,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            m.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: valueFs,
+              fontWeight: m.emphasize ? FontWeight.w700 : FontWeight.w500,
+              color: m.valueColor ?? AppTheme.textPrimary,
+            ),
+          ),
+        ],
+      );
+    }
+
     Widget metricCell(_ShiftMetric m, {bool isLast = false}) {
       return Expanded(
         child: Container(
@@ -116,34 +150,20 @@ class CashierShiftPanel extends StatelessWidget {
                 ? null
                 : const Border(right: BorderSide(color: Color(0xFFE2E8F0))),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                m.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: headFs,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                m.value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: valueFs,
-                  fontWeight: m.emphasize ? FontWeight.w700 : FontWeight.w500,
-                  color: m.valueColor ?? AppTheme.textPrimary,
-                ),
-              ),
-            ],
+          child: metricContent(m),
+        ),
+      );
+    }
+
+    Widget metricTile(_ShiftMetric m, {required double width}) {
+      return SizedBox(
+        width: width,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 6 : 8,
+            vertical: compact ? 6 : 8,
           ),
+          child: metricContent(m),
         ),
       );
     }
@@ -208,6 +228,57 @@ class CashierShiftPanel extends StatelessWidget {
         ),
     ];
 
+    Widget actionsRow() {
+      if (actionButtons.isEmpty) return const SizedBox.shrink();
+      if (loading) {
+        return const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        );
+      }
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < actionButtons.length; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            actionButtons[i],
+          ],
+        ],
+      );
+    }
+
+    Widget metricsBox({required bool stacked, required double maxWidth}) {
+      final cols = metrics.length <= 2
+          ? metrics.length.clamp(1, 2)
+          : (maxWidth < 280 ? 2 : (metrics.length <= 4 ? 2 : 3));
+      final tileW = stacked ? maxWidth / cols : 0.0;
+
+      return Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: stacked
+            ? Wrap(
+                children: [
+                  for (final m in metrics) metricTile(m, width: tileW),
+                ],
+              )
+            : IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < metrics.length; i++)
+                      metricCell(metrics[i], isLast: i == metrics.length - 1),
+                  ],
+                ),
+              ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: bg,
@@ -220,52 +291,50 @@ class CashierShiftPanel extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          compact ? 8 : 10,
-          compact ? 8 : 10,
-          compact ? 8 : 10,
-          compact ? 8 : 10,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (var i = 0; i < metrics.length; i++)
-                        metricCell(metrics[i], isLast: i == metrics.length - 1),
-                    ],
+        padding: EdgeInsets.all(compact ? 8 : 10),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final actionW = actionButtons.isEmpty
+                ? 0.0
+                : 8 +
+                    (loading
+                        ? 20
+                        : actionButtons.length * (compact ? 40.0 : 42.0));
+            // One row of equal cells needs ~72px each; otherwise wrap.
+            final needsStack = constraints.maxWidth <
+                (metrics.length * 72 + actionW);
+
+            if (needsStack) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  metricsBox(stacked: true, maxWidth: constraints.maxWidth),
+                  if (actionButtons.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: actionsRow(),
+                    ),
+                  ],
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(
+                  child: metricsBox(
+                    stacked: false,
+                    maxWidth: constraints.maxWidth - actionW,
                   ),
                 ),
-              ),
-            ),
-            if (actionButtons.isNotEmpty) ...[
-              const SizedBox(width: 8),
-              if (loading)
-                const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (var i = 0; i < actionButtons.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 6),
-                      actionButtons[i],
-                    ],
-                  ],
-                ),
-            ],
-          ],
+                if (actionButtons.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  actionsRow(),
+                ],
+              ],
+            );
+          },
         ),
       ),
     );

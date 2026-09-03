@@ -63,6 +63,7 @@ class Product {
   final bool isService;
   final bool isMedicine;
   final String? treatmentUnderCategory;
+  final String? prescriptionUnderCategory;
   final bool isActive;
   final double? currentStock;
   final String? categoryName;

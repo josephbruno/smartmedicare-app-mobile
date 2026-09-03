@@ -1364,6 +1364,12 @@ class _PosScreenState extends State<PosScreen> {
 
     Widget body;
     if (wide) {
+      // On ~1366px Windows desktops the fixed billing queue + 3:2 flex left the
+      // cart too narrow for shift metrics. Give cart more share below 1400px.
+      final screenW = MediaQuery.sizeOf(context).width;
+      final queueW = screenW < 1280 ? 220.0 : (screenW < 1440 ? 240.0 : 280.0);
+      final searchFlex = screenW < 1400 ? 5 : 3;
+      final cartFlex = screenW < 1400 ? 4 : 2;
       body = Container(
         color: AppTheme.background,
         child: Column(
@@ -1375,15 +1381,15 @@ class _PosScreenState extends State<PosScreen> {
                 children: [
                   if (showBillingQueue) ...[
                     SizedBox(
-                      width: 280,
+                      width: queueW,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 8, 0, 8),
                         child: VisitBillingQueuePanel(compact: true),
                       ),
                     ),
                   ],
-                  Expanded(flex: 3, child: searchPanel),
-                  Expanded(flex: 2, child: cartPanel),
+                  Expanded(flex: searchFlex, child: searchPanel),
+                  Expanded(flex: cartFlex, child: cartPanel),
                 ],
               ),
             ),
