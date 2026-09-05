@@ -8,6 +8,7 @@ import '../../app_services.dart';
 import '../../core/app_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
+import '../../data/models/investigation_under.dart';
 import '../../data/models/product.dart';
 import '../../data/models/treatment_under.dart';
 import '../../core/widgets/app_dropdown.dart';
@@ -48,6 +49,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
   bool _isMedicine = false;
   bool _isActive = true;
   String? _treatmentUnderCategory;
+  String? _investigationUnderCategory;
 
   String get _productType {
     if (_isService) return 'service';
@@ -64,8 +66,12 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         _treatmentUnderCategory = null;
       } else if (_isMedicine && !_trackInventory) {
         _trackInventory = true;
+        _investigationUnderCategory = null;
       } else if (!_isMedicine) {
         _treatmentUnderCategory = null;
+      }
+      if (!_isService) {
+        _investigationUnderCategory = null;
       }
     });
   }
@@ -74,6 +80,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
   List<Brand> _brands = [];
   List<Unit> _units = [];
   List<TreatmentUnderCategoryItem> _treatmentUnderCategories = [];
+  List<InvestigationUnderCategoryItem> _investigationUnderCategories = [];
 
   bool _loading = true;
   bool _saving = false;
@@ -99,12 +106,15 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         products.listBrands(),
         products.listUnits(),
         emrMaster.listTreatmentUnderCategories(),
+        emrMaster.listInvestigationUnderCategories(),
       ]);
       if (!mounted) return;
       _categories = (results[0] as List<Category>).where((c) => c.isActive).toList();
       _brands = (results[1] as List<Brand>).where((b) => b.isActive).toList();
       _units = (results[2] as List<Unit>).where((u) => u.isActive).toList();
       _treatmentUnderCategories = results[3] as List<TreatmentUnderCategoryItem>;
+      _investigationUnderCategories =
+          results[4] as List<InvestigationUnderCategoryItem>;
 
       final id = widget.productId;
       if (id != null) {
@@ -144,6 +154,8 @@ class _ProductFormScreenState extends State<ProductFormScreen>
     _isMedicine = p.isMedicine;
     _isActive = p.isActive;
     _treatmentUnderCategory = p.isMedicine ? p.treatmentUnderCategory : null;
+    _investigationUnderCategory =
+        p.isService ? p.investigationUnderCategory : null;
   }
 
   String _fmtNum(double v) =>
@@ -235,6 +247,8 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         'is_medicine': _isMedicine,
         'product_type': _productType,
         'treatment_under_category': _isMedicine ? _treatmentUnderCategory : null,
+        'investigation_under_category':
+            _isService ? _investigationUnderCategory : null,
         'is_active': _isActive,
       };
 
@@ -382,7 +396,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
           _productType == 'medicine'
               ? 'Medicines track stock and are used on visit Treatment Under tabs.'
               : _productType == 'service'
-                  ? 'Services have no stock and can be billed on visits directly.'
+                  ? 'Services have no stock. Map them to Investigation tabs on the visit form.'
                   : 'Standard sellable product.',
           style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
         ),
@@ -418,6 +432,40 @@ class _ProductFormScreenState extends State<ProductFormScreen>
               ),
             ],
             onChanged: (v) => setState(() => _treatmentUnderCategory = v),
+          ),
+        ],
+        if (_isService) ...[
+          const SizedBox(height: 12),
+          AppDropdownButtonFormField<String?>(
+            value: InvestigationUnderCategory.isValid(
+                  _investigationUnderCategory,
+                  _investigationUnderCategories,
+                )
+                ? _investigationUnderCategory
+                : null,
+            decoration: _dec('Investigation Under', hint: 'Map to visit tab'),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Not mapped'),
+              ),
+              ...(_investigationUnderCategories.isNotEmpty
+                      ? _investigationUnderCategories
+                      : InvestigationUnderCategory.keys.map(
+                          (k) => InvestigationUnderCategoryItem(
+                            id: 0,
+                            slug: k,
+                            label: InvestigationUnderCategory.labels[k]!,
+                          ),
+                        ))
+                  .map(
+                (c) => DropdownMenuItem<String?>(
+                  value: c.slug,
+                  child: Text(c.label),
+                ),
+              ),
+            ],
+            onChanged: (v) => setState(() => _investigationUnderCategory = v),
           ),
         ],
         SwitchListTile(

@@ -213,6 +213,7 @@ class ProductLocalDao {
       isService: product.isService,
       isMedicine: product.isMedicine,
       treatmentUnderCategory: product.treatmentUnderCategory,
+      investigationUnderCategory: product.investigationUnderCategory,
       isActive: product.isActive,
       currentStock: next,
       categoryName: product.categoryName,
@@ -260,6 +261,8 @@ class ProductLocalDao {
         'is_medicine': p.isMedicine,
         if (p.treatmentUnderCategory != null)
           'treatment_under_category': p.treatmentUnderCategory,
+        if (p.investigationUnderCategory != null)
+          'investigation_under_category': p.investigationUnderCategory,
         'is_active': p.isActive,
         if (p.currentStock != null) 'current_stock': p.currentStock,
         if (p.categoryName != null)

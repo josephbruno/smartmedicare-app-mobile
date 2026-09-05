@@ -15,6 +15,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/emr.dart';
+import '../../data/models/investigation_under.dart';
 import '../../data/models/product.dart';
 import '../../data/models/prescription_under.dart';
 import '../../data/models/treatment_under.dart';
@@ -77,12 +78,16 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   String? _vaccinationTab;
   String? _treatmentUnderTab;
   String? _prescriptionTab;
+  String? _investigationUnderTab;
   List<TreatmentUnderCategoryItem> _treatmentUnderCategories = [];
   List<PrescriptionUnderCategoryItem> _prescriptionUnderCategories = [];
+  List<InvestigationUnderCategoryItem> _investigationUnderCategories = [];
   final Map<String, List<Product>> _treatmentUnderMapped = {};
   final Map<String, List<Product>> _prescriptionUnderMapped = {};
+  final Map<String, List<Product>> _investigationUnderMapped = {};
   bool _loadingTreatmentUnderMapped = false;
   bool _loadingPrescriptionUnderMapped = false;
+  bool _loadingInvestigationUnderMapped = false;
   final Set<String> _mappedInflight = {};
   PetSummary? _petSummary;
   int? _serviceChargeProductId;
@@ -97,6 +102,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   DateTime _visitDate = DateTime.now();
   TimeOfDay _visitTime = TimeOfDay.now();
   DateTime? _followUpDate;
+  int? _followUpPresetDays;
 
   bool _loading = false;
   bool _saving = false;
@@ -114,14 +120,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   /// Phone/tablet native app only. Windows/web keep the current wide layout.
   bool get _compactUi => AppConfig.isNativeMobile;
-
-  static const _visitTypes = [
-    'consultation',
-    'followup',
-    'surgery',
-    'wellness',
-    'emergency',
-  ];
 
   // UI uses °F; API stores °C (30–45). Convert on load/save.
   static final List<double> _temperatureOptions = [
@@ -418,6 +416,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         List.of(EmrVisitCatalogCache.treatmentUnderCategories);
     _prescriptionUnderCategories =
         List.of(EmrVisitCatalogCache.prescriptionUnderCategories);
+    _investigationUnderCategories =
+        List.of(EmrVisitCatalogCache.investigationUnderCategories);
     _treatmentUnderMapped
       ..clear()
       ..addAll(EmrVisitCatalogCache.treatmentUnderMapped.map(
@@ -428,11 +428,20 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       ..addAll(EmrVisitCatalogCache.prescriptionUnderMapped.map(
         (k, v) => MapEntry(k, List<Product>.of(v)),
       ));
+    _investigationUnderMapped
+      ..clear()
+      ..addAll(EmrVisitCatalogCache.investigationUnderMapped.map(
+        (k, v) => MapEntry(k, List<Product>.of(v)),
+      ));
     if (_treatmentUnderTab == null && _treatmentUnderCategories.isNotEmpty) {
       _treatmentUnderTab = _treatmentUnderCategories.first.slug;
     }
     if (_prescriptionTab == null && _prescriptionUnderCategories.isNotEmpty) {
       _prescriptionTab = _prescriptionUnderCategories.first.slug;
+    }
+    if (_investigationUnderTab == null &&
+        _investigationUnderCategories.isNotEmpty) {
+      _investigationUnderTab = _investigationUnderCategories.first.slug;
     }
   }
 
@@ -566,6 +575,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     }
     if (visit.followUpDate != null) {
       _followUpDate = DateTime.tryParse(visit.followUpDate!);
+      if (_followUpDate != null) {
+        _followUpPresetDays = _followUpPresetMatching(_followUpDate!);
+      }
     }
     _treatments
       ..clear()
@@ -717,9 +729,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       );
     }
     if (appt.doctor != null) _setSelectedDoctor(appt.doctor);
-    _visitType = appt.appointmentType == 'followup'
-        ? 'followup'
-        : (appt.appointmentType == 'emergency' ? 'emergency' : 'consultation');
+    _visitType = 'consultation';
     _visitDate = DateTime.tryParse(appt.appointmentDate) ?? DateTime.now();
     if (appt.appointmentTime.length >= 5) {
       final parts = appt.appointmentTime.substring(0, 5).split(':');
@@ -838,6 +848,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               : (item.productName ?? kit.name),
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          procedureKitId: kit.id,
+          procedureKitName: kit.name,
+          procedureCode: item.procedureCode ?? kit.procedureCode,
         ));
       }
     });
@@ -1305,8 +1318,24 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       return;
     }
     final isNew = !_isKnownInvestigation(trimmed);
+    Product? mapped;
+    String? mappedCategory;
+    for (final entry in _investigationUnderMapped.entries) {
+      for (final p in entry.value) {
+        if (p.name.toLowerCase() == trimmed.toLowerCase()) {
+          mapped = p;
+          mappedCategory = entry.key;
+          break;
+        }
+      }
+      if (mapped != null) break;
+    }
     setState(() {
-      _investigations.add(_InvestigationRow(name: trimmed));
+      _investigations.add(_InvestigationRow(
+        name: trimmed,
+        productId: mapped?.id,
+        investigationUnderCategory: mappedCategory,
+      ));
       _investigationInput.clear();
       if (isNew) _rememberInvestigation(trimmed);
       _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
@@ -1348,6 +1377,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     await Future.wait([
       _loadTreatmentUnderCategories(),
       _loadPrescriptionUnderCategories(),
+      _loadInvestigationUnderCategories(),
     ]);
   }
 
@@ -1411,6 +1441,323 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       setState(() => _prescriptionTab ??= first);
       await _loadMappedMedicinesFor(first, _MedicineContext.prescription);
     }
+  }
+
+  Future<void> _loadInvestigationUnderCategories() async {
+    try {
+      final list = await context
+          .read<AppServices>()
+          .emrMasterData
+          .listInvestigationUnderCategories();
+      if (!mounted) return;
+      EmrVisitCatalogCache.saveInvestigationUnderCategories(list);
+      setState(() {
+        _investigationUnderCategories = list;
+        _investigationUnderTab ??= list.isNotEmpty ? list.first.slug : null;
+      });
+      final first = _investigationUnderTab ??
+          (list.isNotEmpty ? list.first.slug : null);
+      if (first != null) {
+        await _loadMappedInvestigationServicesFor(first);
+      }
+      if (!mounted) return;
+      unawaited(_prefetchRemainingInvestigationMapped(
+        slugs: list.map((c) => c.slug),
+        skip: first,
+      ));
+    } catch (_) {
+      const first = InvestigationUnderCategory.blood;
+      if (!mounted) return;
+      setState(() => _investigationUnderTab ??= first);
+      await _loadMappedInvestigationServicesFor(first);
+    }
+  }
+
+  Future<void> _prefetchRemainingInvestigationMapped({
+    required Iterable<String> slugs,
+    required String? skip,
+  }) async {
+    final rest = slugs.where((s) => s.isNotEmpty && s != skip).toList();
+    if (rest.isEmpty) return;
+    await Future.wait([
+      for (final slug in rest) _loadMappedInvestigationServicesFor(slug),
+    ]);
+  }
+
+  List<String> get _investigationUnderKeys {
+    final keys =
+        InvestigationUnderCategory.keysOf(_investigationUnderCategories);
+    return keys.isNotEmpty ? keys : InvestigationUnderCategory.keys;
+  }
+
+  String _investigationUnderLabel(String key) =>
+      InvestigationUnderCategory.labelOf(key, _investigationUnderCategories);
+
+  List<Product> _mappedForInvestigationTab(String tab) {
+    return List<Product>.from(_investigationUnderMapped[tab] ?? const [])
+        .where(
+          (p) =>
+              p.investigationUnderCategory != null &&
+              p.investigationUnderCategory!.isNotEmpty &&
+              p.investigationUnderCategory == tab,
+        )
+        .toList();
+  }
+
+  int _investigationCategoryCount(String category) {
+    return _investigations.where((row) {
+      if (row.investigationUnderCategory == category) return true;
+      return _mappedForInvestigationTab(category).any(
+        (p) =>
+            (row.productId != null && row.productId == p.id) ||
+            row.name.toLowerCase() == p.name.toLowerCase(),
+      );
+    }).length;
+  }
+
+  bool _isMappedInvestigationSelected(Product p, String category) {
+    return _investigations.any(
+      (row) =>
+          (row.productId != null && row.productId == p.id) ||
+          (row.investigationUnderCategory == category &&
+              row.name.toLowerCase() == p.name.toLowerCase()),
+    );
+  }
+
+  Future<void> _loadMappedInvestigationServicesFor(String category) async {
+    final key = 'i:$category';
+    if (_investigationUnderMapped.containsKey(category) ||
+        _mappedInflight.contains(key)) {
+      return;
+    }
+    _mappedInflight.add(key);
+
+    final cached = EmrVisitCatalogCache.investigationMapped(category);
+    if (cached != null) {
+      _mappedInflight.remove(key);
+      if (!mounted) return;
+      setState(() => _investigationUnderMapped[category] = cached);
+      return;
+    }
+
+    final services = context.read<AppServices>();
+    try {
+      List<Product> list = [];
+      try {
+        list = await services.emrMasterData.listInvestigationUnderProducts(
+          category: category,
+          isActive: true,
+        );
+      } catch (_) {
+        list = await services.products.list(
+          query: {
+            'type': 'service',
+            'per_page': 200,
+            'is_active': 1,
+            'investigation_under_category': category,
+          },
+        );
+      }
+      list = list
+          .where(
+            (p) =>
+                p.investigationUnderCategory != null &&
+                p.investigationUnderCategory == category,
+          )
+          .toList();
+      EmrVisitCatalogCache.saveInvestigationMapped(
+        category: category,
+        products: list,
+      );
+      if (!mounted) return;
+      setState(() => _investigationUnderMapped[category] = list);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _investigationUnderMapped[category] = []);
+    } finally {
+      _mappedInflight.remove(key);
+    }
+  }
+
+  Future<void> _selectInvestigationTab(String category) async {
+    setState(() {
+      _investigationUnderTab = category;
+      _loadingInvestigationUnderMapped =
+          !_investigationUnderMapped.containsKey(category);
+    });
+    if (!_investigationUnderMapped.containsKey(category)) {
+      await _loadMappedInvestigationServicesFor(category);
+    }
+    if (!mounted) return;
+    setState(() => _loadingInvestigationUnderMapped = false);
+  }
+
+  void _toggleMappedInvestigation(Product p, String category) {
+    final existing = _investigations.indexWhere(
+      (row) =>
+          (row.productId != null && row.productId == p.id) ||
+          row.name.toLowerCase() == p.name.toLowerCase(),
+    );
+    if (existing >= 0) {
+      final row = _investigations.removeAt(existing);
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
+      return;
+    }
+    setState(() {
+      _investigationUnderTab = category;
+      _investigations.add(
+        _InvestigationRow(
+          name: p.name,
+          productId: p.id,
+          investigationUnderCategory: category,
+        ),
+      );
+      _investigationInput.clear();
+      _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
+    });
+  }
+
+  Future<void> _addInvestigationService(String category) async {
+    final p = await _pickProduct(
+      type: 'service',
+      investigationUnderCategory: category,
+    );
+    if (p == null || !mounted) return;
+    if (_investigations.any(
+      (row) =>
+          (row.productId != null && row.productId == p.id) ||
+          row.name.toLowerCase() == p.name.toLowerCase(),
+    )) {
+      return;
+    }
+    setState(() {
+      _investigationUnderTab = category;
+      _investigations.add(
+        _InvestigationRow(
+          name: p.name,
+          productId: p.id,
+          investigationUnderCategory: p.investigationUnderCategory ?? category,
+        ),
+      );
+    });
+    final cached = _investigationUnderMapped[category];
+    if (cached != null &&
+        p.investigationUnderCategory == category &&
+        !cached.any((x) => x.id == p.id)) {
+      setState(() => _investigationUnderMapped[category] = [...cached, p]);
+    }
+  }
+
+  Widget _buildInvestigationCategoryBlock() {
+    final tab = _investigationUnderTab;
+    final mapped =
+        tab == null ? const <Product>[] : _mappedForInvestigationTab(tab);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final key in _investigationUnderKeys)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    avatar: Icon(
+                      _investigationUnderIcon(key),
+                      size: 14,
+                      color: _investigationUnderTab == key
+                          ? AppTheme.primary
+                          : AppTheme.textSecondary,
+                    ),
+                    label: Text(
+                      _investigationCategoryCount(key) == 0
+                          ? _investigationUnderLabel(key)
+                          : '${_investigationUnderLabel(key)} (${_investigationCategoryCount(key)})',
+                      style: const TextStyle(fontSize: 14.5),
+                    ),
+                    selected: _investigationUnderTab == key,
+                    showCheckmark: false,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    side: BorderSide(
+                      color: _investigationUnderTab == key
+                          ? AppTheme.primary
+                          : const Color(0xFFCBD5E1),
+                    ),
+                    selectedColor: AppTheme.primary.withValues(alpha: 0.12),
+                    backgroundColor: Colors.white,
+                    onSelected: (_) => _selectInvestigationTab(key),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (tab != null) ...[
+          const SizedBox(height: 8),
+          if (_loadingInvestigationUnderMapped)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (mapped.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'No services mapped to ${_investigationUnderLabel(tab).toLowerCase()} in settings',
+                style: const TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final p in mapped)
+                    FilterChip(
+                      label: Text(p.name, style: const TextStyle(fontSize: 12)),
+                      selected: _isMappedInvestigationSelected(p, tab),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onSelected: (_) => _toggleMappedInvestigation(p, tab),
+                    ),
+                ],
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => _addInvestigationService(tab),
+              icon: const Icon(Icons.search, size: 16),
+              label: Text(
+                'Browse ${_investigationUnderLabel(tab).toLowerCase()}',
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ),
+        ] else
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 6),
+            child: Text(
+              'Tap a category to see mapped services',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 14.5),
+            ),
+          ),
+      ],
+    );
   }
 
   Future<void> _prefetchRemainingMapped({
@@ -1800,6 +2147,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     double? requiredQty,
     String? treatmentUnderCategory,
     String? prescriptionUnderCategory,
+    String? investigationUnderCategory,
   }) {
     if (!mounted) return Future.value(null);
     return showAppDialog<Product>(
@@ -1811,6 +2159,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         requiredQty: requiredQty,
         treatmentUnderCategory: treatmentUnderCategory,
         prescriptionUnderCategory: prescriptionUnderCategory,
+        investigationUnderCategory: investigationUnderCategory,
       ),
     );
   }
@@ -2248,53 +2597,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                       ),
                     );
 
-              final visitTypeField = AppDropdownButtonFormField<String>(
-                value: _visitType,
-                isExpanded: true,
-                isDense: true,
-                alignment: AlignmentDirectional.centerStart,
-                decoration: const InputDecoration(
-                  labelText: 'Visit type',
-                  contentPadding: EdgeInsets.fromLTRB(12, 18, 12, 18),
-                ),
-                selectedItemBuilder: (context) => _visitTypes
-                    .map(
-                      (t) => Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          t,
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            height: 1.2,
-                            fontWeight: FontWeight.w500,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-                items: _visitTypes
-                    .map(
-                      (t) => DropdownMenuItem(
-                        value: t,
-                        child: Text(
-                          t,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) => setState(() => _visitType = v ?? 'consultation'),
-              );
-
               final serviceChargeField = TextField(
                 controller: _serviceCharge,
                 decoration: InputDecoration(
@@ -2352,8 +2654,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                   children: [
                     patientField,
                     ...petResultTiles,
-                    const SizedBox(height: 12),
-                    visitTypeField,
                     if (_isCheckInOnly) ...[
                       const SizedBox(height: 12),
                       doctorField,
@@ -2372,8 +2672,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(flex: 3, child: patientField),
-                      const SizedBox(width: 12),
-                      Expanded(flex: 2, child: visitTypeField),
                       const SizedBox(width: 12),
                       Expanded(
                         flex: 2,
@@ -2633,6 +2931,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ),
           const SizedBox(height: 12),
           _formSectionHeader('Investigation', Icons.biotech_outlined),
+          const SizedBox(height: 6),
+          _buildInvestigationCategoryBlock(),
           const SizedBox(height: 6),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -3035,30 +3335,42 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             decoration: const InputDecoration(labelText: 'Clinical notes'),
           ),
           const SizedBox(height: 20),
-          _buildVaccinationSection(),
-          const SizedBox(height: 12),
-          _formSectionHeader('Follow-up', Icons.event_outlined),
-          const SizedBox(height: 6),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final d = await showDatePicker(
-                context: context,
-                initialDate: _followUpDate ?? DateTime.now().add(const Duration(days: 7)),
-                firstDate: DateTime.now(),
-                lastDate: DateTime(2100),
-              );
-              if (d != null) setState(() => _followUpDate = d);
-            },
-            icon: const Icon(Icons.event_outlined, size: 18),
-            label: Text(_followUpDate != null
-                ? _formatYmd(_followUpDate!)
-                : 'Set follow-up date'),
+          _formSectionHeader('Adv to Review on', Icons.event_outlined),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _followUpPresetChip(
+                label: '21 days',
+                days: 21,
+              ),
+              _followUpPresetChip(
+                label: '365 days',
+                days: 365,
+              ),
+              _prescriptionFreqChip(
+                label: 'Custom',
+                selected: _followUpDate != null && _followUpPresetDays == null,
+                onSelected: (_) => _pickCustomFollowUpDate(),
+              ),
+              if (_followUpDate != null)
+                Text(
+                  _formatYmd(_followUpDate!),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF047857),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _followUpNotes,
             maxLines: 2,
-            decoration: const InputDecoration(labelText: 'Follow-up instructions'),
+            decoration: const InputDecoration(labelText: 'Review instructions'),
           ),
           const SizedBox(height: 24),
           if (compact) ...[
@@ -3239,6 +3551,21 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     return _treatmentUnderIcon(key);
   }
 
+  IconData _investigationUnderIcon(String key) {
+    switch (key) {
+      case InvestigationUnderCategory.blood:
+        return Icons.bloodtype_outlined;
+      case InvestigationUnderCategory.imaging:
+        return Icons.monitor_heart_outlined;
+      case InvestigationUnderCategory.lab:
+        return Icons.science_outlined;
+      case InvestigationUnderCategory.unique:
+        return Icons.star_outline_rounded;
+      default:
+        return Icons.biotech_outlined;
+    }
+  }
+
   IconData _treatmentUnderIcon(String key) {
     switch (key) {
       case TreatmentUnderCategory.antibiotics:
@@ -3279,6 +3606,50 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         Wrap(spacing: 4, runSpacing: 4, children: actions),
       ],
     );
+  }
+
+  Widget _followUpPresetChip({required String label, required int days}) {
+    return _prescriptionFreqChip(
+      label: label,
+      selected: _followUpPresetDays == days,
+      onSelected: (_) => _applyFollowUpPreset(days),
+    );
+  }
+
+  int? _followUpPresetMatching(DateTime date) {
+    final days = _dateOnly(date).difference(_dateOnly(_visitDate)).inDays;
+    if (days == 21 || days == 365) return days;
+    return null;
+  }
+
+  void _applyFollowUpPreset(int days) {
+    setState(() {
+      if (_followUpPresetDays == days) {
+        _followUpPresetDays = null;
+        _followUpDate = null;
+        return;
+      }
+      _followUpPresetDays = days;
+      _followUpDate = _dateOnly(_visitDate).add(Duration(days: days));
+    });
+  }
+
+  Future<void> _pickCustomFollowUpDate() async {
+    final visit = _dateOnly(_visitDate);
+    final today = _dateOnly(DateTime.now());
+    final first = visit.isBefore(today) ? visit : today;
+    final initial = _followUpDate ?? visit.add(const Duration(days: 21));
+    final d = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(first) ? first : initial,
+      firstDate: first,
+      lastDate: DateTime(2100),
+    );
+    if (d == null || !mounted) return;
+    setState(() {
+      _followUpDate = _dateOnly(d);
+      _followUpPresetDays = _followUpPresetMatching(_followUpDate!);
+    });
   }
 
   Widget _buildMedicineCard({
@@ -3330,7 +3701,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         prefixText: nameReadOnly ? '₹ ' : null,
         isDense: true,
         contentPadding: nameReadOnly
-            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8)
+            ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8)
             : null,
       ),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -3389,6 +3760,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         : (treatmentUnderCategory != null
             ? _categoryLabel(treatmentUnderCategory, _MedicineContext.treatmentUnder)
             : null);
+    final isPrescription = _isPrescriptionMedicine(m);
 
     if (nameReadOnly) {
       return Card(
@@ -3424,12 +3796,17 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         ),
                     ],
                   ),
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(width: 8),
-              SizedBox(width: compact ? 76 : 92, child: priceField),
+              if (isPrescription) ...[
+                const SizedBox(width: 8),
+                _prescriptionQtyAndFrequencyRow(m),
+              ] else ...[
+                const SizedBox(width: 8),
+                SizedBox(width: compact ? 76 : 92, child: priceField),
+              ],
               linkBtn,
               removeBtn,
             ],
@@ -3449,8 +3826,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               compact: compact,
               nameField: nameField,
               priceField: priceField,
+              showPrice: !isPrescription,
               linkBtn: linkBtn,
               removeBtn: removeBtn,
+              extraControls: isPrescription
+                  ? _prescriptionQtyAndFrequencyRow(m)
+                  : null,
             ),
             if (showMedicineSuggestions)
               Padding(
@@ -3492,21 +3873,188 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     );
   }
 
-  /// Desktop: name + price in one row. Mobile stacks price under name.
+  bool _isPrescriptionMedicine(_MedicineRow m) =>
+      m.context != _MedicineContext.treatmentUnder;
+
+  Widget _prescriptionQtyAndFrequencyRow(_MedicineRow m) {
+    final freq = m.freqCtrl.text.trim().toUpperCase();
+    final od = freq == 'OD';
+    final bd = freq == 'BD';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Qty',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+        const SizedBox(width: 6),
+        _prescriptionQtyStepper(m),
+        const SizedBox(width: 8),
+        _prescriptionFreqChip(
+          label: 'OD',
+          selected: od,
+          onSelected: (selected) => setState(() {
+            m.freqCtrl.text = selected ? 'OD' : '';
+          }),
+        ),
+        const SizedBox(width: 6),
+        _prescriptionFreqChip(
+          label: 'BD',
+          selected: bd,
+          onSelected: (selected) => setState(() {
+            m.freqCtrl.text = selected ? 'BD' : '';
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _prescriptionQtyStepper(_MedicineRow m) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _prescriptionQtyButton(
+            icon: Icons.remove_rounded,
+            onTap: m.quantity <= 1
+                ? null
+                : () => setState(() {
+                      m.quantity = (m.quantity - 1).clamp(1, 20);
+                      m.qtyCtrl.text = m.quantity.toString();
+                    }),
+          ),
+          SizedBox(
+            width: 40,
+            child: Focus(
+              onFocusChange: (hasFocus) {
+                if (hasFocus) return;
+                final n = int.tryParse(m.qtyCtrl.text) ?? m.quantity;
+                final clamped = n.clamp(1, 20);
+                if (clamped == m.quantity &&
+                    m.qtyCtrl.text == clamped.toString()) {
+                  return;
+                }
+                setState(() {
+                  m.quantity = clamped;
+                  m.qtyCtrl.text = clamped.toString();
+                });
+              },
+              child: TextField(
+                controller: m.qtyCtrl,
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  height: 1.2,
+                ),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(vertical: 6),
+                ),
+                onChanged: (v) {
+                  final n = int.tryParse(v);
+                  if (n == null) return;
+                  m.quantity = n.clamp(1, 20);
+                },
+              ),
+            ),
+          ),
+          _prescriptionQtyButton(
+            icon: Icons.add_rounded,
+            onTap: m.quantity >= 20
+                ? null
+                : () => setState(() {
+                      m.quantity = (m.quantity + 1).clamp(1, 20);
+                      m.qtyCtrl.text = m.quantity.toString();
+                    }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _prescriptionQtyButton({
+    required IconData icon,
+    required VoidCallback? onTap,
+  }) {
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: IconButton(
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+        icon: Icon(icon, size: 16),
+        color: onTap == null ? const Color(0xFFCBD5E1) : AppTheme.primary,
+        onPressed: onTap,
+      ),
+    );
+  }
+
+  Widget _prescriptionFreqChip({
+    required String label,
+    required bool selected,
+    required ValueChanged<bool> onSelected,
+  }) {
+    return FilterChip(
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+      ),
+      selected: selected,
+      showCheckmark: true,
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: EdgeInsets.zero,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+      selectedColor: AppTheme.primary.withValues(alpha: 0.12),
+      backgroundColor: Colors.white,
+      checkmarkColor: AppTheme.primary,
+      side: BorderSide(
+        color: selected ? AppTheme.primary : const Color(0xFFCBD5E1),
+      ),
+      onSelected: onSelected,
+    );
+  }
+
+  /// Desktop: name + price in one row. Mobile stacks price under name
+  /// unless extra controls (prescription qty / OD / BD) force a single row.
   Widget _medicineFieldsLayout({
     required bool compact,
     required Widget nameField,
     required Widget priceField,
     required Widget linkBtn,
     required Widget removeBtn,
+    bool showPrice = true,
+    Widget? extraControls,
   }) {
-    if (!compact) {
+    if (!compact || extraControls != null) {
       return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(flex: 3, child: nameField),
-          const SizedBox(width: 8),
-          Expanded(flex: 2, child: priceField),
+          if (extraControls != null) ...[
+            const SizedBox(width: 8),
+            extraControls,
+          ],
+          if (showPrice) ...[
+            const SizedBox(width: 8),
+            Expanded(flex: 2, child: priceField),
+          ],
           linkBtn,
           removeBtn,
         ],
@@ -3523,8 +4071,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             removeBtn,
           ],
         ),
-        const SizedBox(height: 8),
-        priceField,
+        if (showPrice) ...[
+          const SizedBox(height: 8),
+          priceField,
+        ],
       ],
     );
   }
@@ -3963,6 +4513,7 @@ class _ProductPickerDialog extends StatefulWidget {
     this.requiredQty,
     this.treatmentUnderCategory,
     this.prescriptionUnderCategory,
+    this.investigationUnderCategory,
   });
 
   final String type;
@@ -3971,6 +4522,7 @@ class _ProductPickerDialog extends StatefulWidget {
   final double? requiredQty;
   final String? treatmentUnderCategory;
   final String? prescriptionUnderCategory;
+  final String? investigationUnderCategory;
 
   @override
   State<_ProductPickerDialog> createState() => _ProductPickerDialogState();
@@ -4024,7 +4576,17 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
     final services = context.read<AppServices>();
     final rx = widget.prescriptionUnderCategory;
     final tu = widget.treatmentUnderCategory;
-    if (rx != null || tu != null) {
+    final iu = widget.investigationUnderCategory;
+    if (iu != null) {
+      try {
+        final mapped = await services.emrMasterData.listInvestigationUnderProducts(
+          category: iu,
+          search: search,
+          isActive: true,
+        );
+        return _onlyMapped(mapped);
+      } catch (_) {}
+    } else if (rx != null || tu != null) {
       try {
         final mapped = rx != null
             ? await services.emrMasterData.listPrescriptionUnderProducts(
@@ -4049,6 +4611,7 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
           'type': widget.type,
           if (tu != null) 'treatment_under_category': tu,
           if (rx != null) 'prescription_under_category': rx,
+          if (iu != null) 'investigation_under_category': iu,
         },
       ),
     );
@@ -4057,6 +4620,10 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
   List<Product> _onlyMapped(List<Product> list) {
     final rx = widget.prescriptionUnderCategory;
     final tu = widget.treatmentUnderCategory;
+    final iu = widget.investigationUnderCategory;
+    if (iu != null) {
+      return list.where((p) => p.investigationUnderCategory == iu).toList();
+    }
     if (rx != null) {
       return list.where((p) => p.prescriptionUnderCategory == rx).toList();
     }
@@ -4140,14 +4707,21 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
       _ => 'Select product',
     };
     final mappedCategory = widget.prescriptionUnderCategory ??
-        widget.treatmentUnderCategory;
+        widget.treatmentUnderCategory ??
+        widget.investigationUnderCategory;
     final mappedLabel = widget.prescriptionUnderCategory != null
         ? PrescriptionUnderCategory.labelOf(widget.prescriptionUnderCategory)
         : (widget.treatmentUnderCategory != null
             ? TreatmentUnderCategory.labelOf(widget.treatmentUnderCategory)
-            : null);
+            : (widget.investigationUnderCategory != null
+                ? InvestigationUnderCategory.labelOf(
+                    widget.investigationUnderCategory,
+                  )
+                : null));
     final subtitle = switch (type) {
-      'service' => 'Link a billable service for GST and invoicing',
+      'service' => mappedLabel != null
+          ? 'Link a ${mappedLabel.toLowerCase()} service mapped in settings'
+          : 'Link a billable service for GST and invoicing',
       'medicine' => mappedLabel != null
           ? 'Link a ${mappedLabel.toLowerCase()} medicine mapped in settings'
           : 'Link inventory so stock and billing stay in sync',
@@ -4172,7 +4746,9 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                     ? 'No ${mappedLabel!.toLowerCase()} medicines mapped yet'
                     : 'No medicine products in catalog')
                 : type == 'service'
-                    ? 'No service products in catalog'
+                    ? (mappedCategory != null
+                        ? 'No ${mappedLabel!.toLowerCase()} services mapped yet'
+                        : 'No service products in catalog')
                     : 'No products in catalog')
             : 'No matching products found');
 
@@ -4580,13 +5156,19 @@ class _VaccinationRow {
 }
 
 class _InvestigationRow {
-  _InvestigationRow({required this.name, String notes = ''})
-      : notesCtrl = TextEditingController(text: notes);
+  _InvestigationRow({
+    required this.name,
+    String notes = '',
+    this.productId,
+    this.investigationUnderCategory,
+  }) : notesCtrl = TextEditingController(text: notes);
 
   factory _InvestigationRow.fromItem(VisitInvestigationItem item) =>
       _InvestigationRow(name: item.name, notes: item.notes);
 
   final String name;
+  int? productId;
+  String? investigationUnderCategory;
   final TextEditingController notesCtrl;
 
   VisitInvestigationItem toItem() => VisitInvestigationItem(
@@ -4602,6 +5184,9 @@ class _InvestigationRow {
 class _TreatmentRow {
   _TreatmentRow({
     this.productId,
+    this.procedureKitId,
+    this.procedureKitName,
+    this.procedureCode,
     String name = '',
     double quantity = 1,
     double unitPrice = 0,
@@ -4613,19 +5198,30 @@ class _TreatmentRow {
 
   factory _TreatmentRow.fromModel(VisitTreatment t) => _TreatmentRow(
         productId: t.productId,
+        procedureKitId: t.procedureKitId,
+        procedureKitName: t.procedureKitName,
+        procedureCode: t.procedureCode,
         name: t.treatmentName,
         quantity: t.quantity,
         unitPrice: t.unitPrice,
       );
 
   int? productId;
+  int? procedureKitId;
+  String? procedureKitName;
+  String? procedureCode;
   final TextEditingController nameCtrl;
   final TextEditingController qtyCtrl;
   final TextEditingController priceCtrl;
 
   Map<String, dynamic> toJson() => {
         if (productId != null) 'product_id': productId,
+        if (procedureKitId != null) 'procedure_kit_id': procedureKitId,
+        if (procedureKitName != null && procedureKitName!.isNotEmpty)
+          'procedure_kit_name': procedureKitName,
         'treatment_name': nameCtrl.text.trim(),
+        if (procedureCode != null && procedureCode!.isNotEmpty)
+          'procedure_code': procedureCode,
         'quantity': double.tryParse(qtyCtrl.text) ?? 1,
         'unit_price': double.tryParse(priceCtrl.text) ?? 0,
       };
@@ -4654,6 +5250,7 @@ class _MedicineRow {
         nameCtrl = TextEditingController(text: name),
         dosageCtrl = TextEditingController(text: dosage),
         freqCtrl = TextEditingController(text: frequency),
+        qtyCtrl = TextEditingController(text: '${quantity.clamp(1, 20)}'),
         priceCtrl = TextEditingController(text: unitPrice.toString());
 
   factory _MedicineRow.fromModel(VisitMedicine m) {
@@ -4688,6 +5285,7 @@ class _MedicineRow {
   final TextEditingController nameCtrl;
   final TextEditingController dosageCtrl;
   final TextEditingController freqCtrl;
+  final TextEditingController qtyCtrl;
   final TextEditingController priceCtrl;
 
   Map<String, dynamic> toJson() => {
@@ -4700,7 +5298,9 @@ class _MedicineRow {
         if (dosageCtrl.text.isNotEmpty) 'dosage': dosageCtrl.text.trim(),
         if (freqCtrl.text.isNotEmpty) 'frequency': freqCtrl.text.trim(),
         if (durationDays != null) 'duration_days': durationDays,
-        'quantity': quantity.toDouble(),
+        'quantity': (int.tryParse(qtyCtrl.text) ?? quantity)
+            .clamp(1, 20)
+            .toDouble(),
         'unit_price': double.tryParse(priceCtrl.text) ?? 0,
       };
 
@@ -4708,6 +5308,7 @@ class _MedicineRow {
     nameCtrl.dispose();
     dosageCtrl.dispose();
     freqCtrl.dispose();
+    qtyCtrl.dispose();
     priceCtrl.dispose();
   }
 }

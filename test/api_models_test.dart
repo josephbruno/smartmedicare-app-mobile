@@ -3,6 +3,7 @@ import 'package:maran/data/json_helpers.dart';
 import 'package:maran/data/models/dashboard_data.dart';
 import 'package:maran/data/models/emr.dart';
 import 'package:maran/data/models/inventory.dart';
+import 'package:maran/data/models/investigation_under.dart';
 import 'package:maran/data/models/invoice.dart';
 import 'package:maran/data/models/product.dart';
 import 'package:maran/data/models/treatment_under.dart';
@@ -374,6 +375,19 @@ void main() {
       expect(product.isMedicine, isTrue);
       expect(product.treatmentUnderCategory, 'antibiotics');
     });
+
+    test('parses investigation under category on service products', () {
+      final product = Product.fromJson({
+        'id': 12,
+        'name': 'CBC',
+        'is_service': true,
+        'investigation_under_category': 'blood',
+        'selling_price': 350,
+      });
+
+      expect(product.isService, isTrue);
+      expect(product.investigationUnderCategory, 'blood');
+    });
   });
 
   group('TreatmentUnderCategory', () {
@@ -397,6 +411,21 @@ void main() {
 
       expect(groups.map((e) => e.key).toList(), ['antibiotics', 'fluids']);
       expect(groups.first.value.map((m) => m.medicineName).toList(), ['Amox', 'Cef']);
+    });
+  });
+
+  group('InvestigationUnderCategory', () {
+    test('falls back to unique for unmapped visit lines', () {
+      expect(InvestigationUnderCategory.forVisit(), 'unique');
+      expect(
+        InvestigationUnderCategory.forVisit(fromProduct: 'blood'),
+        'blood',
+      );
+    });
+
+    test('labels default slugs', () {
+      expect(InvestigationUnderCategory.labelOf('imaging'), 'Imaging');
+      expect(InvestigationUnderCategory.labelOf('lab'), 'Lab');
     });
   });
 

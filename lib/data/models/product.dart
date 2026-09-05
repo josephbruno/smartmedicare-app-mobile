@@ -33,6 +33,7 @@ class Product {
     required this.isMedicine,
     this.treatmentUnderCategory,
     this.prescriptionUnderCategory,
+    this.investigationUnderCategory,
     required this.isActive,
     this.currentStock,
     this.categoryName,
@@ -64,6 +65,7 @@ class Product {
   final bool isMedicine;
   final String? treatmentUnderCategory;
   final String? prescriptionUnderCategory;
+  final String? investigationUnderCategory;
   final bool isActive;
   final double? currentStock;
   final String? categoryName;
@@ -126,6 +128,7 @@ class Product {
       isMedicine: j['is_medicine'] as bool? ?? false,
       treatmentUnderCategory: j['treatment_under_category']?.toString(),
       prescriptionUnderCategory: j['prescription_under_category']?.toString(),
+      investigationUnderCategory: j['investigation_under_category']?.toString(),
       isActive: j['is_active'] as bool? ?? true,
       currentStock: numOrNull(j['current_stock']) ?? _stockFromInventory(j['inventory']),
       categoryName: cat?['name']?.toString(),

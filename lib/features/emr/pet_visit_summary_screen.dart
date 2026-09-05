@@ -8,7 +8,6 @@ import '../../core/router/app_route_observer.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
-import '../../data/models/treatment_under.dart';
 import 'visit_pdf.dart';
 
 /// All visit records for one pet, laid out like the visit print summary.
@@ -347,7 +346,7 @@ class _VisitSummaryCard extends StatelessWidget {
   final VoidCallback onOpen;
 
   static const _border = Color(0xFFE2E8F0);
-  static const _muted = Color(0xFF64748B);
+  static const _ink = Color(0xFF0F172A);
   static const _surface = Color(0xFFF8FAFC);
 
   String _formatTime(String? t) {
@@ -419,7 +418,11 @@ class _VisitSummaryCard extends StatelessWidget {
                     Text(
                       clinicSubtitle,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 11.5, color: _muted),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w400,
+                        color: _ink,
+                      ),
                     ),
                 ],
               ),
@@ -504,8 +507,8 @@ class _Kv extends StatelessWidget {
           label,
           style: const TextStyle(
             fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w400,
+            color: Color(0xFF0F172A),
           ),
         ),
         const SizedBox(height: 2),
@@ -513,7 +516,7 @@ class _Kv extends StatelessWidget {
           value,
           style: const TextStyle(
             fontSize: 13,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             color: Color(0xFF0F172A),
           ),
         ),
@@ -575,11 +578,10 @@ class _DividerLine extends StatelessWidget {
 }
 
 class _BodyText extends StatelessWidget {
-  const _BodyText(this.text, {this.bold = false, this.muted = false});
+  const _BodyText(this.text, {this.semi = false});
 
   final String text;
-  final bool bold;
-  final bool muted;
+  final bool semi;
 
   @override
   Widget build(BuildContext context) {
@@ -588,8 +590,8 @@ class _BodyText extends StatelessWidget {
       style: TextStyle(
         fontSize: 13,
         height: 1.35,
-        fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
-        color: muted ? const Color(0xFF64748B) : const Color(0xFF0F172A),
+        fontWeight: semi ? FontWeight.w600 : FontWeight.w400,
+        color: const Color(0xFF0F172A),
       ),
     );
   }
@@ -625,7 +627,7 @@ class _ClinicalColumn extends StatelessWidget {
         if (vitals.isNotEmpty) ...[
           const _DividerLine(),
           const _SectionTitle('Vitals'),
-          _BodyText(vitals.join(' · '), muted: true),
+          _BodyText(vitals.join(' · ')),
         ],
         const _DividerLine(),
         const _SectionTitle('Investigation'),
@@ -634,16 +636,16 @@ class _ClinicalColumn extends StatelessWidget {
         else
           for (var i = 0; i < visit.investigationItems.length; i++) ...[
             if (i > 0) const SizedBox(height: 6),
-            _BodyText(visit.investigationItems[i].name, bold: true),
+            _BodyText(visit.investigationItems[i].name, semi: true),
             if (visit.investigationItems[i].notes.trim().isNotEmpty)
-              _BodyText(visit.investigationItems[i].notes, muted: true),
+              _BodyText(visit.investigationItems[i].notes),
           ],
         const _DividerLine(),
         const _SectionTitle('Follow-up'),
         if (visit.followUpDate != null) ...[
-          _BodyText(visit.followUpDate!, bold: true),
+          _BodyText(visit.followUpDate!, semi: true),
           if (visit.followUpNotes != null && visit.followUpNotes!.trim().isNotEmpty)
-            _BodyText(visit.followUpNotes!, muted: true),
+            _BodyText(visit.followUpNotes!),
         ] else
           const _BodyText('—'),
       ],
@@ -658,17 +660,20 @@ class _ProceduresColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = visit.treatments ?? const <VisitTreatment>[];
-    final meds = visit.medicines ?? const <VisitMedicine>[];
+    final kitLines = VisitSummaryTreatmentLine.fromTreatments(
+      visit.treatments ?? const <VisitTreatment>[],
+    );
+    final clinicMeds = VisitMedicine.clinicTreatments(visit.medicines);
+    final rxMeds = VisitMedicine.prescriptionsOf(visit.medicines);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionTitle('Treatments'),
-        if (items.isEmpty)
+        if (kitLines.isEmpty && clinicMeds.isEmpty)
           const _BodyText('—')
-        else
-          for (var i = 0; i < items.length; i++) ...[
+        else ...[
+          for (var i = 0; i < kitLines.length; i++) ...[
             if (i > 0) const SizedBox(height: 6),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -677,56 +682,71 @@ class _ProceduresColumn extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _BodyText(items[i].treatmentName, bold: true),
-                      if (items[i].notes != null && items[i].notes!.trim().isNotEmpty)
-                        _BodyText(items[i].notes!, muted: true),
+                      _BodyText(kitLines[i].name, semi: true),
+                      if (!kitLines[i].fromKit &&
+                          kitLines[i].notes != null &&
+                          kitLines[i].notes!.trim().isNotEmpty)
+                        _BodyText(kitLines[i].notes!),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '× ${items[i].quantity}',
-                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-                ),
+                if (!kitLines[i].fromKit && kitLines[i].quantity != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '× ${kitLines[i].quantity}',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w400,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                ],
               ],
             ),
           ],
+          if (kitLines.isNotEmpty && clinicMeds.isNotEmpty)
+            const SizedBox(height: 8),
+          for (var i = 0; i < clinicMeds.length; i++) ...[
+            if (i > 0 || kitLines.isNotEmpty) const SizedBox(height: 6),
+            _summaryMedicineRow(clinicMeds[i]),
+          ],
+        ],
         const _DividerLine(),
         const _SectionTitle('Prescriptions'),
-        if (meds.isEmpty)
+        if (rxMeds.isEmpty)
           const _BodyText('—')
         else
-          for (final entry in TreatmentUnderCategory.groupBy(
-            meds,
-            (m) => m.treatmentUnderCategory ?? m.product?.treatmentUnderCategory,
-          ).asMap().entries) ...[
-            if (entry.key > 0) const SizedBox(height: 8),
-            _BodyText(TreatmentUnderCategory.labelOf(entry.value.key), muted: true),
-            const SizedBox(height: 4),
-            for (var i = 0; i < entry.value.value.length; i++) ...[
-              if (i > 0) const SizedBox(height: 6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _BodyText(entry.value.value[i].medicineName, bold: true),
-                        if (_medicineMeta(entry.value.value[i]).isNotEmpty)
-                          _BodyText(_medicineMeta(entry.value.value[i]), muted: true),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '× ${entry.value.value[i].quantity}',
-                    style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
-                  ),
-                ],
-              ),
-            ],
+          for (var i = 0; i < rxMeds.length; i++) ...[
+            if (i > 0) const SizedBox(height: 6),
+            _summaryMedicineRow(rxMeds[i]),
           ],
+      ],
+    );
+  }
+
+  Widget _summaryMedicineRow(VisitMedicine med) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _BodyText(med.medicineName, semi: true),
+              if (_medicineMeta(med).isNotEmpty)
+                _BodyText(_medicineMeta(med)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '× ${med.quantity}',
+          style: const TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w400,
+            color: Color(0xFF0F172A),
+          ),
+        ),
       ],
     );
   }

@@ -342,7 +342,6 @@ class _PosScreenState extends State<PosScreen> {
       final product = await repo.findByBarcode(branchId, q, online: online);
       if (product != null && mounted) {
         final msg = cart.addProduct(product);
-        _search.clear();
         if (msg != 'added' && msg != 'incremented') {
           AppMessenger.show(
             context,
@@ -354,7 +353,7 @@ class _PosScreenState extends State<PosScreen> {
             ),
           );
         }
-        _searchFocus.requestFocus();
+        _clearSearch();
         return;
       }
     }
@@ -494,7 +493,9 @@ class _PosScreenState extends State<PosScreen> {
   void _clearSearch() {
     _search.clear();
     unawaited(_runSearch('', immediate: true));
-    _searchFocus.requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocus.requestFocus();
+    });
   }
 
   bool get _desktop => AppConfig.isDesktopPlatform;
@@ -984,21 +985,24 @@ class _PosScreenState extends State<PosScreen> {
             controller: _search,
             focusNode: _searchFocus,
             autofocus: desktopShortcuts,
-            style: TextStyle(fontSize: _fs(14)),
+            style: TextStyle(fontSize: _fs(16), height: 1.3),
             decoration: InputDecoration(
-              labelText: 'Search items by name, category, or barcode...',
-              labelStyle: TextStyle(fontSize: _fs(14)),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              prefixIcon: Icon(Icons.search_rounded, color: AppTheme.textSecondary, size: _ic(22)),
+              hintText: 'Search items by name, category, or barcode...',
+              hintStyle: TextStyle(fontSize: _fs(15), color: AppTheme.textSecondary),
+              isDense: false,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: _desktop ? 18 : 16,
+              ),
+              prefixIcon: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Icon(Icons.search_rounded, color: AppTheme.textSecondary, size: _ic(26)),
+              ),
+              prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               suffixIcon: _search.text.isNotEmpty
                   ? IconButton(
-                      icon: Icon(Icons.clear, size: _ic(18)),
-                      onPressed: () {
-                        _search.clear();
-                        unawaited(_runSearch('', immediate: true));
-                        _searchFocus.requestFocus();
-                      },
+                      icon: Icon(Icons.clear, size: _ic(20)),
+                      onPressed: _clearSearch,
                     )
                   : null,
             ),
@@ -1149,6 +1153,7 @@ class _PosScreenState extends State<PosScreen> {
                                           ),
                                         );
                                       }
+                                      _clearSearch();
                                     }
 
                                     return Material(

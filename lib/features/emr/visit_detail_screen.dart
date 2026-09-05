@@ -9,6 +9,7 @@ import '../../core/router/app_route_observer.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
+import '../../data/models/prescription_under.dart';
 import '../../data/models/treatment_under.dart';
 import '../../data/models/vaccination_category.dart';
 import 'emr_pet_hub.dart';
@@ -459,7 +460,8 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
           ),
         ),
       ],
-      if (v.treatments != null && v.treatments!.isNotEmpty) ...[
+      if ((v.treatments != null && v.treatments!.isNotEmpty) ||
+          VisitMedicine.clinicTreatments(v.medicines).isNotEmpty) ...[
         const SizedBox(height: 12),
         _SectionCard(
           icon: Icons.healing_outlined,
@@ -467,16 +469,39 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
           iconBg: const Color(0xFFF5F3FF),
           title: 'Treatments',
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (var i = 0; i < v.treatments!.length; i++) ...[
-                if (i > 0) const Divider(height: 20),
-                _TreatmentRow(treatment: v.treatments![i]),
+              if (v.treatments != null)
+                for (var i = 0; i < v.treatments!.length; i++) ...[
+                  if (i > 0) const Divider(height: 20),
+                  _TreatmentRow(treatment: v.treatments![i]),
+                ],
+              for (final entry in TreatmentUnderCategory.groupBy(
+                VisitMedicine.clinicTreatments(v.medicines),
+                (m) => m.treatmentUnderCategory,
+              ).asMap().entries) ...[
+                if ((v.treatments != null && v.treatments!.isNotEmpty) ||
+                    entry.key > 0)
+                  const Divider(height: 20),
+                Text(
+                  TreatmentUnderCategory.labelOf(entry.value.key),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                for (var i = 0; i < entry.value.value.length; i++) ...[
+                  if (i > 0) const Divider(height: 20),
+                  _MedicineRow(medicine: entry.value.value[i]),
+                ],
               ],
             ],
           ),
         ),
       ],
-      if (v.medicines != null && v.medicines!.isNotEmpty) ...[
+      if (VisitMedicine.prescriptionsOf(v.medicines).isNotEmpty) ...[
         const SizedBox(height: 12),
         _SectionCard(
           icon: Icons.medication_outlined,
@@ -486,13 +511,13 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final entry in TreatmentUnderCategory.groupBy(
-                v.medicines!,
-                (m) => m.treatmentUnderCategory ?? m.product?.treatmentUnderCategory,
+              for (final entry in PrescriptionUnderCategory.groupBy(
+                VisitMedicine.prescriptionsOf(v.medicines),
+                (m) => m.prescriptionUnderCategory,
               ).asMap().entries) ...[
                 if (entry.key > 0) const SizedBox(height: 12),
                 Text(
-                  TreatmentUnderCategory.labelOf(entry.value.key),
+                  PrescriptionUnderCategory.labelOf(entry.value.key),
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,

@@ -6,7 +6,6 @@ import '../../core/services/receipt_branch_store.dart';
 import '../../core/session/auth_session.dart';
 import '../../data/models/emr.dart';
 import '../../data/models/shop.dart';
-import '../../data/models/treatment_under.dart';
 import '../../data/services/settings_service.dart';
 
 /// Clinic header info for visit print/download (A5 landscape).
@@ -33,9 +32,12 @@ class VisitPdf {
 
   static const _primary = PdfColor.fromInt(0xFF1D4ED8);
   static const _text = PdfColor.fromInt(0xFF0F172A);
-  static const _muted = PdfColor.fromInt(0xFF64748B);
   static const _border = PdfColor.fromInt(0xFFE2E8F0);
   static const _surface = PdfColor.fromInt(0xFFF8FAFC);
+
+  static pw.Font? _fontRegular;
+  static pw.Font? _fontSemi;
+  static pw.Font? _fontBold;
 
   static final PdfPageFormat _pageFormat = PdfPageFormat.a5.landscape;
 
@@ -88,6 +90,46 @@ class VisitPdf {
         .join(sep);
   }
 
+  static Future<void> _ensureFonts() async {
+    if (_fontRegular != null) return;
+    try {
+      _fontRegular = await PdfGoogleFonts.notoSansRegular();
+      _fontSemi = await PdfGoogleFonts.notoSansSemiBold();
+      _fontBold = await PdfGoogleFonts.notoSansBold();
+    } catch (_) {
+      // Offline: Helvetica regular/bold. Semibold falls back to regular.
+    }
+  }
+
+  static pw.TextStyle _headingStyle([double size = _fsSection]) {
+    return pw.TextStyle(
+      font: _fontBold,
+      fontSize: size,
+      fontWeight: _fontBold == null ? pw.FontWeight.bold : null,
+      color: _text,
+    );
+  }
+
+  static pw.TextStyle _semiStyle([double size = _fsBody]) {
+    return pw.TextStyle(
+      font: _fontSemi,
+      fontSize: size,
+      fontWeight: _fontSemi == null ? pw.FontWeight.normal : null,
+      color: _text,
+      lineSpacing: 1.25,
+    );
+  }
+
+  static pw.TextStyle _regularStyle([double size = _fsBody]) {
+    return pw.TextStyle(
+      font: _fontRegular,
+      fontSize: size,
+      fontWeight: _fontRegular == null ? pw.FontWeight.normal : null,
+      color: _text,
+      lineSpacing: 1.25,
+    );
+  }
+
   static Future<pw.Document> build(
     PetVisit visit, {
     VisitClinicInfo? clinic,
@@ -100,6 +142,7 @@ class VisitPdf {
     List<PetVisit> visits, {
     VisitClinicInfo? clinic,
   }) async {
+    await _ensureFonts();
     final doc = pw.Document();
     final clinicName = clinic?.name.trim().isNotEmpty == true
         ? clinic!.name.trim()
@@ -158,7 +201,7 @@ class VisitPdf {
                             if (_visitVitals(visit).isNotEmpty) ...[
                               _divider(),
                               _sectionTitle('Vitals'),
-                              _bodyText(_join(_visitVitals(visit)), muted: true),
+                              _bodyText(_join(_visitVitals(visit))),
                             ],
                             _divider(),
                             _sectionTitle('Investigation'),
@@ -166,10 +209,10 @@ class VisitPdf {
                             _divider(),
                             _sectionTitle('Follow-up'),
                             if (visit.followUpDate != null) ...[
-                              _bodyText(_t(visit.followUpDate), bold: true),
+                              _bodyText(_t(visit.followUpDate), semi: true),
                               if (visit.followUpNotes != null &&
                                   visit.followUpNotes!.trim().isNotEmpty)
-                                _bodyText(_t(visit.followUpNotes), muted: true),
+                                _bodyText(_t(visit.followUpNotes)),
                             ] else
                               _bodyText(_empty),
                           ],
@@ -227,8 +270,9 @@ class VisitPdf {
             _t(name),
             textAlign: pw.TextAlign.center,
             style: pw.TextStyle(
+              font: _fontBold,
               fontSize: _fsClinic,
-              fontWeight: pw.FontWeight.bold,
+              fontWeight: _fontBold == null ? pw.FontWeight.bold : null,
               color: _primary,
             ),
           ),
@@ -236,7 +280,7 @@ class VisitPdf {
             pw.Text(
               subtitle,
               textAlign: pw.TextAlign.center,
-              style: const pw.TextStyle(fontSize: _fsSubtitle, color: _muted),
+              style: _regularStyle(_fsSubtitle),
             ),
         ],
       ),
@@ -301,19 +345,11 @@ class VisitPdf {
       children: [
         pw.Text(
           label,
-          style: pw.TextStyle(
-            fontSize: _fsLabel,
-            fontWeight: pw.FontWeight.bold,
-            color: _muted,
-          ),
+          style: _regularStyle(_fsLabel),
         ),
         pw.Text(
           _t(value),
-          style: pw.TextStyle(
-            fontSize: _fsBody,
-            fontWeight: pw.FontWeight.bold,
-            color: _text,
-          ),
+          style: _semiStyle(_fsBody),
         ),
       ],
     );
@@ -336,11 +372,7 @@ class VisitPdf {
       padding: const pw.EdgeInsets.only(bottom: 2),
       child: pw.Text(
         title,
-        style: pw.TextStyle(
-          fontSize: _fsSection,
-          fontWeight: pw.FontWeight.bold,
-          color: _text,
-        ),
+        style: _headingStyle(_fsSection),
       ),
     );
   }
@@ -377,16 +409,12 @@ class VisitPdf {
           if (i > 0) pw.SizedBox(height: 2),
           pw.Text(
             _t(items[i].name),
-            style: pw.TextStyle(
-              fontSize: _fsBody,
-              fontWeight: pw.FontWeight.bold,
-              color: _text,
-            ),
+            style: _semiStyle(_fsBody),
           ),
           if (items[i].notes.trim().isNotEmpty)
             pw.Text(
               _t(items[i].notes),
-              style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
+              style: _regularStyle(_fsMeta),
             ),
         ],
       ],
@@ -394,61 +422,43 @@ class VisitPdf {
   }
 
   static pw.Widget _medicinesBody(PetVisit visit) {
-    final meds = visit.medicines ?? const <VisitMedicine>[];
-    if (meds.isEmpty) return _bodyText(_empty);
+    return _medicineRows(VisitMedicine.prescriptionsOf(visit.medicines));
+  }
 
-    final groups = TreatmentUnderCategory.groupBy(
-      meds,
-      (m) => m.treatmentUnderCategory ?? m.product?.treatmentUnderCategory,
-    );
+  static pw.Widget _medicineRows(List<VisitMedicine> meds) {
+    if (meds.isEmpty) return _bodyText(_empty);
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        for (var g = 0; g < groups.length; g++) ...[
-          if (g > 0) pw.SizedBox(height: 4),
-          pw.Text(
-            TreatmentUnderCategory.labelOf(groups[g].key),
-            style: pw.TextStyle(
-              fontSize: _fsMeta,
-              fontWeight: pw.FontWeight.bold,
-              color: _muted,
-            ),
-          ),
-          pw.SizedBox(height: 2),
-          for (var i = 0; i < groups[g].value.length; i++) ...[
-            if (i > 0) pw.SizedBox(height: 2),
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Expanded(
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
+        for (var i = 0; i < meds.length; i++) ...[
+          if (i > 0) pw.SizedBox(height: 2),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      _t(meds[i].medicineName),
+                      style: _semiStyle(_fsBody),
+                    ),
+                    if (_medicineMeta(meds[i]).isNotEmpty)
                       pw.Text(
-                        _t(groups[g].value[i].medicineName),
-                        style: pw.TextStyle(
-                          fontSize: _fsBody,
-                          fontWeight: pw.FontWeight.bold,
-                          color: _text,
-                        ),
+                        _medicineMeta(meds[i]),
+                        style: _regularStyle(_fsMeta),
                       ),
-                      if (_medicineMeta(groups[g].value[i]).isNotEmpty)
-                        pw.Text(
-                          _medicineMeta(groups[g].value[i]),
-                          style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
-                        ),
-                    ],
-                  ),
+                  ],
                 ),
-                pw.SizedBox(width: 4),
-                pw.Text(
-                  'x ${groups[g].value[i].quantity}',
-                  style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
-                ),
-              ],
-            ),
-          ],
+              ),
+              pw.SizedBox(width: 4),
+              pw.Text(
+                'x ${meds[i].quantity}',
+                style: _regularStyle(_fsMeta),
+              ),
+            ],
+          ),
         ],
       ],
     );
@@ -462,13 +472,16 @@ class VisitPdf {
   }
 
   static pw.Widget _proceduresBody(PetVisit visit) {
-    final items = visit.treatments ?? const <VisitTreatment>[];
-    if (items.isEmpty) return _bodyText(_empty);
+    final kitLines = VisitSummaryTreatmentLine.fromTreatments(
+      visit.treatments ?? const <VisitTreatment>[],
+    );
+    final clinicMeds = VisitMedicine.clinicTreatments(visit.medicines);
+    if (kitLines.isEmpty && clinicMeds.isEmpty) return _bodyText(_empty);
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < items.length; i++) ...[
+        for (var i = 0; i < kitLines.length; i++) ...[
           if (i > 0) pw.SizedBox(height: 2),
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -478,47 +491,42 @@ class VisitPdf {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
-                      _t(items[i].treatmentName),
-                      style: pw.TextStyle(
-                        fontSize: _fsBody,
-                        fontWeight: pw.FontWeight.bold,
-                        color: _text,
-                      ),
+                      _t(kitLines[i].name),
+                      style: _semiStyle(_fsBody),
                     ),
-                    if (items[i].notes != null &&
-                        items[i].notes!.trim().isNotEmpty)
+                    if (!kitLines[i].fromKit &&
+                        kitLines[i].notes != null &&
+                        kitLines[i].notes!.trim().isNotEmpty)
                       pw.Text(
-                        _t(items[i].notes),
-                        style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
+                        _t(kitLines[i].notes),
+                        style: _regularStyle(_fsMeta),
                       ),
                   ],
                 ),
               ),
-              pw.SizedBox(width: 4),
-              pw.Text(
-                'x ${items[i].quantity}',
-                style: const pw.TextStyle(fontSize: _fsMeta, color: _muted),
-              ),
+              if (!kitLines[i].fromKit && kitLines[i].quantity != null) ...[
+                pw.SizedBox(width: 4),
+                pw.Text(
+                  'x ${kitLines[i].quantity}',
+                  style: _regularStyle(_fsMeta),
+                ),
+              ],
             ],
           ),
         ],
+        if (kitLines.isNotEmpty && clinicMeds.isNotEmpty) pw.SizedBox(height: 4),
+        if (clinicMeds.isNotEmpty) _medicineRows(clinicMeds),
       ],
     );
   }
 
   static pw.Widget _bodyText(
     String text, {
-    bool bold = false,
-    bool muted = false,
+    bool semi = false,
   }) {
     return pw.Text(
       _t(text),
-      style: pw.TextStyle(
-        fontSize: _fsBody,
-        fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
-        color: muted ? _muted : _text,
-        lineSpacing: 1.25,
-      ),
+      style: semi ? _semiStyle(_fsBody) : _regularStyle(_fsBody),
     );
   }
 
@@ -533,11 +541,11 @@ class VisitPdf {
         children: [
           pw.Text(
             'Powered by bestwaveinnovation.com',
-            style: const pw.TextStyle(fontSize: _fsFooter, color: _muted),
+            style: _regularStyle(_fsFooter),
           ),
           pw.Text(
             'Page ${context.pageNumber}',
-            style: const pw.TextStyle(fontSize: _fsFooter, color: _muted),
+            style: _regularStyle(_fsFooter),
           ),
         ],
       ),

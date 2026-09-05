@@ -8,6 +8,7 @@ import '../../core/widgets/app_form_dialog.dart';
 import '../../data/services/emr_master_data_service.dart';
 import 'procedure_kits_master_tab.dart';
 import 'prescription_under_master_tab.dart';
+import 'investigation_under_master_tab.dart';
 import 'treatment_under_master_tab.dart';
 import 'vaccination_master_tab.dart';
 
@@ -26,6 +27,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
   final _vaccinationsTabKey = GlobalKey<VaccinationMasterTabState>();
   final _treatmentUnderTabKey = GlobalKey<TreatmentUnderMasterTabState>();
   final _prescriptionUnderTabKey = GlobalKey<PrescriptionUnderMasterTabState>();
+  final _investigationUnderTabKey = GlobalKey<InvestigationUnderMasterTabState>();
   bool _loading = false;
   List<EmrTemplateItem> _items = [];
 
@@ -53,6 +55,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
   bool get _isVaccinationsTab => _currentKey == 'vaccinations';
   bool get _isTreatmentUnderTab => _currentKey == 'treatment_under';
   bool get _isPrescriptionUnderTab => _currentKey == 'prescription_under';
+  bool get _isInvestigationUnderTab => _currentKey == 'investigations';
 
   @override
   void initState() {
@@ -72,6 +75,9 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
         } else if (_isPrescriptionUnderTab) {
           setState(() {});
           _prescriptionUnderTabKey.currentState?.reload();
+        } else if (_isInvestigationUnderTab) {
+          setState(() {});
+          _investigationUnderTabKey.currentState?.reload();
         } else {
           _load();
         }
@@ -106,6 +112,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
       await _prescriptionUnderTabKey.currentState?.reload();
       return;
     }
+    if (_isInvestigationUnderTab) {
+      await _investigationUnderTabKey.currentState?.reload();
+      return;
+    }
     setState(() => _loading = true);
     try {
       final svc = context.read<AppServices>().emrMasterData;
@@ -113,7 +123,6 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
       final list = switch (_currentKey) {
         'complaints' => await svc.listComplaints(search: q.isEmpty ? null : q),
         'observations' => await svc.listObservations(search: q.isEmpty ? null : q),
-        'investigations' => await svc.listInvestigations(search: q.isEmpty ? null : q),
         _ => <EmrTemplateItem>[],
       };
       if (mounted) setState(() => _items = list);
@@ -139,6 +148,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     }
     if (_isPrescriptionUnderTab) {
       await _prescriptionUnderTabKey.currentState?.openAdd();
+      return;
+    }
+    if (_isInvestigationUnderTab) {
+      await _investigationUnderTabKey.currentState?.openAdd();
       return;
     }
     final isEdit = item != null;
@@ -237,8 +250,6 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
             await svc.updateComplaint(item!.id, body);
           case 'observations':
             await svc.updateObservation(item!.id, body);
-          case 'investigations':
-            await svc.updateInvestigation(item!.id, body);
         }
       } else {
         switch (_currentKey) {
@@ -246,8 +257,6 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
             await svc.createComplaint(body);
           case 'observations':
             await svc.createObservation(body);
-          case 'investigations':
-            await svc.createInvestigation(body);
         }
       }
       _load();
@@ -275,8 +284,6 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
           await svc.deleteComplaint(item.id);
         case 'observations':
           await svc.deleteObservation(item.id);
-        case 'investigations':
-          await svc.deleteInvestigation(item.id);
       }
       _load();
     } catch (e) {
@@ -341,7 +348,12 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
                                 key: _prescriptionUnderTabKey,
                                 searchQuery: _search.text.trim(),
                               )
-                        : _loading
+                            : _isInvestigationUnderTab
+                                ? InvestigationUnderMasterTab(
+                                    key: _investigationUnderTabKey,
+                                    searchQuery: _search.text.trim(),
+                                  )
+                                : _loading
                             ? const Center(child: CircularProgressIndicator())
                             : _items.isEmpty
                                 ? const Center(child: Text('No items yet'))

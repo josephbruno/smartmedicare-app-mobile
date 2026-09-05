@@ -582,6 +582,9 @@ class VisitTreatment {
     required this.treatmentName,
     this.productId,
     this.product,
+    this.procedureKitId,
+    this.procedureKitName,
+    this.procedureCode,
     this.quantity = 1,
     this.unitPrice = 0,
     this.notes,
@@ -590,6 +593,9 @@ class VisitTreatment {
   final String treatmentName;
   final int? productId;
   final Product? product;
+  final int? procedureKitId;
+  final String? procedureKitName;
+  final String? procedureCode;
   final double quantity;
   final double unitPrice;
   final String? notes;
@@ -602,6 +608,9 @@ class VisitTreatment {
       product: productMap != null
           ? Product.fromJson(Map<String, dynamic>.from(productMap))
           : null,
+      procedureKitId: intOrNull(j['procedure_kit_id']),
+      procedureKitName: j['procedure_kit_name']?.toString(),
+      procedureCode: j['procedure_code']?.toString(),
       quantity: numOrNull(j['quantity']) ?? 1,
       unitPrice: numOrNull(j['unit_price']) ?? 0,
       notes: j['notes']?.toString(),
@@ -610,11 +619,95 @@ class VisitTreatment {
 
   Map<String, dynamic> toJson() => {
         if (productId != null) 'product_id': productId,
+        if (procedureKitId != null) 'procedure_kit_id': procedureKitId,
+        if (procedureKitName != null && procedureKitName!.isNotEmpty)
+          'procedure_kit_name': procedureKitName,
         'treatment_name': treatmentName,
+        if (procedureCode != null && procedureCode!.isNotEmpty)
+          'procedure_code': procedureCode,
         'quantity': quantity,
         'unit_price': unitPrice,
         if (notes != null && notes!.isNotEmpty) 'notes': notes,
       };
+
+  /// Kit label from saved kit name, or `"Kit name - product"` treatment lines.
+  String? get summaryKitName {
+    final saved = procedureKitName?.trim();
+    if (saved != null && saved.isNotEmpty) return saved;
+    const sep = ' - ';
+    final name = treatmentName.trim();
+    final i = name.indexOf(sep);
+    if (i <= 0) return null;
+    return name.substring(0, i).trim();
+  }
+}
+
+/// One treatments-section row for visit summary print / PDF.
+/// Kit components are collapsed to the kit name; other lines stay as-is.
+class VisitSummaryTreatmentLine {
+  const VisitSummaryTreatmentLine({
+    required this.name,
+    this.notes,
+    this.quantity,
+    this.fromKit = false,
+  });
+
+  final String name;
+  final String? notes;
+  final double? quantity;
+  final bool fromKit;
+
+  static List<VisitSummaryTreatmentLine> fromTreatments(
+    List<VisitTreatment> items,
+  ) {
+    if (items.isEmpty) return const [];
+
+    final prefixCounts = <String, int>{};
+    for (final t in items) {
+      final kit = t.summaryKitName;
+      if (kit == null || kit.isEmpty) continue;
+      prefixCounts[kit] = (prefixCounts[kit] ?? 0) + 1;
+    }
+
+    bool isKitLine(VisitTreatment t) {
+      if (t.procedureKitId != null) return true;
+      final saved = t.procedureKitName?.trim();
+      if (saved != null && saved.isNotEmpty) return true;
+      final kit = t.summaryKitName;
+      if (kit == null) return false;
+      // Only collapse expanded kit lines ("Kit name - product"), never a
+      // single unmatched treatment.
+      return (prefixCounts[kit] ?? 0) >= 2;
+    }
+
+    final used = <int>{};
+    final lines = <VisitSummaryTreatmentLine>[];
+    for (var i = 0; i < items.length; i++) {
+      if (used.contains(i)) continue;
+      final t = items[i];
+      if (!isKitLine(t)) {
+        lines.add(VisitSummaryTreatmentLine(
+          name: t.treatmentName,
+          notes: t.notes,
+          quantity: t.quantity,
+        ));
+        used.add(i);
+        continue;
+      }
+
+      final kitName = t.summaryKitName ?? t.treatmentName;
+      for (var j = i; j < items.length; j++) {
+        if (used.contains(j)) continue;
+        if (!isKitLine(items[j])) continue;
+        if ((items[j].summaryKitName ?? items[j].treatmentName) != kitName) {
+          continue;
+        }
+        used.add(j);
+      }
+      lines.add(VisitSummaryTreatmentLine(name: kitName, fromKit: true));
+    }
+    return lines;
+  }
 }
 
 class VisitMedicine {
@@ -646,16 +739,42 @@ class VisitMedicine {
 
   factory VisitMedicine.fromJson(Map<String, dynamic> j) {
     final productMap = mapOrNull(j['product']);
+    String? nonEmpty(dynamic v) {
+      final s = v?.toString().trim();
+      if (s == null || s.isEmpty) return null;
+      return s;
+    }
+
+    final tuSnap = nonEmpty(j['treatment_under_category']);
+    final puSnap = nonEmpty(j['prescription_under_category']);
+    final tuProd = nonEmpty(productMap?['treatment_under_category']);
+    final puProd = nonEmpty(productMap?['prescription_under_category']);
+
+    String? treatmentUnder;
+    String? prescriptionUnder;
+    if (tuSnap != null) {
+      treatmentUnder = tuSnap;
+      prescriptionUnder = puSnap;
+    } else if (puSnap != null) {
+      prescriptionUnder = puSnap;
+    } else if (tuProd != null && puProd == null) {
+      treatmentUnder = tuProd;
+    } else if (puProd != null && tuProd == null) {
+      prescriptionUnder = puProd;
+    } else if (puProd != null) {
+      prescriptionUnder = puProd;
+    } else {
+      treatmentUnder = tuProd;
+    }
+
     return VisitMedicine(
       medicineName: j['medicine_name']?.toString() ?? '',
       productId: intOrNull(j['product_id']),
       product: productMap != null
           ? Product.fromJson(Map<String, dynamic>.from(productMap))
           : null,
-      treatmentUnderCategory: j['treatment_under_category']?.toString() ??
-          productMap?['treatment_under_category']?.toString(),
-      prescriptionUnderCategory: j['prescription_under_category']?.toString() ??
-          productMap?['prescription_under_category']?.toString(),
+      treatmentUnderCategory: treatmentUnder,
+      prescriptionUnderCategory: prescriptionUnder,
       dosage: j['dosage']?.toString(),
       frequency: j['frequency']?.toString(),
       durationDays: intOrNull(j['duration_days']),
@@ -664,6 +783,20 @@ class VisitMedicine {
       isDispensed: j['is_dispensed'] as bool? ?? false,
     );
   }
+
+  /// In-clinic "Treatments" line (Antibiotics, NSAIDS, …), not a take-home Rx.
+  bool get isClinicTreatment {
+    final pu = prescriptionUnderCategory?.trim();
+    if (pu != null && pu.isNotEmpty) return false;
+    final tu = treatmentUnderCategory?.trim();
+    return tu != null && tu.isNotEmpty;
+  }
+
+  static List<VisitMedicine> clinicTreatments(List<VisitMedicine>? meds) =>
+      (meds ?? const <VisitMedicine>[]).where((m) => m.isClinicTreatment).toList();
+
+  static List<VisitMedicine> prescriptionsOf(List<VisitMedicine>? meds) =>
+      (meds ?? const <VisitMedicine>[]).where((m) => !m.isClinicTreatment).toList();
 
   Map<String, dynamic> toJson() => {
         if (productId != null) 'product_id': productId,

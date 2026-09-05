@@ -98,4 +98,34 @@ class PrescriptionUnderCategory {
         .map((p) => '${p[0].toUpperCase()}${p.substring(1)}')
         .join(' ');
   }
+
+  static List<MapEntry<String, List<T>>> groupBy<T>(
+    Iterable<T> items,
+    String? Function(T) categoryOf, {
+    List<PrescriptionUnderCategoryItem>? catalog,
+  }) {
+    final order = catalog != null && catalog.isNotEmpty
+        ? keysOf(catalog)
+        : keys;
+    final buckets = <String, List<T>>{
+      for (final key in order) key: <T>[],
+    };
+    final extras = <String, List<T>>{};
+
+    for (final item in items) {
+      final key = forVisit(snapshot: categoryOf(item));
+      if (buckets.containsKey(key)) {
+        buckets[key]!.add(item);
+      } else {
+        extras.putIfAbsent(key, () => <T>[]).add(item);
+      }
+    }
+
+    return [
+      for (final key in order)
+        if (buckets[key]!.isNotEmpty) MapEntry(key, buckets[key]!),
+      for (final e in extras.entries)
+        if (e.value.isNotEmpty) e,
+    ];
+  }
 }

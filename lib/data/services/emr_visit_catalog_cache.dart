@@ -1,4 +1,5 @@
 import '../models/emr.dart';
+import '../models/investigation_under.dart';
 import '../models/prescription_under.dart';
 import '../models/product.dart';
 import '../models/treatment_under.dart';
@@ -25,8 +26,11 @@ class EmrVisitCatalogCache {
   static List<TreatmentUnderCategoryItem> treatmentUnderCategories = const [];
   static List<PrescriptionUnderCategoryItem> prescriptionUnderCategories =
       const [];
+  static List<InvestigationUnderCategoryItem> investigationUnderCategories =
+      const [];
   static final Map<String, List<Product>> treatmentUnderMapped = {};
   static final Map<String, List<Product>> prescriptionUnderMapped = {};
+  static final Map<String, List<Product>> investigationUnderMapped = {};
   static final Map<String, List<VaccinationTemplate>> vaccinationsBySpecies = {};
 
   static bool get isFresh =>
@@ -85,6 +89,14 @@ class EmrVisitCatalogCache {
     touch();
   }
 
+  static void saveInvestigationUnderCategories(
+    List<InvestigationUnderCategoryItem> value,
+  ) {
+    investigationUnderCategories =
+        List<InvestigationUnderCategoryItem>.of(value);
+    touch();
+  }
+
   static void saveMapped({
     required bool prescription,
     required String category,
@@ -97,6 +109,19 @@ class EmrVisitCatalogCache {
       treatmentUnderMapped[category] = copy;
     }
     touch();
+  }
+
+  static void saveInvestigationMapped({
+    required String category,
+    required List<Product> products,
+  }) {
+    investigationUnderMapped[category] = List<Product>.of(products);
+    touch();
+  }
+
+  static List<Product>? investigationMapped(String category) {
+    final list = investigationUnderMapped[category];
+    return list == null ? null : List<Product>.of(list);
   }
 
   static List<Product>? mapped({
@@ -153,17 +178,24 @@ class EmrVisitCatalogCache {
     try {
       late List<TreatmentUnderCategoryItem> treatmentCats;
       late List<PrescriptionUnderCategoryItem> prescriptionCats;
+      late List<InvestigationUnderCategoryItem> investigationCats;
       await Future.wait([
         master.listTreatmentUnderCategories().then((v) => treatmentCats = v),
         master.listPrescriptionUnderCategories().then((v) => prescriptionCats = v),
+        master
+            .listInvestigationUnderCategories()
+            .then((v) => investigationCats = v),
       ]);
       saveTreatmentUnderCategories(treatmentCats);
       savePrescriptionUnderCategories(prescriptionCats);
+      saveInvestigationUnderCategories(investigationCats);
 
       final firstTreatment =
           treatmentCats.isNotEmpty ? treatmentCats.first.slug : null;
       final firstPrescription =
           prescriptionCats.isNotEmpty ? prescriptionCats.first.slug : null;
+      final firstInvestigation =
+          investigationCats.isNotEmpty ? investigationCats.first.slug : null;
 
       await Future.wait([
         if (firstTreatment != null)
@@ -192,6 +224,18 @@ class EmrVisitCatalogCache {
                   products: list,
                 ),
               ),
+        if (firstInvestigation != null)
+          master
+              .listInvestigationUnderProducts(
+                category: firstInvestigation,
+                isActive: true,
+              )
+              .then(
+                (list) => saveInvestigationMapped(
+                  category: firstInvestigation,
+                  products: list,
+                ),
+              ),
       ]);
     } catch (_) {}
   }
@@ -207,8 +251,10 @@ class EmrVisitCatalogCache {
     medicines = const [];
     treatmentUnderCategories = const [];
     prescriptionUnderCategories = const [];
+    investigationUnderCategories = const [];
     treatmentUnderMapped.clear();
     prescriptionUnderMapped.clear();
+    investigationUnderMapped.clear();
     vaccinationsBySpecies.clear();
   }
 }
