@@ -458,12 +458,12 @@ class EmrMasterDataService {
       final res = await _client.get(
         '$_base/treatment-under-categories',
         queryParameters: {
-          if (includeInactive) 'include_inactive': true,
+          if (includeInactive) 'include_inactive': 1,
         },
       );
       return parseEnvelopeData(
         res,
-        (data) => listFromData(data, TreatmentUnderCategoryItem.fromJson),
+        (data) => listFromData(_unwrapListData(data), TreatmentUnderCategoryItem.fromJson),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
@@ -577,12 +577,12 @@ class EmrMasterDataService {
       final res = await _client.get(
         '$_base/prescription-under-categories',
         queryParameters: {
-          if (includeInactive) 'include_inactive': true,
+          if (includeInactive) 'include_inactive': 1,
         },
       );
       return parseEnvelopeData(
         res,
-        (data) => listFromData(data, PrescriptionUnderCategoryItem.fromJson),
+        (data) => listFromData(_unwrapListData(data), PrescriptionUnderCategoryItem.fromJson),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
@@ -781,6 +781,12 @@ class EmrMasterDataService {
 }
 
 dynamic _unwrapListData(dynamic data) {
+  if (data is List) return data;
   if (data is Map && data['data'] is List) return data['data'];
+  if (data is Map &&
+      data.isNotEmpty &&
+      data.values.every((v) => v is Map)) {
+    return data.values.toList();
+  }
   return data;
 }

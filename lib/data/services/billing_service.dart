@@ -41,6 +41,7 @@ class BillingService {
     String? search,
     String? dateFrom,
     String? dateTo,
+    String? paymentMode,
     int? customerId,
   }) async {
     final query = <String, dynamic>{
@@ -52,6 +53,10 @@ class BillingService {
       if (search != null && search.isNotEmpty) 'search': search,
       if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
       if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
+      if (paymentMode != null &&
+          paymentMode.isNotEmpty &&
+          paymentMode != 'all')
+        'payment_mode': paymentMode,
     };
     if (status != null && status.isNotEmpty && status != 'all') {
       if (status == 'unpaid') {
