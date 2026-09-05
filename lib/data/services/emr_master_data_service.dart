@@ -532,6 +532,7 @@ class EmrMasterDataService {
   Future<List<Product>> listTreatmentUnderProducts({
     String? search,
     String? category,
+    bool? isActive,
   }) async {
     try {
       final res = await _client.get(
@@ -539,11 +540,12 @@ class EmrMasterDataService {
         queryParameters: {
           if (search != null && search.isNotEmpty) 'search': search,
           if (category != null && category.isNotEmpty) 'category': category,
+          if (isActive != null) 'is_active': isActive,
         },
       );
       return parseEnvelopeData(
         res,
-        (data) => listFromData(data, Product.fromJson),
+        (data) => listFromData(_unwrapListData(data), Product.fromJson),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
@@ -649,6 +651,7 @@ class EmrMasterDataService {
   Future<List<Product>> listPrescriptionUnderProducts({
     String? search,
     String? category,
+    bool? isActive,
   }) async {
     try {
       final res = await _client.get(
@@ -656,11 +659,12 @@ class EmrMasterDataService {
         queryParameters: {
           if (search != null && search.isNotEmpty) 'search': search,
           if (category != null && category.isNotEmpty) 'category': category,
+          if (isActive != null) 'is_active': isActive,
         },
       );
       return parseEnvelopeData(
         res,
-        (data) => listFromData(data, Product.fromJson),
+        (data) => listFromData(_unwrapListData(data), Product.fromJson),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
@@ -774,4 +778,9 @@ class EmrMasterDataService {
       ApiClient.throwFromDio(e);
     }
   }
+}
+
+dynamic _unwrapListData(dynamic data) {
+  if (data is Map && data['data'] is List) return data['data'];
+  return data;
 }

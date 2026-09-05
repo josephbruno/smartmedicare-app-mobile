@@ -1288,11 +1288,24 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     return TreatmentUnderCategory.labelOf(key, _treatmentUnderCategories);
   }
 
+  bool _productMappedToCategory(
+    Product p,
+    String category,
+    _MedicineContext context,
+  ) {
+    final slug = context == _MedicineContext.prescription
+        ? p.prescriptionUnderCategory
+        : p.treatmentUnderCategory;
+    return slug != null && slug.isNotEmpty && slug == category;
+  }
+
   List<Product> _mappedForTab(String tab, _MedicineContext context) {
     final map = context == _MedicineContext.prescription
         ? _prescriptionUnderMapped
         : _treatmentUnderMapped;
-    return List<Product>.from(map[tab] ?? const []);
+    return List<Product>.from(map[tab] ?? const [])
+        .where((p) => _productMappedToCategory(p, tab, context))
+        .toList();
   }
 
   bool _isCategoryLoading(_MedicineContext context) =>
@@ -1332,13 +1345,19 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ? await context
                 .read<AppServices>()
                 .emrMasterData
-                .listPrescriptionUnderProducts(category: category)
+                .listPrescriptionUnderProducts(
+                  category: category,
+                  isActive: true,
+                )
             : await context
                 .read<AppServices>()
                 .emrMasterData
-                .listTreatmentUnderProducts(category: category);
-      } catch (_) {}
-      if (list.isEmpty) {
+                .listTreatmentUnderProducts(
+                  category: category,
+                  isActive: true,
+                );
+      } catch (_) {
+        // Visit users may lack master-data permission; use the filtered catalog.
         final filterKey = section == _MedicineContext.prescription
             ? 'prescription_under_category'
             : 'treatment_under_category';
@@ -1351,6 +1370,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               },
             );
       }
+      list = list
+          .where((p) => _productMappedToCategory(p, category, section))
+          .toList();
       if (!mounted) return;
       final target = section == _MedicineContext.prescription
           ? _prescriptionUnderMapped
@@ -1469,7 +1491,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         ? _prescriptionUnderMapped
         : _treatmentUnderMapped;
     final cached = map[category];
-    if (cached != null && !cached.any((x) => x.id == p.id)) {
+    if (cached != null &&
+        _productMappedToCategory(p, category, section) &&
+        !cached.any((x) => x.id == p.id)) {
       setState(() => map[category] = [...cached, p]);
     }
   }
@@ -3619,20 +3643,10 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
       _loadError = null;
     });
     try {
-      final list = await context.read<AppServices>().products.list(
-            query: {
-              'per_page': 500,
-              'is_active': 1,
-              'type': widget.type,
-              if (widget.treatmentUnderCategory != null)
-                'treatment_under_category': widget.treatmentUnderCategory,
-              if (widget.prescriptionUnderCategory != null)
-                'prescription_under_category': widget.prescriptionUnderCategory,
-            },
-          );
+      final list = await _fetchMappedCatalog();
       if (!mounted) return;
       setState(() {
-        _catalog = list;
+        _catalog = _onlyMapped(list);
         _loadingCatalog = false;
       });
       await _runSearch(_search.text);
@@ -3645,19 +3659,54 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
     }
   }
 
+  Future<List<Product>> _fetchMappedCatalog({String? search}) async {
+    final services = context.read<AppServices>();
+    final rx = widget.prescriptionUnderCategory;
+    final tu = widget.treatmentUnderCategory;
+    if (rx != null || tu != null) {
+      try {
+        final mapped = rx != null
+            ? await services.emrMasterData.listPrescriptionUnderProducts(
+                category: rx,
+                search: search,
+                isActive: true,
+              )
+            : await services.emrMasterData.listTreatmentUnderProducts(
+                category: tu,
+                search: search,
+                isActive: true,
+              );
+        return _onlyMapped(mapped);
+      } catch (_) {}
+    }
+    return _onlyMapped(
+      await services.products.list(
+        query: {
+          if (search != null && search.isNotEmpty) 'search': search,
+          'per_page': search == null || search.isEmpty ? 500 : 50,
+          'is_active': 1,
+          'type': widget.type,
+          if (tu != null) 'treatment_under_category': tu,
+          if (rx != null) 'prescription_under_category': rx,
+        },
+      ),
+    );
+  }
+
+  List<Product> _onlyMapped(List<Product> list) {
+    final rx = widget.prescriptionUnderCategory;
+    final tu = widget.treatmentUnderCategory;
+    if (rx != null) {
+      return list.where((p) => p.prescriptionUnderCategory == rx).toList();
+    }
+    if (tu != null) {
+      return list.where((p) => p.treatmentUnderCategory == tu).toList();
+    }
+    return list;
+  }
+
   Future<List<Product>> _fetch(String q) async {
-    return context.read<AppServices>().products.list(
-          query: {
-            'search': q,
-            'per_page': 50,
-            'is_active': 1,
-            'type': widget.type,
-            if (widget.treatmentUnderCategory != null)
-              'treatment_under_category': widget.treatmentUnderCategory,
-            if (widget.prescriptionUnderCategory != null)
-              'prescription_under_category': widget.prescriptionUnderCategory,
-          },
-        );
+    return _fetchMappedCatalog(search: q);
   }
 
   List<Product> _filterLocal(String q) {
@@ -3729,10 +3778,17 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
       'medicine' => 'Select medicine product',
       _ => 'Select product',
     };
+    final mappedCategory = widget.prescriptionUnderCategory ??
+        widget.treatmentUnderCategory;
+    final mappedLabel = widget.prescriptionUnderCategory != null
+        ? PrescriptionUnderCategory.labelOf(widget.prescriptionUnderCategory)
+        : (widget.treatmentUnderCategory != null
+            ? TreatmentUnderCategory.labelOf(widget.treatmentUnderCategory)
+            : null);
     final subtitle = switch (type) {
       'service' => 'Link a billable service for GST and invoicing',
-      'medicine' => widget.treatmentUnderCategory != null
-          ? 'Link a ${TreatmentUnderCategory.labelOf(widget.treatmentUnderCategory).toLowerCase()} medicine'
+      'medicine' => mappedLabel != null
+          ? 'Link a ${mappedLabel.toLowerCase()} medicine mapped in settings'
           : 'Link inventory so stock and billing stay in sync',
       _ => 'Search the catalog and pick an item',
     };
@@ -3751,8 +3807,8 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
         ? 'Could not load products.\n$_loadError'
         : (_search.text.trim().isEmpty
             ? (type == 'medicine'
-                ? (widget.treatmentUnderCategory != null
-                    ? 'No ${TreatmentUnderCategory.labelOf(widget.treatmentUnderCategory).toLowerCase()} medicines mapped yet'
+                ? (mappedCategory != null
+                    ? 'No ${mappedLabel!.toLowerCase()} medicines mapped yet'
                     : 'No medicine products in catalog')
                 : type == 'service'
                     ? 'No service products in catalog'
