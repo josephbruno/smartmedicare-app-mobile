@@ -507,68 +507,6 @@ class _PosScreenState extends State<PosScreen> {
   /// Smaller type for the right-hand cart workspace column.
   double _cartFs(double size) => size - 2;
 
-  Widget _shortcutHint(String keys, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: _desktop ? 8 : 6, vertical: _desktop ? 4 : 2),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Text(keys, style: TextStyle(fontSize: _fs(11), fontWeight: FontWeight.w600)),
-        ),
-        const SizedBox(width: 6),
-        Text(label, style: TextStyle(fontSize: _fs(12), color: AppTheme.textSecondary)),
-      ],
-    );
-  }
-
-  Widget _buildCartWorkspaceHeader(PosCartNotifier cart) {
-    return Row(
-      children: [
-        Container(
-          width: _desktop ? 32 : 28,
-          height: _desktop ? 32 : 28,
-          decoration: BoxDecoration(
-            color: AppTheme.primary,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(Icons.shopping_cart_rounded, color: Colors.white, size: _ic(16)),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            'Cart Workspace',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: _cartFs(15),
-              color: AppTheme.textPrimary,
-              height: 1.2,
-            ),
-          ),
-        ),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: _desktop ? 8 : 6, vertical: _desktop ? 3 : 2),
-          decoration: BoxDecoration(
-            color: AppTheme.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            '${cart.items.length} items',
-            style: TextStyle(
-              color: AppTheme.primary,
-              fontSize: _cartFs(10),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildCartCustomerSection(PosCartNotifier cart) {
     final customer = cart.customer;
     return Container(
@@ -894,8 +832,6 @@ class _PosScreenState extends State<PosScreen> {
               child: CustomScrollView(
                 clipBehavior: Clip.hardEdge,
                 slivers: [
-                  SliverToBoxAdapter(child: _buildCartWorkspaceHeader(cart)),
-                  const SliverToBoxAdapter(child: SizedBox(height: 10)),
                   SliverToBoxAdapter(
                     child: CashierShiftPanel(
                       session: _cashSession,
@@ -1315,53 +1251,6 @@ class _PosScreenState extends State<PosScreen> {
       ),
     );
 
-    final sessionBar = Padding(
-      padding: EdgeInsets.fromLTRB(_desktop ? 16 : 12, _desktop ? 10 : 8, _desktop ? 16 : 12, 0),
-      child: Row(
-        children: [
-          Icon(Icons.store_rounded, size: _ic(16), color: AppTheme.textSecondary.withOpacity(0.8)),
-          const SizedBox(width: 6),
-          Text(auth.currentBranch?.name ?? 'Branch', style: TextStyle(fontWeight: FontWeight.w600, fontSize: _fs(13))),
-          const SizedBox(width: 12),
-          Icon(Icons.person_outline_rounded, size: _ic(16), color: AppTheme.textSecondary.withOpacity(0.8)),
-          const SizedBox(width: 6),
-          Text(auth.user?.name ?? 'Cashier', style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(13))),
-          const Spacer(),
-          if (AppConfig.isCashierPlatform &&
-              (auth.hasRole(AppRoles.cashier) ||
-                  auth.hasPermission(AppPermissions.shopManage)))
-            IconButton(
-              tooltip: 'USB Printer (TSPL / ESC/POS)',
-              visualDensity: VisualDensity.compact,
-              onPressed: () => context.go('/settings/printer'),
-              icon: Icon(Icons.print_outlined, size: _ic(20), color: AppTheme.primary),
-            ),
-          Text(
-            DateFormat('EEE, d MMM · HH:mm').format(DateTime.now()),
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(12)),
-          ),
-        ],
-      ),
-    );
-
-    final shortcutBar = desktopShortcuts
-        ? Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-            child: Wrap(
-              spacing: 16,
-              runSpacing: 8,
-              children: [
-                _shortcutHint('Ctrl+B', 'Search'),
-                _shortcutHint('Enter', 'Scan / search'),
-                _shortcutHint('Ctrl+↵', 'Checkout'),
-                _shortcutHint('Ctrl+H', 'Hold bill'),
-                _shortcutHint('Ctrl+E', 'Clear cart'),
-                _shortcutHint('Esc', 'Clear search'),
-              ],
-            ),
-          )
-        : const SizedBox.shrink();
-
     Widget body;
     if (wide) {
       // On ~1366px Windows desktops the fixed billing queue + 3:2 flex left the
@@ -1374,7 +1263,6 @@ class _PosScreenState extends State<PosScreen> {
         color: AppTheme.background,
         child: Column(
           children: [
-            sessionBar,
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1393,7 +1281,6 @@ class _PosScreenState extends State<PosScreen> {
                 ],
               ),
             ),
-            shortcutBar,
           ],
         ),
       );

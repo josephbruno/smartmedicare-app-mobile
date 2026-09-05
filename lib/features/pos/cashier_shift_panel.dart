@@ -9,6 +9,13 @@ import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/cashier_cash_session.dart';
 
+String _shiftRupees(double value) {
+  if (value == value.roundToDouble()) {
+    return '₹${value.toStringAsFixed(0)}';
+  }
+  return '₹${value.toStringAsFixed(2)}';
+}
+
 /// Compact POS bar: amount in hand, shift start/end, day close.
 class CashierShiftPanel extends StatelessWidget {
   const CashierShiftPanel({
@@ -53,56 +60,54 @@ class CashierShiftPanel extends StatelessWidget {
     final headFs = compact ? 9.0 : 10.0;
     final valueFs = compact ? 12.0 : 13.0;
     final actionIconSize = compact ? 18.0 : 20.0;
+    final iconBox = compact ? 34.0 : 36.0;
 
-    // Compact labels avoid ellipsis in the narrow Windows cart column.
-    final statusLabel = open
-        ? (compact ? 'Open' : 'Shift open')
-        : (dayClosed
-            ? (compact ? 'Closed' : 'Day closed')
-            : (compact ? 'Idle' : 'Not started'));
     final statusColor = open
         ? AppTheme.accent
         : (dayClosed ? AppTheme.textSecondary : AppTheme.warning);
+    final statusTooltip = open
+        ? 'Shift open'
+        : (dayClosed ? 'Day closed' : 'Shift not started');
+    final statusIconData = open
+        ? Icons.circle
+        : (dayClosed ? Icons.event_busy_rounded : Icons.circle_outlined);
 
     final metrics = <_ShiftMetric>[
-      _ShiftMetric(
-        label: 'Status',
-        value: statusLabel,
-        emphasize: true,
-        valueColor: statusColor,
-      ),
       if (open) ...[
         _ShiftMetric(
           label: 'In hand',
-          value: '₹${session!.amountInHand.toStringAsFixed(2)}',
+          value: _shiftRupees(session!.amountInHand),
           emphasize: true,
+          flex: 2,
         ),
         _ShiftMetric(
           label: 'Opening',
-          value: '₹${session!.openingAmount.toStringAsFixed(0)}',
+          value: _shiftRupees(session!.openingAmount),
         ),
         _ShiftMetric(
           label: 'Cash in',
-          value: '₹${session!.cashCollected.toStringAsFixed(0)}',
+          value: _shiftRupees(session!.cashCollected),
         ),
         if (session!.cashOutTotal > 0)
           _ShiftMetric(
             label: 'Taken',
-            value: '₹${session!.cashOutTotal.toStringAsFixed(0)}',
+            value: _shiftRupees(session!.cashOutTotal),
           ),
       ] else if (dayClosed) ...[
-        const _ShiftMetric(label: 'Shifts', value: 'None today'),
+        const _ShiftMetric(label: 'Shifts', value: 'None today', flex: 2),
       ] else ...[
         _ShiftMetric(
           label: 'Available',
           value: suggestedOpening?.hasSuggestion == true
-              ? '₹${suggestedOpening!.amount!.toStringAsFixed(2)}'
+              ? _shiftRupees(suggestedOpening!.amount!)
               : '—',
           emphasize: true,
+          flex: 2,
         ),
         _ShiftMetric(
           label: 'Note',
           value: suggestedOpening?.label ?? 'Enter opening cash',
+          flex: 2,
         ),
       ],
     ];
@@ -124,14 +129,18 @@ class CashierShiftPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            m.value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: valueFs,
-              fontWeight: m.emphasize ? FontWeight.w700 : FontWeight.w500,
-              color: m.valueColor ?? AppTheme.textPrimary,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              m.value,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                fontSize: valueFs,
+                fontWeight: m.emphasize ? FontWeight.w700 : FontWeight.w500,
+                color: AppTheme.textPrimary,
+              ),
             ),
           ),
         ],
@@ -140,6 +149,7 @@ class CashierShiftPanel extends StatelessWidget {
 
     Widget metricCell(_ShiftMetric m, {bool isLast = false}) {
       return Expanded(
+        flex: m.flex,
         child: Container(
           padding: EdgeInsets.symmetric(
             horizontal: compact ? 6 : 8,
@@ -155,105 +165,102 @@ class CashierShiftPanel extends StatelessWidget {
       );
     }
 
-    Widget metricTile(_ShiftMetric m, {required double width}) {
-      return SizedBox(
-        width: width,
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 6 : 8,
-            vertical: compact ? 6 : 8,
-          ),
-          child: metricContent(m),
-        ),
-      );
-    }
-
-    Widget actionIcon({
+    Widget iconBoxWidget({
       required String tooltip,
       required IconData icon,
       required Color color,
-      required Color bg,
-      required VoidCallback? onPressed,
+      required Color background,
+      VoidCallback? onPressed,
+      double? glyphSize,
     }) {
+      final child = SizedBox(
+        width: iconBox,
+        height: iconBox,
+        child: Icon(icon, size: glyphSize ?? actionIconSize, color: color),
+      );
       return Tooltip(
         message: tooltip,
         child: Material(
-          color: bg,
+          color: background,
           borderRadius: BorderRadius.circular(8),
-          child: InkWell(
-            onTap: loading ? null : onPressed,
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              width: compact ? 34 : 36,
-              height: compact ? 34 : 36,
-              child: Icon(icon, size: actionIconSize, color: color),
-            ),
-          ),
+          child: onPressed == null
+              ? child
+              : InkWell(
+                  onTap: loading ? null : onPressed,
+                  borderRadius: BorderRadius.circular(8),
+                  child: child,
+                ),
         ),
       );
     }
 
+    final statusChip = iconBoxWidget(
+      tooltip: statusTooltip,
+      icon: statusIconData,
+      color: statusColor,
+      background: statusColor.withValues(alpha: 0.12),
+      glyphSize: compact ? 14 : 16,
+    );
+
     final actionButtons = <Widget>[
       if (!open && !dayClosed && canStart)
-        actionIcon(
+        iconBoxWidget(
           tooltip: 'Start shift',
           icon: Icons.play_arrow_rounded,
           color: Colors.white,
-          bg: AppTheme.primary,
+          background: AppTheme.primary,
           onPressed: () => _startShift(context),
         ),
       if (open && canMove)
-        actionIcon(
+        iconBoxWidget(
           tooltip: 'Take from drawer',
           icon: Icons.money_off_csred_rounded,
           color: AppTheme.danger,
-          bg: AppTheme.danger.withValues(alpha: 0.12),
+          background: AppTheme.danger.withValues(alpha: 0.12),
           onPressed: () => _takeFromDrawer(context),
         ),
       if (open && canEnd)
-        actionIcon(
+        iconBoxWidget(
           tooltip: 'End shift',
           icon: Icons.stop_circle_outlined,
           color: AppTheme.primary,
-          bg: AppTheme.primary.withValues(alpha: 0.12),
+          background: AppTheme.primary.withValues(alpha: 0.12),
           onPressed: () => _endShift(context),
         ),
       if (canDayClose)
-        actionIcon(
+        iconBoxWidget(
           tooltip: dayClosed ? 'Day status' : 'Day close',
           icon: Icons.calendar_today_outlined,
           color: AppTheme.primary,
-          bg: Colors.white,
+          background: Colors.white,
           onPressed: () => _showDayClose(context),
         ),
     ];
 
     Widget actionsRow() {
-      if (actionButtons.isEmpty) return const SizedBox.shrink();
-      if (loading) {
-        return const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        );
-      }
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (var i = 0; i < actionButtons.length; i++) ...[
-            if (i > 0) const SizedBox(width: 6),
-            actionButtons[i],
+          statusChip,
+          if (loading) ...[
+            const SizedBox(width: 6),
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ] else ...[
+            for (final btn in actionButtons) ...[
+              const SizedBox(width: 6),
+              btn,
+            ],
           ],
         ],
       );
     }
 
-    Widget metricsBox({required bool stacked, required double maxWidth}) {
-      final cols = metrics.length <= 2
-          ? metrics.length.clamp(1, 2)
-          : (maxWidth < 280 ? 2 : (metrics.length <= 4 ? 2 : 3));
-      final tileW = stacked ? maxWidth / cols : 0.0;
-
+    Widget metricsBox() {
+      if (metrics.isEmpty) return const SizedBox.shrink();
       return Container(
         width: double.infinity,
         decoration: BoxDecoration(
@@ -261,25 +268,19 @@ class CashierShiftPanel extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
-        child: stacked
-            ? Wrap(
-                children: [
-                  for (final m in metrics) metricTile(m, width: tileW),
-                ],
-              )
-            : IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var i = 0; i < metrics.length; i++)
-                      metricCell(metrics[i], isLast: i == metrics.length - 1),
-                  ],
-                ),
-              ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < metrics.length; i++)
+                metricCell(metrics[i], isLast: i == metrics.length - 1),
+            ],
+          ),
+        ),
       );
     }
 
-    return Container(
+    final bar = Container(
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(12),
@@ -292,52 +293,55 @@ class CashierShiftPanel extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: EdgeInsets.all(compact ? 8 : 10),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final actionW = actionButtons.isEmpty
-                ? 0.0
-                : 8 +
-                    (loading
-                        ? 20
-                        : actionButtons.length * (compact ? 40.0 : 42.0));
-            // One row of equal cells needs ~72px each; otherwise wrap.
-            final needsStack = constraints.maxWidth <
-                (metrics.length * 72 + actionW);
-
-            if (needsStack) {
-              return Column(
+        child: compact
+            ? Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  metricsBox(stacked: true, maxWidth: constraints.maxWidth),
-                  if (actionButtons.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: actionsRow(),
-                    ),
-                  ],
-                ],
-              );
-            }
-
-            return Row(
-              children: [
-                Expanded(
-                  child: metricsBox(
-                    stacked: false,
-                    maxWidth: constraints.maxWidth - actionW,
+                  if (metrics.isNotEmpty) metricsBox(),
+                  SizedBox(height: metrics.isNotEmpty ? 8 : 0),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: actionsRow(),
                   ),
-                ),
-                if (actionButtons.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  actionsRow(),
                 ],
-              ],
-            );
-          },
-        ),
+              )
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final actionCount = 1 + (loading ? 1 : actionButtons.length);
+                  final actionW = 8 + actionCount * (iconBox + 6);
+                  final needsStack = metrics.isNotEmpty &&
+                      constraints.maxWidth < (metrics.length * 100 + actionW);
+
+                  if (needsStack) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        metricsBox(),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: actionsRow(),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      if (metrics.isNotEmpty)
+                        Expanded(child: metricsBox())
+                      else
+                        const Spacer(),
+                      const SizedBox(width: 8),
+                      actionsRow(),
+                    ],
+                  );
+                },
+              ),
       ),
     );
+
+    return bar;
   }
 
   Future<void> _startShift(BuildContext context) async {
@@ -775,13 +779,13 @@ class _ShiftMetric {
     required this.label,
     required this.value,
     this.emphasize = false,
-    this.valueColor,
+    this.flex = 1,
   });
 
   final String label;
   final String value;
   final bool emphasize;
-  final Color? valueColor;
+  final int flex;
 }
 
 class _DialogMetric {

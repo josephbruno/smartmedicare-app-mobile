@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -211,7 +213,7 @@ class _NavDest {
   final String location;
 }
 
-class _PosFullscreenShell extends StatelessWidget {
+class _PosFullscreenShell extends StatefulWidget {
   const _PosFullscreenShell({
     required this.auth,
     required this.connectivity,
@@ -225,9 +227,61 @@ class _PosFullscreenShell extends StatelessWidget {
   final Widget child;
 
   @override
+  State<_PosFullscreenShell> createState() => _PosFullscreenShellState();
+}
+
+class _PosFullscreenShellState extends State<_PosFullscreenShell> {
+  Timer? _clock;
+  DateTime _now = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _clock = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _clock?.cancel();
+    super.dispose();
+  }
+
+  Widget _navMeta({
+    required IconData icon,
+    required String text,
+    required double iconSize,
+    FontWeight weight = FontWeight.w600,
+    Color color = AppTheme.textPrimary,
+  }) {
+    return Flexible(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: iconSize, color: AppTheme.textSecondary.withValues(alpha: 0.85)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: weight, fontSize: 13, color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final bool desktop = AppConfig.usesLargeUiScale;
     double ic(double base) => desktop ? base * AppConfig.desktopIconScale : base;
+    final showPrinter = AppConfig.isCashierPlatform &&
+        (widget.auth.hasRole(AppRoles.cashier) ||
+            widget.auth.hasPermission(AppPermissions.shopManage));
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: Column(
@@ -245,18 +299,36 @@ class _PosFullscreenShell extends StatelessWidget {
                 const SizedBox(width: 10),
                 const Text('POS Billing', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                 const SizedBox(width: 16),
-                Flexible(
-                  child: Text(
-                    auth.currentBranch?.name ?? 'Branch',
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                  ),
+                _navMeta(
+                  icon: Icons.store_rounded,
+                  text: widget.auth.currentBranch?.name ?? 'Branch',
+                  iconSize: ic(16),
+                ),
+                const SizedBox(width: 14),
+                _navMeta(
+                  icon: Icons.person_outline_rounded,
+                  text: widget.auth.user?.name ?? 'Cashier',
+                  iconSize: ic(16),
+                  weight: FontWeight.w500,
+                  color: AppTheme.textSecondary,
                 ),
                 const Spacer(),
-                _OnlineChip(connectivity: connectivity),
+                if (showPrinter)
+                  IconButton(
+                    tooltip: 'USB Printer (TSPL / ESC/POS)',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => context.go('/settings/printer'),
+                    icon: Icon(Icons.print_outlined, size: ic(20), color: AppTheme.primary),
+                  ),
+                Text(
+                  DateFormat('EEE, d MMM · HH:mm').format(_now),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: desktop ? 13 : 12),
+                ),
+                const SizedBox(width: 12),
+                _OnlineChip(connectivity: widget.connectivity),
                 const SizedBox(width: 8),
                 TextButton.icon(
-                  onPressed: onSync,
+                  onPressed: widget.onSync,
                   icon: Icon(Icons.cloud_upload_outlined, size: ic(18)),
                   label: const Text('Sync'),
                 ),
@@ -270,7 +342,7 @@ class _PosFullscreenShell extends StatelessWidget {
               ],
             ),
           ),
-          Expanded(child: child),
+          Expanded(child: widget.child),
         ],
       ),
     );
@@ -1055,6 +1127,8 @@ List<_MenuItem> _menuItems(AuthSession auth) {
       _MenuItem(label: 'Sales Report', icon: Icons.bar_chart_outlined, path: '/reports/sales'),
     ],
     if (auth.isSuperAdmin && can('reports.view')) ...[
+      _MenuItem(label: 'Summary Report', icon: Icons.insights_outlined, path: '/reports/summary'),
+      _MenuItem(label: 'Shift Summary', icon: Icons.schedule_outlined, path: '/reports/shift-summary'),
       _MenuItem(label: 'Stock Transfer Report', icon: Icons.swap_horiz_outlined, path: '/reports/stock-transfers'),
       _MenuItem(label: 'Visit Report', icon: Icons.medical_services_outlined, path: '/reports/visits'),
     ],
@@ -1117,6 +1191,8 @@ String _titleForPath(String path) {
   if (path.startsWith('/reports/sales')) return 'Sales Report';
   if (path.startsWith('/reports/gst')) return 'GST Report';
   if (path.startsWith('/reports/stock-transfers')) return 'Stock Transfer Report';
+  if (path.startsWith('/reports/summary')) return 'Summary Report';
+  if (path.startsWith('/reports/shift-summary')) return 'Shift Summary';
   if (path.startsWith('/reports/visits')) return 'Visit Report';
   if (path.startsWith('/reports/day-close')) return 'Day Close Report';
   if (path.startsWith('/settings/doctors')) return 'Doctors';

@@ -285,6 +285,12 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
     keywords: ['return', 'expired', 'damaged'],
   );
   add('Expenses', '/expenses', Icons.payments_outlined, visible: () => can(AppPermissions.expensesView));
+  add('Summary report', '/reports/summary', Icons.insights_outlined,
+      visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView),
+      keywords: ['summary', 'cash', 'upi', 'pending', 'daywise', 'monthwise', 'branch']);
+  add('Shift summary', '/reports/shift-summary', Icons.schedule_outlined,
+      visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView),
+      keywords: ['cashier', 'shift', 'drawer', 'daywise', 'branch', 'day close']);
   add('Payment report', '/reports/payments', Icons.account_balance_wallet_outlined,
       visible: () => can(AppPermissions.reportsView),
       keywords: ['cash', 'upi', 'credit', 'advance', 'due', 'daily']);

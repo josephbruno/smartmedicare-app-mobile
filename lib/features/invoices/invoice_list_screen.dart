@@ -87,6 +87,59 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     }
   }
 
+  Color _paymentModeColor(String mode) {
+    switch (mode.toLowerCase().trim()) {
+      case 'cash':
+        return AppTheme.primary;
+      case 'upi':
+        return const Color(0xFFEA580C);
+      default:
+        return AppTheme.textPrimary;
+    }
+  }
+
+  Widget _buildPaymentsCell(Invoice inv) {
+    final map = inv.paymentsByMode;
+    if (map.isEmpty) {
+      return const Text(
+        '—',
+        style: TextStyle(
+          color: AppTheme.textSecondary,
+          fontSize: 12,
+        ),
+      );
+    }
+
+    String money(double v) =>
+        v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
+    final entries = map.entries.toList();
+    final spans = <InlineSpan>[];
+    for (var i = 0; i < entries.length; i++) {
+      final mode = entries[i].key;
+      if (i > 0) {
+        spans.add(const TextSpan(
+          text: ' · ',
+          style: TextStyle(color: AppTheme.textSecondary),
+        ));
+      }
+      spans.add(TextSpan(
+        text: '${paymentModeLabel(mode)} ₹${money(entries[i].value)}',
+        style: TextStyle(
+          color: _paymentModeColor(mode),
+          fontWeight: FontWeight.w600,
+          fontSize: 10,
+        ),
+      ));
+    }
+
+    return Text.rich(
+      TextSpan(children: spans),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final services = context.read<AppServices>();
@@ -288,29 +341,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
                     TableColumnDef(
                       label: 'Payments',
                       flex: 1.5,
-                      cellBuilder: (c, inv) {
-                        final breakdown = inv.paymentBreakdownSummary(
-                          modeLabel: paymentModeLabel,
-                        );
-                        if (breakdown.isEmpty) {
-                          return const Text(
-                            '—',
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 12,
-                            ),
-                          );
-                        }
-                        return Text(
-                          breakdown,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 10,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        );
-                      },
+                      cellBuilder: (c, inv) => _buildPaymentsCell(inv),
                     ),
                     TableColumnDef(
                       label: 'Cash recv',

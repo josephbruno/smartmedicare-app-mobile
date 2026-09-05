@@ -60,6 +60,8 @@ import '../../features/reports/day_close_report_screen.dart';
 import '../../features/reports/payment_report_screen.dart';
 import '../../features/reports/sales_report_screen.dart';
 import '../../features/reports/stock_transfer_report_screen.dart';
+import '../../features/reports/shift_summary_report_screen.dart';
+import '../../features/reports/summary_report_screen.dart';
 import '../../features/reports/visit_report_screen.dart';
 import '../../features/settings/account_security_screen.dart';
 import '../../features/settings/branches_screen.dart';
@@ -597,6 +599,24 @@ GoRouter createAppRouter({
             path: '/expenses',
             name: 'Expenses',
             builder: (c, s) => const ExpensesScreen(),
+          ),
+          GoRoute(
+            path: '/reports/summary',
+            name: 'SummaryReport',
+            builder: (c, s) => PermissionGuard(
+              permission: AppPermissions.reportsView,
+              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
+              child: const SummaryReportScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/reports/shift-summary',
+            name: 'ShiftSummaryReport',
+            builder: (c, s) => PermissionGuard(
+              permission: AppPermissions.reportsView,
+              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
+              child: const ShiftSummaryReportScreen(),
+            ),
           ),
           GoRoute(
             path: '/reports/sales',

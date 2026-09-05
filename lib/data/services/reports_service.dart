@@ -7,6 +7,8 @@ import '../models/dashboard_data.dart';
 import '../models/payment_report.dart';
 import '../models/report_data.dart';
 import '../models/stock_transfer.dart';
+import '../models/shift_summary.dart';
+import '../models/summary_report.dart';
 import '../models/visit_report.dart';
 
 class StockTransferReportSummary {
@@ -91,6 +93,58 @@ class ReportsService {
       return parseEnvelopeData(
         res,
         (data) => SalesTrendData.fromJson(data),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  /// Super Admin only — day/month cashier shift summary by branch.
+  Future<ShiftSummaryData> shiftSummary({
+    required String dateFrom,
+    required String dateTo,
+    String groupBy = 'day',
+    int? branchId,
+  }) async {
+    try {
+      final res = await _client.get(
+        '/reports/shift-summary',
+        queryParameters: {
+          'date_from': dateFrom,
+          'date_to': dateTo,
+          'group_by': groupBy,
+          if (branchId != null) 'branch_id': branchId,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => ShiftSummaryData.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  /// Super Admin only — day/month sales summary (count, total, cash, UPI, pending).
+  Future<SummaryReportData> summary({
+    required String dateFrom,
+    required String dateTo,
+    String groupBy = 'day',
+    int? branchId,
+  }) async {
+    try {
+      final res = await _client.get(
+        '/reports/summary',
+        queryParameters: {
+          'date_from': dateFrom,
+          'date_to': dateTo,
+          'group_by': groupBy,
+          if (branchId != null) 'branch_id': branchId,
+        },
+      );
+      return parseEnvelopeData(
+        res,
+        (data) => SummaryReportData.fromJson(Map<String, dynamic>.from(data as Map)),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
