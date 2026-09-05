@@ -143,6 +143,7 @@ abstract class AppRoles {
     AppPermissions.petsView,
     AppPermissions.petsCreate,
     AppPermissions.emrVisitsView,
+    AppPermissions.emrVisitsCreate,
     AppPermissions.emrVisitsBill,
     AppPermissions.emrRemindersView,
     AppPermissions.patientAppointmentsView,

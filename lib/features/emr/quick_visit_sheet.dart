@@ -69,6 +69,12 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
     'Wound / Laceration',
   ];
 
+  bool get _isCheckInOnly {
+    final auth = context.read<AuthSession>();
+    return auth.hasPermission(AppPermissions.emrVisitsCreate) &&
+        !auth.hasPermission(AppPermissions.emrVisitsEdit);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -156,8 +162,9 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
         'visit_date':
             '${_visitDate.year.toString().padLeft(4, '0')}-${_visitDate.month.toString().padLeft(2, '0')}-${_visitDate.day.toString().padLeft(2, '0')}',
         if (_complaint.text.trim().isNotEmpty) 'chief_complaint': _complaint.text.trim(),
-        if (_notes.text.trim().isNotEmpty) 'clinical_notes': _notes.text.trim(),
-        if (_diagnoses.isNotEmpty)
+        if (!_isCheckInOnly && _notes.text.trim().isNotEmpty)
+          'clinical_notes': _notes.text.trim(),
+        if (!_isCheckInOnly && _diagnoses.isNotEmpty)
           'diagnoses': _diagnoses.map((d) => d.toJson()).toList(),
       });
       return visit.id;
@@ -198,7 +205,11 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
     if (id == null || !mounted) return;
     widget.onSaved?.call();
     AppMessenger.show(context,
-      const SnackBar(content: Text('Visit saved — add another')),
+      SnackBar(
+        content: Text(_isCheckInOnly
+            ? 'Visit checked in — a doctor can continue it'
+            : 'Visit saved — add another'),
+      ),
     );
     _resetForm();
   }
@@ -229,7 +240,7 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
                   children: [
                     const Icon(Icons.bolt, color: AppTheme.warning),
                     const SizedBox(width: 8),
-                    Text('Quick Visit',
+                    Text(_isCheckInOnly ? 'Quick check-in' : 'Quick Visit',
                         style: Theme.of(context).textTheme.titleLarge),
                     const Spacer(),
                     IconButton(
@@ -293,7 +304,7 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
                         ),
                       ),
                     const SizedBox(height: 12),
-                    if (_doctors.isNotEmpty || _selectedDoctor != null)
+                    if (_isCheckInOnly || _doctors.isNotEmpty || _selectedDoctor != null)
                       Builder(
                         builder: (context) {
                           final auth = context.watch<AuthSession>();
@@ -323,11 +334,19 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
                           return AppDropdownButtonFormField<int>(
                             value: _selectedDoctor?.id,
                             isExpanded: true,
-                            decoration: const InputDecoration(labelText: 'Doctor'),
+                            decoration: InputDecoration(
+                              labelText: _isCheckInOnly
+                                  ? 'Doctor (optional)'
+                                  : 'Doctor',
+                            ),
                             selectedItemBuilder: (context) => [
-                              const Align(
+                              Align(
                                 alignment: Alignment.centerLeft,
-                                child: Text('— None —', overflow: TextOverflow.ellipsis, maxLines: 1),
+                                child: Text(
+                                  _isCheckInOnly ? 'Any doctor' : '— None —',
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
                               ),
                               ..._doctors.map(
                                 (d) => Align(
@@ -341,7 +360,10 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
                               ),
                             ],
                             items: [
-                              const DropdownMenuItem(value: null, child: Text('— None —')),
+                              DropdownMenuItem(
+                                value: null,
+                                child: Text(_isCheckInOnly ? 'Any doctor' : '— None —'),
+                              ),
                               ..._doctors.map(
                                 (d) => DropdownMenuItem(
                                   value: d.id,
@@ -408,6 +430,7 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
                       decoration: const InputDecoration(labelText: 'Chief complaint'),
                     ),
                     const SizedBox(height: 12),
+                    if (!_isCheckInOnly) ...[
                     const Text('Diagnoses (optional)',
                         style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                     const SizedBox(height: 6),
@@ -447,6 +470,12 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
                       'After saving, open the visit to add treatments, medicines, and vitals.',
                       style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                     ),
+                    ] else ...[
+                    const Text(
+                      'A doctor will complete this visit from their open list.',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    ),
+                    ],
                   ],
                 ),
               ),

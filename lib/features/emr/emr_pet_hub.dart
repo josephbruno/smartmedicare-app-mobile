@@ -56,7 +56,7 @@ class EmrPetHub extends StatelessWidget {
         _HubLink('Documents', Icons.folder_outlined, '/emr/pets/$petId/documents'),
       if (auth.hasPermission('emr.visits.create'))
         _HubLink(
-          'New visit',
+          auth.hasPermission('emr.visits.edit') ? 'New visit' : 'Check in',
           Icons.add_circle_outline,
           '/emr/visits/new?pet_id=$petId',
           primary: true,

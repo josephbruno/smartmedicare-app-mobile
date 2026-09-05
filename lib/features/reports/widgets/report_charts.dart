@@ -255,6 +255,35 @@ class ReportBarChart extends StatelessWidget {
                     ),
                   ),
                 ),
+                barTouchData: BarTouchData(
+                  enabled: true,
+                  touchTooltipData: BarTouchTooltipData(
+                    maxContentWidth: 180,
+                    tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    tooltipBorderRadius: BorderRadius.circular(8),
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
+                    getTooltipColor: (_) => const Color(0xFF0F172A),
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final seriesName = (rodIndex >= 0 && rodIndex < series.length)
+                          ? series[rodIndex].name
+                          : '';
+                      final label = (groupIndex >= 0 && groupIndex < labels.length)
+                          ? labels[groupIndex]
+                          : '';
+                      final title = seriesName.isEmpty ? label : seriesName;
+                      return BarTooltipItem(
+                        '$title\n${formatReportCurrency(rod.toY)}',
+                        const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          height: 1.35,
+                        ),
+                      );
+                    },
+                  ),
+                ),
                 barGroups: [
                   for (var i = 0; i < labels.length; i++)
                     BarChartGroupData(
@@ -293,7 +322,7 @@ class ReportBarChart extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       s.name,
-                      style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
                     ),
                     const SizedBox(width: 14),
                   ],
@@ -380,6 +409,30 @@ class ReportLineChart extends StatelessWidget {
                   ),
                 ),
               ),
+              lineTouchData: LineTouchData(
+                handleBuiltInTouches: true,
+                touchTooltipData: LineTouchTooltipData(
+                  tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  tooltipBorderRadius: BorderRadius.circular(8),
+                  fitInsideHorizontally: true,
+                  fitInsideVertically: true,
+                  getTooltipColor: (_) => const Color(0xFF0F172A),
+                  getTooltipItems: (spots) {
+                    return [
+                      for (final s in spots)
+                        LineTooltipItem(
+                          '${(s.barIndex >= 0 && s.barIndex < series.length) ? series[s.barIndex].name : ''}\n${formatReportCurrency(s.y)}',
+                          const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
+                        ),
+                    ];
+                  },
+                ),
+              ),
               lineBarsData: [
                 for (final s in series)
                   LineChartBarData(
@@ -412,7 +465,7 @@ class ReportLineChart extends StatelessWidget {
                     children: [
                       Container(width: 10, height: 10, decoration: BoxDecoration(color: s.color, shape: BoxShape.circle)),
                       const SizedBox(width: 6),
-                      Text(s.name, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                      Text(s.name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155))),
                     ],
                   ),
               ],

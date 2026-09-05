@@ -46,6 +46,8 @@ class ShiftSummaryBranch extends ShiftSummaryMetrics {
   ShiftSummaryBranch({
     required this.branchId,
     required this.branchName,
+    required this.userId,
+    required this.userName,
     required super.shifts,
     required super.openShifts,
     required super.closedShifts,
@@ -61,10 +63,14 @@ class ShiftSummaryBranch extends ShiftSummaryMetrics {
 
   final int branchId;
   final String branchName;
+  final int userId;
+  final String userName;
 
   factory ShiftSummaryBranch.fromJson(Map<String, dynamic> j) => ShiftSummaryBranch(
         branchId: intOrNull(j['branch_id']) ?? 0,
         branchName: j['branch_name']?.toString() ?? '',
+        userId: intOrNull(j['user_id']) ?? 0,
+        userName: j['user_name']?.toString() ?? '',
         shifts: intOrNull(j['shifts']) ?? 0,
         openShifts: intOrNull(j['open_shifts']) ?? 0,
         closedShifts: intOrNull(j['closed_shifts']) ?? 0,
@@ -122,6 +128,8 @@ class ShiftSummaryRow extends ShiftSummaryPeriod {
     required super.label,
     required this.branchId,
     required this.branchName,
+    required this.userId,
+    required this.userName,
     required this.dayClosed,
     required super.shifts,
     required super.openShifts,
@@ -138,6 +146,8 @@ class ShiftSummaryRow extends ShiftSummaryPeriod {
 
   final int branchId;
   final String branchName;
+  final int userId;
+  final String userName;
   final bool dayClosed;
 
   factory ShiftSummaryRow.fromJson(Map<String, dynamic> j) => ShiftSummaryRow(
@@ -145,6 +155,8 @@ class ShiftSummaryRow extends ShiftSummaryPeriod {
         label: j['label']?.toString() ?? j['period']?.toString() ?? '',
         branchId: intOrNull(j['branch_id']) ?? 0,
         branchName: j['branch_name']?.toString() ?? '',
+        userId: intOrNull(j['user_id']) ?? 0,
+        userName: j['user_name']?.toString() ?? '',
         dayClosed: j['day_closed'] == true,
         shifts: intOrNull(j['shifts']) ?? 0,
         openShifts: intOrNull(j['open_shifts']) ?? 0,

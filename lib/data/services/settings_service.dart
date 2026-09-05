@@ -141,6 +141,21 @@ class UsersService {
     }
   }
 
+  Future<User> updatePin(int id, {required String pin}) async {
+    try {
+      final res = await _client.put('/users/$id/pin', data: {
+        'pin': pin,
+        'pin_confirmation': pin,
+      });
+      return parseEnvelopeData(
+        res,
+        (data) => User.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
   Future<List<({String value, String label})>> listRoles() async {
     try {
       final res = await _client.get('/users/roles');

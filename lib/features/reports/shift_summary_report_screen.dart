@@ -12,6 +12,12 @@ import 'report_date_range.dart';
 import 'report_formatters.dart';
 import 'widgets/report_charts.dart';
 
+String _cashierLabel(String name, int userId) {
+  final trimmed = name.trim();
+  if (trimmed.isNotEmpty) return trimmed;
+  return userId > 0 ? 'User #$userId' : '—';
+}
+
 /// Super-admin cashier shift summary across all branches, day-wise or month-wise.
 class ShiftSummaryReportScreen extends StatefulWidget {
   const ShiftSummaryReportScreen({super.key});
@@ -285,7 +291,7 @@ class _Toolbar extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Branch-wise cashier shifts · opening, cash collected, counted · Super admin',
+            'Cashier shifts by branch and user · opening, cash collected, counted · Super admin',
             style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 12),
@@ -411,10 +417,10 @@ class _BranchTotalsTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ReportSectionCard(
-      title: 'Branch totals',
+      title: 'Branch / user totals',
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final tableWidth = constraints.maxWidth < 920 ? 920.0 : constraints.maxWidth;
+          final tableWidth = constraints.maxWidth < 1080 ? 1080.0 : constraints.maxWidth;
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SizedBox(
@@ -426,6 +432,7 @@ class _BranchTotalsTable extends StatelessWidget {
                   for (final b in branches)
                     _MetricRow(
                       label: b.branchName,
+                      userName: _cashierLabel(b.userName, b.userId),
                       metrics: b,
                       money: money,
                       isMonth: true,
@@ -467,7 +474,7 @@ class _BreakdownTable extends StatelessWidget {
             )
           : LayoutBuilder(
               builder: (context, constraints) {
-                final tableWidth = constraints.maxWidth < 920 ? 920.0 : constraints.maxWidth;
+                final tableWidth = constraints.maxWidth < 1080 ? 1080.0 : constraints.maxWidth;
                 return SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: SizedBox(
@@ -488,6 +495,7 @@ class _BreakdownTable extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10),
                               child: _MetricRow(
                                 label: showBranch ? '${row.branchName}  ·  ${row.label}' : row.label,
+                                userName: _cashierLabel(row.userName, row.userId),
                                 metrics: row,
                                 money: money,
                                 isMonth: data.isMonth,
@@ -499,6 +507,7 @@ class _BreakdownTable extends StatelessWidget {
                         const Divider(height: 20),
                         _MetricRow(
                           label: 'Total',
+                          userName: '—',
                           metrics: s,
                           money: money,
                           isMonth: data.isMonth,
@@ -534,6 +543,7 @@ class _TableHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(flex: 3, child: Text(showBranch ? 'Branch / $periodLabel' : periodLabel, style: style)),
+          const Expanded(flex: 2, child: Text('User', style: style)),
           const SizedBox(
             width: 52,
             child: Text('Shifts', style: style, textAlign: TextAlign.right),
@@ -553,6 +563,7 @@ class _TableHeader extends StatelessWidget {
 class _MetricRow extends StatelessWidget {
   const _MetricRow({
     required this.label,
+    required this.userName,
     required this.metrics,
     required this.money,
     required this.isMonth,
@@ -562,6 +573,7 @@ class _MetricRow extends StatelessWidget {
   });
 
   final String label;
+  final String userName;
   final ShiftSummaryMetrics metrics;
   final String Function(double) money;
   final bool isMonth;
@@ -596,6 +608,19 @@ class _MetricRow extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: emphasize ? FontWeight.w800 : FontWeight.w700,
                 color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              userName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: emphasize ? FontWeight.w800 : FontWeight.w600,
+                color: emphasize ? AppTheme.textSecondary : AppTheme.textPrimary,
               ),
             ),
           ),

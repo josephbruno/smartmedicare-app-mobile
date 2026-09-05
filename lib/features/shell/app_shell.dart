@@ -108,6 +108,14 @@ class _AppShellState extends State<AppShell> {
         location: '/pos',
       ));
     }
+    if (auth.hasPermission(AppPermissions.emrVisitsView)) {
+      items.add(const _NavDest(
+        label: 'Visits',
+        icon: Icons.medical_services_outlined,
+        activeIcon: Icons.medical_services_rounded,
+        location: '/emr/visits',
+      ));
+    }
     if (auth.hasPermission(AppPermissions.customersView)) {
       items.add(const _NavDest(
         label: 'Customers',

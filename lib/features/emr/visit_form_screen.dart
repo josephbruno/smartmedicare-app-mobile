@@ -102,6 +102,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   bool get _isEdit => widget.visitId != null;
 
+  /// Cashier / reception: create an open visit; doctors fill clinical details later.
+  bool get _isCheckInOnly {
+    final auth = context.read<AuthSession>();
+    return auth.hasPermission(AppPermissions.emrVisitsCreate) &&
+        !auth.hasPermission(AppPermissions.emrVisitsEdit);
+  }
+
   /// Phone/tablet native app only. Windows/web keep the current wide layout.
   bool get _compactUi => AppConfig.isNativeMobile;
 
@@ -359,10 +366,14 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       _doctors = _uniqueDoctors(await emr.listDoctors());
       _defaultComplaintSuggestions = await emr.getComplaints();
       _complaintSuggestions = List.of(_defaultComplaintSuggestions);
-      _defaultInvestigationSuggestions = await emr.getInvestigations();
-      _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
-      _defaultTreatmentSuggestions = await emr.getTreatmentSuggestions();
-      _defaultMedicineSuggestions = await emr.getMedicineSuggestions();
+
+      final checkInOnly = _isCheckInOnly;
+      if (!checkInOnly) {
+        _defaultInvestigationSuggestions = await emr.getInvestigations();
+        _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
+        _defaultTreatmentSuggestions = await emr.getTreatmentSuggestions();
+        _defaultMedicineSuggestions = await emr.getMedicineSuggestions();
+      }
 
       if (_isEdit) {
         final visit = await emr.getVisit(widget.visitId!);
@@ -374,18 +385,25 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         await _prefillFromPetId(widget.petId!);
       }
 
-      await _loadVaccinationSuggestions();
-      await _loadCategoryCatalogs();
+      if (!checkInOnly) {
+        await _loadVaccinationSuggestions();
+        await _loadCategoryCatalogs();
+      }
 
       // Doctor login: bind doctor_id from session (Doctor UI is hidden).
       // Admin / branch manager: no doctor_id.
+      // Cashier check-in: optional doctor, default unassigned so any doctor can continue.
       if (_isAdminSession(auth)) {
         _doctors = [];
         _selectedDoctor = null;
-      } else {
+      } else if (auth.hasRole(AppRoles.doctor)) {
         _lockDoctorToLoggedInUser(auth);
         if (!_isEdit) {
           _applyDoctorServiceChargeDefaults();
+        }
+      } else {
+        if (!_isEdit) {
+          _selectedDoctor = null;
         }
       }
     } catch (e) {
@@ -1668,6 +1686,24 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       return null;
     }
 
+    if (_isCheckInOnly) {
+      final timeStr =
+          '${_visitTime.hour.toString().padLeft(2, '0')}:${_visitTime.minute.toString().padLeft(2, '0')}';
+      final pendingComplaint = _complaintSearchTerm(_complaint.text);
+      if (pendingComplaint.isNotEmpty &&
+          !_complaint.text.trimRight().endsWith(',')) {
+        _commitComplaintTerm();
+      }
+      return <String, dynamic>{
+        'pet_id': _selectedPet!.id,
+        if (_selectedDoctor != null) 'doctor_id': _selectedDoctor!.id,
+        'visit_type': _visitType,
+        'visit_date': _formatYmd(_visitDate),
+        'visit_time': timeStr,
+        if (_complaintForApi.isNotEmpty) 'chief_complaint': _complaintForApi,
+      };
+    }
+
     for (final t in _treatments) {
       if (t.nameCtrl.text.trim().isEmpty) continue;
       if (t.productId == null) {
@@ -1811,6 +1847,14 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     try {
       final visit = await _persistVisit(body);
       if (mounted && visit != null) {
+        if (_isCheckInOnly) {
+          AppMessenger.show(
+            context,
+            const SnackBar(
+              content: Text('Visit checked in — a doctor can continue it.'),
+            ),
+          );
+        }
         context.go('/emr/visits/${visit.id}');
       }
     } catch (e) {
@@ -1942,7 +1986,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _isEdit ? 'Edit visit' : 'New visit',
+                  _isEdit
+                      ? 'Edit visit'
+                      : (_isCheckInOnly ? 'Check in visit' : 'New visit'),
                   style: const TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
@@ -1953,7 +1999,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 Text(
                   _isEdit
                       ? 'Update the details of this visit'
-                      : 'Create a new visit record',
+                      : (_isCheckInOnly
+                          ? 'Create an open visit — a doctor will complete it'
+                          : 'Create a new visit record'),
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w400,
@@ -2135,6 +2183,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
               );
 
+              final doctorField = _buildOptionalDoctorField();
+
               final petResultTiles = _selectedPet == null
                   ? _petResults
                       .map(
@@ -2156,8 +2206,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     ...petResultTiles,
                     const SizedBox(height: 12),
                     visitTypeField,
-                    const SizedBox(height: 12),
-                    serviceChargeField,
+                    if (_isCheckInOnly) ...[
+                      const SizedBox(height: 12),
+                      doctorField,
+                    ] else ...[
+                      const SizedBox(height: 12),
+                      serviceChargeField,
+                    ],
                   ],
                 );
               }
@@ -2172,7 +2227,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                       const SizedBox(width: 12),
                       Expanded(flex: 2, child: visitTypeField),
                       const SizedBox(width: 12),
-                      Expanded(flex: 2, child: serviceChargeField),
+                      Expanded(
+                        flex: 2,
+                        child: _isCheckInOnly ? doctorField : serviceChargeField,
+                      ),
                     ],
                   ),
                   if (petResultTiles.isNotEmpty)
@@ -2187,7 +2245,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               );
             },
           ),
-          if (_serviceChargeProductName != null)
+          if (!_isCheckInOnly && _serviceChargeProductName != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
@@ -2306,6 +2364,30 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               }).toList(),
             ),
           ],
+          if (_isCheckInOnly) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Leave doctor empty so any remaining doctor can continue this visit.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textSecondary,
+                    height: 1.35,
+                  ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _saving ? null : _save,
+                child: _saving
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Check in visit'),
+              ),
+            ),
+          ] else ...[
           const SizedBox(height: 12),
           _formSectionHeader('Vitals', Icons.monitor_heart_outlined),
           const SizedBox(height: 6),
@@ -2887,7 +2969,70 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                   color: AppTheme.textSecondary,
                 ),
           ),
+          ],
       ],
+    );
+  }
+
+  Widget _buildOptionalDoctorField() {
+    return AppDropdownButtonFormField<int>(
+      value: _selectedDoctor?.id,
+      isExpanded: true,
+      isDense: true,
+      alignment: AlignmentDirectional.centerStart,
+      decoration: const InputDecoration(
+        labelText: 'Doctor (optional)',
+        contentPadding: EdgeInsets.fromLTRB(12, 18, 12, 18),
+      ),
+      selectedItemBuilder: (context) => [
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Any doctor',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 16,
+              height: 1.2,
+              fontWeight: FontWeight.w500,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ),
+        ..._doctors.map(
+          (d) => Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              d.displayLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 16,
+                height: 1.2,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+        ),
+      ],
+      items: [
+        const DropdownMenuItem(value: null, child: Text('Any doctor')),
+        ..._doctors.map(
+          (d) => DropdownMenuItem(
+            value: d.id,
+            child: Text(
+              d.displayLabel,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
+        ),
+      ],
+      onChanged: (id) => setState(() {
+        _selectedDoctor =
+            id == null ? null : _doctors.where((d) => d.id == id).firstOrNull;
+      }),
     );
   }
 

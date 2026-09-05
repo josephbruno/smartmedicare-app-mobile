@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/responsive/desktop_layout_helper.dart';
+import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_dropdown.dart';
@@ -78,7 +79,9 @@ class _VisitListScreenState extends State<VisitListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canCreate = context.watch<AuthSession>().hasPermission('emr.visits.create');
+    final auth = context.watch<AuthSession>();
+    final canCreate = auth.hasPermission(AppPermissions.emrVisitsCreate);
+    final isCheckIn = canCreate && !auth.hasPermission(AppPermissions.emrVisitsEdit);
     final services = context.read<AppServices>();
     final search = _search.text.trim();
     final isMobile = ResponsiveLayout.isMobile(context);
@@ -159,7 +162,7 @@ class _VisitListScreenState extends State<VisitListScreen> {
                         OutlinedButton.icon(
                           onPressed: () => showQuickVisitSheet(context),
                           icon: const Icon(Icons.bolt, size: 18),
-                          label: const Text('Quick visit'),
+                          label: Text(isCheckIn ? 'Quick check-in' : 'Quick visit'),
                           style: _visitOutlinedButtonStyle,
                         ),
                       ],
@@ -167,7 +170,7 @@ class _VisitListScreenState extends State<VisitListScreen> {
                       FilledButton(
                         onPressed: () => context.push('/emr/visits/new'),
                         style: _visitFilledButtonStyle,
-                        child: const Text('New visit'),
+                        child: Text(isCheckIn ? 'Check in' : 'New visit'),
                       ),
                     ],
                   ],
@@ -185,6 +188,7 @@ class _VisitListScreenState extends State<VisitListScreen> {
               emptyBuilder: (context) => _VisitEmptyState(
                 hasSearch: search.length >= 2,
                 canCreate: canCreate,
+                isCheckIn: isCheckIn,
                 onQuickVisit: () => showQuickVisitSheet(context),
                 onNewVisit: () => context.push('/emr/visits/new'),
               ),
@@ -270,12 +274,14 @@ class _VisitEmptyState extends StatelessWidget {
   const _VisitEmptyState({
     required this.hasSearch,
     required this.canCreate,
+    this.isCheckIn = false,
     required this.onQuickVisit,
     required this.onNewVisit,
   });
 
   final bool hasSearch;
   final bool canCreate;
+  final bool isCheckIn;
   final VoidCallback onQuickVisit;
   final VoidCallback onNewVisit;
 
@@ -314,7 +320,9 @@ class _VisitEmptyState extends StatelessWidget {
             child: Text(
               hasSearch
                   ? 'Try a different search or clear filters to see all visits.'
-                  : 'Create a visit to start recording consultations, treatments, and billing.',
+                  : (isCheckIn
+                      ? 'Check in a patient so a doctor can continue the visit.'
+                      : 'Create a visit to start recording consultations, treatments, and billing.'),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 14,
@@ -333,13 +341,13 @@ class _VisitEmptyState extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: onQuickVisit,
                   icon: const Icon(Icons.bolt, size: 18),
-                  label: const Text('Quick visit'),
+                  label: Text(isCheckIn ? 'Quick check-in' : 'Quick visit'),
                   style: _visitOutlinedButtonStyle,
                 ),
                 FilledButton(
                   onPressed: onNewVisit,
                   style: _visitFilledButtonStyle,
-                  child: const Text('New visit'),
+                  child: Text(isCheckIn ? 'Check in' : 'New visit'),
                 ),
               ],
             ),

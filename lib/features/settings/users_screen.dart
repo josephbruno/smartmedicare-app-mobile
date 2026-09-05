@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
 
@@ -14,6 +15,29 @@ import '../../core/widgets/table_column_def.dart';
 import '../../data/models/shop.dart';
 import '../../data/models/user.dart';
 import '../../core/widgets/app_dropdown.dart';
+
+String? _validateOptionalPinPair(
+  String pin,
+  String confirm, {
+  required bool enabled,
+}) {
+  if (!enabled) return null;
+  final p = pin.trim();
+  final c = confirm.trim();
+  if (p.isEmpty && c.isEmpty) return null;
+  return _validateRequiredPinPair(p, c);
+}
+
+String? _validateRequiredPinPair(String pin, String confirm) {
+  if (pin.length != 6 || confirm.length != 6) {
+    return 'PIN must be exactly 6 digits';
+  }
+  if (pin != confirm) {
+    return 'PINs must match';
+  }
+  return null;
+}
+
 class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
 
@@ -90,6 +114,7 @@ class _UsersScreenState extends State<UsersScreen> {
     final roleOptions = _assignableRoleOptions();
     final roleLocked = _isRoleLockedOnMobile(user);
     final doctorRoleOnly = AppConfig.isNativeMobile;
+    final canUpdatePin = context.read<AuthSession>().isSuperAdmin;
 
     final result = await _showUserFormDialog(
       context,
@@ -98,6 +123,7 @@ class _UsersScreenState extends State<UsersScreen> {
       roleOptions: roleOptions,
       roleLocked: roleLocked,
       doctorRoleOnly: doctorRoleOnly,
+      canUpdatePin: canUpdatePin,
     );
 
     if (result == null || !mounted) return;
@@ -129,6 +155,7 @@ class _UsersScreenState extends State<UsersScreen> {
     required List<({String value, String label})> roleOptions,
     required bool roleLocked,
     required bool doctorRoleOnly,
+    required bool canUpdatePin,
   }) {
     if (useCenteredFormDialog(context)) {
       return showAppDialog<Map<String, dynamic>>(
@@ -139,6 +166,7 @@ class _UsersScreenState extends State<UsersScreen> {
           roleOptions: roleOptions,
           roleLocked: roleLocked,
           doctorRoleOnly: doctorRoleOnly,
+          canUpdatePin: canUpdatePin,
         ),
       );
     }
@@ -154,7 +182,49 @@ class _UsersScreenState extends State<UsersScreen> {
         roleOptions: roleOptions,
         roleLocked: roleLocked,
         doctorRoleOnly: doctorRoleOnly,
+        canUpdatePin: canUpdatePin,
       ),
+    );
+  }
+
+  Future<void> _openUpdatePin(User user) async {
+    if (!context.read<AuthSession>().isSuperAdmin) {
+      context.showPermissionDenied();
+      return;
+    }
+
+    final pin = await _showUpdatePinDialog(context, user);
+    if (pin == null || !mounted) return;
+
+    try {
+      await context.read<AppServices>().users.updatePin(user.id, pin: pin);
+      if (!mounted) return;
+      AppMessenger.success(
+        context,
+        user.hasPin ? 'PIN updated successfully' : 'PIN set successfully',
+      );
+      await _refreshTable();
+    } catch (e) {
+      if (mounted) {
+        AppMessenger.error(context, '$e');
+      }
+    }
+  }
+
+  Future<String?> _showUpdatePinDialog(BuildContext context, User user) {
+    if (useCenteredFormDialog(context)) {
+      return showAppDialog<String>(
+        context: context,
+        builder: (ctx) => _UpdateUserPinEditor(user: user),
+      );
+    }
+
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _UpdateUserPinEditor(user: user, asSheet: true),
     );
   }
 
@@ -163,6 +233,7 @@ class _UsersScreenState extends State<UsersScreen> {
     final services = context.read<AppServices>();
     final canCreate = context.watch<AuthSession>().hasPermission(AppPermissions.usersCreate);
     final canEdit = context.watch<AuthSession>().hasPermission(AppPermissions.usersEdit);
+    final canUpdatePin = context.watch<AuthSession>().isSuperAdmin;
 
     final columns = <TableColumnDef<User>>[
       const TableColumnDef(label: 'User', flex: 2, cellBuilder: _userCell),
@@ -175,19 +246,36 @@ class _UsersScreenState extends State<UsersScreen> {
         align: TextAlign.center,
         cellBuilder: _statusCell,
       ),
-      if (canEdit)
+      if (canEdit || canUpdatePin)
         TableColumnDef(
           label: '',
-          flex: 0.5,
+          flex: canEdit && canUpdatePin ? 0.9 : 0.5,
           align: TextAlign.center,
-          cellBuilder: (_, u) => Tooltip(
-            message: 'Edit user',
-            child: IconButton(
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              color: AppTheme.primary,
-              onPressed: () => _openForm(user: u),
-            ),
+          cellBuilder: (_, u) => Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (canUpdatePin)
+                Tooltip(
+                  message: u.hasPin ? 'Update PIN' : 'Set PIN',
+                  child: IconButton(
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.dialpad_outlined, size: 18),
+                    color: AppTheme.primary,
+                    onPressed: () => _openUpdatePin(u),
+                  ),
+                ),
+              if (canEdit)
+                Tooltip(
+                  message: 'Edit user',
+                  child: IconButton(
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    color: AppTheme.primary,
+                    onPressed: () => _openForm(user: u),
+                  ),
+                ),
+            ],
           ),
         ),
     ];
@@ -406,6 +494,7 @@ class _UserFormDialog extends StatefulWidget {
     required this.roleOptions,
     required this.roleLocked,
     required this.doctorRoleOnly,
+    required this.canUpdatePin,
   });
 
   final User? user;
@@ -413,6 +502,7 @@ class _UserFormDialog extends StatefulWidget {
   final List<({String value, String label})> roleOptions;
   final bool roleLocked;
   final bool doctorRoleOnly;
+  final bool canUpdatePin;
 
   @override
   State<_UserFormDialog> createState() => _UserFormDialogState();
@@ -424,11 +514,15 @@ class _UserFormDialogState extends State<_UserFormDialog> {
   late final TextEditingController _phone;
   late final TextEditingController _password;
   late final TextEditingController _passwordConfirm;
+  late final TextEditingController _pin;
+  late final TextEditingController _pinConfirm;
   late String _selectedRole;
   int? _selectedBranchId;
   late bool _isActive;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  bool _obscurePin = true;
+  bool _obscurePinConfirm = true;
 
   bool get isEdit => widget.user != null;
 
@@ -441,6 +535,8 @@ class _UserFormDialogState extends State<_UserFormDialog> {
     _phone = TextEditingController(text: u?.phone ?? '');
     _password = TextEditingController();
     _passwordConfirm = TextEditingController();
+    _pin = TextEditingController();
+    _pinConfirm = TextEditingController();
     _selectedRole = u?.roles.isNotEmpty == true
         ? u!.roles.first
         : (widget.doctorRoleOnly ? 'doctor' : widget.roleOptions.first.value);
@@ -455,6 +551,8 @@ class _UserFormDialogState extends State<_UserFormDialog> {
     _phone.dispose();
     _password.dispose();
     _passwordConfirm.dispose();
+    _pin.dispose();
+    _pinConfirm.dispose();
     super.dispose();
   }
 
@@ -497,6 +595,16 @@ class _UserFormDialogState extends State<_UserFormDialog> {
       }
     }
 
+    final pinError = _validateOptionalPinPair(
+      _pin.text,
+      _pinConfirm.text,
+      enabled: widget.canUpdatePin,
+    );
+    if (pinError != null) {
+      AppMessenger.show(context, SnackBar(content: Text(pinError)));
+      return null;
+    }
+
     return {
       'name': _name.text.trim(),
       'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
@@ -511,6 +619,10 @@ class _UserFormDialogState extends State<_UserFormDialog> {
       if (isEdit && _password.text.isNotEmpty) ...{
         'password': _password.text,
         'password_confirmation': _passwordConfirm.text,
+      },
+      if (widget.canUpdatePin && _pin.text.isNotEmpty) ...{
+        'pin': _pin.text,
+        'pin_confirmation': _pinConfirm.text,
       },
     };
   }
@@ -549,21 +661,29 @@ class _UserFormDialogState extends State<_UserFormDialog> {
                     phone: _phone,
                     password: _password,
                     passwordConfirm: _passwordConfirm,
+                    pin: _pin,
+                    pinConfirm: _pinConfirm,
                     selectedRole: _selectedRole,
                     selectedBranchId: _selectedBranchId,
                     isActive: _isActive,
                     obscurePassword: _obscurePassword,
                     obscureConfirm: _obscureConfirm,
+                    obscurePin: _obscurePin,
+                    obscurePinConfirm: _obscurePinConfirm,
                     roleOptions: widget.roleOptions,
                     branches: widget.branches,
                     twoColumn: true,
                     roleLocked: widget.roleLocked,
                     doctorRoleOnly: widget.doctorRoleOnly,
+                    canUpdatePin: widget.canUpdatePin,
+                    hasPin: widget.user?.hasPin ?? false,
                     onRoleChanged: (v) => setState(() => _selectedRole = v),
                     onBranchChanged: (v) => setState(() => _selectedBranchId = v),
                     onActiveChanged: (v) => setState(() => _isActive = v),
                     onTogglePassword: () => setState(() => _obscurePassword = !_obscurePassword),
                     onToggleConfirm: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                    onTogglePin: () => setState(() => _obscurePin = !_obscurePin),
+                    onTogglePinConfirm: () => setState(() => _obscurePinConfirm = !_obscurePinConfirm),
                   ),
                 ),
               ),
@@ -592,6 +712,7 @@ class _UserFormBottomSheet extends StatefulWidget {
     required this.roleOptions,
     required this.roleLocked,
     required this.doctorRoleOnly,
+    required this.canUpdatePin,
   });
 
   final User? user;
@@ -599,6 +720,7 @@ class _UserFormBottomSheet extends StatefulWidget {
   final List<({String value, String label})> roleOptions;
   final bool roleLocked;
   final bool doctorRoleOnly;
+  final bool canUpdatePin;
 
   @override
   State<_UserFormBottomSheet> createState() => _UserFormBottomSheetState();
@@ -610,11 +732,15 @@ class _UserFormBottomSheetState extends State<_UserFormBottomSheet> {
   late final TextEditingController _phone;
   late final TextEditingController _password;
   late final TextEditingController _passwordConfirm;
+  late final TextEditingController _pin;
+  late final TextEditingController _pinConfirm;
   late String _selectedRole;
   int? _selectedBranchId;
   late bool _isActive;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  bool _obscurePin = true;
+  bool _obscurePinConfirm = true;
 
   bool get isEdit => widget.user != null;
 
@@ -627,6 +753,8 @@ class _UserFormBottomSheetState extends State<_UserFormBottomSheet> {
     _phone = TextEditingController(text: u?.phone ?? '');
     _password = TextEditingController();
     _passwordConfirm = TextEditingController();
+    _pin = TextEditingController();
+    _pinConfirm = TextEditingController();
     _selectedRole = u?.roles.isNotEmpty == true
         ? u!.roles.first
         : (widget.doctorRoleOnly ? 'doctor' : widget.roleOptions.first.value);
@@ -641,6 +769,8 @@ class _UserFormBottomSheetState extends State<_UserFormBottomSheet> {
     _phone.dispose();
     _password.dispose();
     _passwordConfirm.dispose();
+    _pin.dispose();
+    _pinConfirm.dispose();
     super.dispose();
   }
 
@@ -676,6 +806,16 @@ class _UserFormBottomSheetState extends State<_UserFormBottomSheet> {
       }
     }
 
+    final pinError = _validateOptionalPinPair(
+      _pin.text,
+      _pinConfirm.text,
+      enabled: widget.canUpdatePin,
+    );
+    if (pinError != null) {
+      AppMessenger.show(context, SnackBar(content: Text(pinError)));
+      return null;
+    }
+
     return {
       'name': _name.text.trim(),
       'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
@@ -690,6 +830,10 @@ class _UserFormBottomSheetState extends State<_UserFormBottomSheet> {
       if (isEdit && _password.text.isNotEmpty) ...{
         'password': _password.text,
         'password_confirmation': _passwordConfirm.text,
+      },
+      if (widget.canUpdatePin && _pin.text.isNotEmpty) ...{
+        'pin': _pin.text,
+        'pin_confirmation': _pinConfirm.text,
       },
     };
   }
@@ -730,21 +874,29 @@ class _UserFormBottomSheetState extends State<_UserFormBottomSheet> {
                   phone: _phone,
                   password: _password,
                   passwordConfirm: _passwordConfirm,
+                  pin: _pin,
+                  pinConfirm: _pinConfirm,
                   selectedRole: _selectedRole,
                   selectedBranchId: _selectedBranchId,
                   isActive: _isActive,
                   obscurePassword: _obscurePassword,
                   obscureConfirm: _obscureConfirm,
+                  obscurePin: _obscurePin,
+                  obscurePinConfirm: _obscurePinConfirm,
                   roleOptions: widget.roleOptions,
                   branches: widget.branches,
                   twoColumn: false,
                   roleLocked: widget.roleLocked,
                   doctorRoleOnly: widget.doctorRoleOnly,
+                  canUpdatePin: widget.canUpdatePin,
+                  hasPin: widget.user?.hasPin ?? false,
                   onRoleChanged: (v) => setState(() => _selectedRole = v),
                   onBranchChanged: (v) => setState(() => _selectedBranchId = v),
                   onActiveChanged: (v) => setState(() => _isActive = v),
                   onTogglePassword: () => setState(() => _obscurePassword = !_obscurePassword),
                   onToggleConfirm: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                  onTogglePin: () => setState(() => _obscurePin = !_obscurePin),
+                  onTogglePinConfirm: () => setState(() => _obscurePinConfirm = !_obscurePinConfirm),
                 ),
               ),
             ),
@@ -898,21 +1050,29 @@ class _UserFormFields extends StatelessWidget {
     required this.phone,
     required this.password,
     required this.passwordConfirm,
+    required this.pin,
+    required this.pinConfirm,
     required this.selectedRole,
     required this.selectedBranchId,
     required this.isActive,
     required this.obscurePassword,
     required this.obscureConfirm,
+    required this.obscurePin,
+    required this.obscurePinConfirm,
     required this.roleOptions,
     required this.branches,
     required this.twoColumn,
     required this.roleLocked,
     required this.doctorRoleOnly,
+    required this.canUpdatePin,
+    required this.hasPin,
     required this.onRoleChanged,
     required this.onBranchChanged,
     required this.onActiveChanged,
     required this.onTogglePassword,
     required this.onToggleConfirm,
+    required this.onTogglePin,
+    required this.onTogglePinConfirm,
   });
 
   final bool isEdit;
@@ -921,21 +1081,29 @@ class _UserFormFields extends StatelessWidget {
   final TextEditingController phone;
   final TextEditingController password;
   final TextEditingController passwordConfirm;
+  final TextEditingController pin;
+  final TextEditingController pinConfirm;
   final String selectedRole;
   final int? selectedBranchId;
   final bool isActive;
   final bool obscurePassword;
   final bool obscureConfirm;
+  final bool obscurePin;
+  final bool obscurePinConfirm;
   final List<({String value, String label})> roleOptions;
   final List<Branch> branches;
   final bool twoColumn;
   final bool roleLocked;
   final bool doctorRoleOnly;
+  final bool canUpdatePin;
+  final bool hasPin;
   final ValueChanged<String> onRoleChanged;
   final ValueChanged<int?> onBranchChanged;
   final ValueChanged<bool> onActiveChanged;
   final VoidCallback onTogglePassword;
   final VoidCallback onToggleConfirm;
+  final VoidCallback onTogglePin;
+  final VoidCallback onTogglePinConfirm;
 
   @override
   Widget build(BuildContext context) {
@@ -1007,6 +1175,23 @@ class _UserFormFields extends StatelessWidget {
           ),
         ),
       )),
+      if (canUpdatePin) ...[
+        field(_PinTextField(
+          controller: pin,
+          obscure: obscurePin,
+          onToggle: onTogglePin,
+          label: isEdit
+              ? (hasPin ? 'New PIN' : 'Set PIN')
+              : 'Unlock PIN',
+          hint: isEdit ? 'Leave blank to keep current' : 'Optional 6-digit PIN',
+        )),
+        field(_PinTextField(
+          controller: pinConfirm,
+          obscure: obscurePinConfirm,
+          onToggle: onTogglePinConfirm,
+          label: isEdit ? 'Confirm new PIN' : 'Confirm PIN',
+        )),
+      ],
     ];
 
     final accessFields = [
@@ -1066,6 +1251,15 @@ class _UserFormFields extends StatelessWidget {
             Expanded(child: securityFields[1]),
           ],
         ),
+        if (canUpdatePin)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: securityFields[2]),
+              const SizedBox(width: 16),
+              Expanded(child: securityFields[3]),
+            ],
+          ),
         const _SectionLabel(title: 'Access', icon: Icons.key_outlined),
         accessFields[0],
         accessFields[1],
@@ -1369,6 +1563,148 @@ class _ActiveToggleCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PinTextField extends StatelessWidget {
+  const _PinTextField({
+    required this.controller,
+    required this.obscure,
+    required this.onToggle,
+    required this.label,
+    this.hint,
+    this.autofocus = false,
+    this.textInputAction = TextInputAction.next,
+    this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final bool obscure;
+  final VoidCallback onToggle;
+  final String label;
+  final String? hint;
+  final bool autofocus;
+  final TextInputAction textInputAction;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      obscureText: obscure,
+      autofocus: autofocus,
+      keyboardType: TextInputType.number,
+      maxLength: 6,
+      textInputAction: textInputAction,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      onSubmitted: onSubmitted,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint ?? '6 digits',
+        counterText: '',
+        prefixIcon: const Icon(Icons.dialpad_outlined, size: 20),
+        suffixIcon: IconButton(
+          icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+          onPressed: onToggle,
+        ),
+      ),
+    );
+  }
+}
+
+class _UpdateUserPinEditor extends StatefulWidget {
+  const _UpdateUserPinEditor({
+    required this.user,
+    this.asSheet = false,
+  });
+
+  final User user;
+  final bool asSheet;
+
+  @override
+  State<_UpdateUserPinEditor> createState() => _UpdateUserPinEditorState();
+}
+
+class _UpdateUserPinEditorState extends State<_UpdateUserPinEditor> {
+  final _pin = TextEditingController();
+  final _confirm = TextEditingController();
+  bool _obscurePin = true;
+  bool _obscureConfirm = true;
+
+  @override
+  void dispose() {
+    _pin.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final error = _validateRequiredPinPair(_pin.text.trim(), _confirm.text.trim());
+    if (error != null) {
+      AppMessenger.show(context, SnackBar(content: Text(error)));
+      return;
+    }
+    Navigator.pop(context, _pin.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPin = widget.user.hasPin;
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          hasPin
+              ? 'Set a new 6-digit unlock PIN for ${widget.user.name}. The current PIN is not required.'
+              : 'Set a 6-digit unlock PIN for ${widget.user.name}.',
+          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
+        ),
+        const SizedBox(height: 16),
+        _PinTextField(
+          controller: _pin,
+          obscure: _obscurePin,
+          onToggle: () => setState(() => _obscurePin = !_obscurePin),
+          label: hasPin ? 'New PIN' : 'PIN',
+          autofocus: true,
+        ),
+        const SizedBox(height: 14),
+        _PinTextField(
+          controller: _confirm,
+          obscure: _obscureConfirm,
+          onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
+          label: 'Confirm PIN',
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _submit(),
+        ),
+      ],
+    );
+
+    final footer = AppFormFooter(
+      primaryLabel: hasPin ? 'Update PIN' : 'Set PIN',
+      onCancel: () => Navigator.pop(context),
+      onSubmit: _submit,
+    );
+
+    if (widget.asSheet) {
+      return AppFormBottomSheetShell(
+        title: hasPin ? 'Update PIN' : 'Set PIN',
+        subtitle: widget.user.name,
+        icon: Icons.dialpad_outlined,
+        onClose: () => Navigator.pop(context),
+        body: body,
+        footer: footer,
+      );
+    }
+
+    return AppFormDialogShell(
+      title: hasPin ? 'Update PIN' : 'Set PIN',
+      subtitle: widget.user.name,
+      icon: Icons.dialpad_outlined,
+      maxWidth: 420,
+      onClose: () => Navigator.pop(context),
+      body: body,
+      footer: footer,
     );
   }
 }

@@ -99,7 +99,7 @@ class ReportsService {
     }
   }
 
-  /// Super Admin only — day/month cashier shift summary by branch.
+  /// Super Admin only — day/month cashier shift summary by branch and user.
   Future<ShiftSummaryData> shiftSummary({
     required String dateFrom,
     required String dateTo,

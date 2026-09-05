@@ -109,6 +109,20 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
           color: AppTheme.primary,
           onTap: () => context.go('/customers'),
         ),
+      if (auth.hasPermission(AppPermissions.emrVisitsCreate))
+        _CashierAction(
+          icon: Icons.add_circle_outline,
+          label: 'Check in',
+          color: AppTheme.accent,
+          onTap: () => context.push('/emr/visits/new'),
+        ),
+      if (auth.hasPermission(AppPermissions.emrVisitsView))
+        _CashierAction(
+          icon: Icons.medical_services_outlined,
+          label: 'Visits',
+          color: const Color(0xFF0EA5E9),
+          onTap: () => context.go('/emr/visits'),
+        ),
       if (auth.hasPermission(AppPermissions.productsView))
         _CashierAction(
           icon: Icons.inventory_2_outlined,
