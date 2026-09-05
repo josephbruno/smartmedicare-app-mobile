@@ -65,6 +65,40 @@ class BillingService {
         query['status'] = status;
       }
     }
+
+    final mode = paymentMode?.toLowerCase().trim();
+    final filterByPayment = mode != null && mode.isNotEmpty && mode != 'all';
+
+    if (filterByPayment) {
+      final all = <Invoice>[];
+      var fetchPage = 1;
+      while (true) {
+        query['page'] = fetchPage;
+        query['per_page'] = 200;
+        final chunk = await list(query: query);
+        all.addAll(chunk.items);
+        final lastPage = chunk.pagination?.lastPage ?? fetchPage;
+        if (fetchPage >= lastPage) break;
+        fetchPage++;
+      }
+      final filtered = all.where((inv) => inv.hasPaymentMode(mode)).toList();
+      final total = filtered.length;
+      final lastPage = total == 0 ? 1 : (total / perPage).ceil();
+      final start = (page - 1) * perPage;
+      final pageItems = start >= total
+          ? <Invoice>[]
+          : filtered.sublist(start, start + perPage > total ? total : start + perPage);
+      return (
+        items: pageItems,
+        meta: PaginationMeta(
+          total: total,
+          perPage: perPage,
+          currentPage: page,
+          lastPage: lastPage,
+        ),
+      );
+    }
+
     final result = await list(query: query);
     return (items: result.items, meta: result.pagination);
   }

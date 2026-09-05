@@ -1498,7 +1498,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     }
   }
 
-  /// Category chips + settings-mapped medicines + selected rows for the active tab.
+  /// Category chips + mapped medicines for the active tab.
+  /// Selected rows stay below as one list for every tab in this section.
   Widget _buildCategoryMedicineBlock({
     required bool compact,
     required String? activeTab,
@@ -1507,15 +1508,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   }) {
     final tab = activeTab;
     final mapped = tab == null ? const <Product>[] : _mappedForTab(tab, context);
-    final selectedUnder = tab == null
-        ? const <MapEntry<int, _MedicineRow>>[]
-        : _medicines.asMap().entries
-            .where(
-              (e) =>
-                  e.value.context == context &&
-                  _medicineMatchesCategory(e.value, tab, context),
-            )
-            .toList();
+    final selectedUnder = _medicines.asMap().entries
+        .where((e) => e.value.context == context)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1623,10 +1618,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           (e) => _buildMedicineCard(
             index: e.key,
             compact: compact,
-            treatmentUnderCategory:
-                context == _MedicineContext.treatmentUnder ? tab : null,
-            prescriptionUnderCategory:
-                context == _MedicineContext.prescription ? tab : null,
+            nameReadOnly: true,
+            treatmentUnderCategory: e.value.treatmentUnderCategory,
+            prescriptionUnderCategory: e.value.prescriptionUnderCategory,
           ),
         ),
       ],
@@ -2997,46 +2991,65 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   Widget _buildMedicineCard({
     required int index,
     required bool compact,
+    bool nameReadOnly = false,
     String? treatmentUnderCategory,
     String? prescriptionUnderCategory,
   }) {
     final m = _medicines[index];
-    final showMedicineSuggestions =
-        _medicineSuggestForIndex == index && _medicineSuggestions.isNotEmpty;
-    final nameField = Focus(
-      onFocusChange: (hasFocus) {
-        if (hasFocus) {
-          _showMedicineSuggestionsFor(index);
-        } else {
-          Future.delayed(const Duration(milliseconds: 180), () {
-            if (!mounted) return;
-            _clearMedicineSuggestions(onlyIfIndex: index);
-          });
-        }
-      },
-      child: TextField(
-        decoration: const InputDecoration(
-          labelText: 'Medicine name',
-          isDense: true,
-        ),
-        controller: m.nameCtrl,
-        onChanged: (q) => _searchMedicines(q, forIndex: index),
-      ),
-    );
+    final showMedicineSuggestions = !nameReadOnly &&
+        _medicineSuggestForIndex == index &&
+        _medicineSuggestions.isNotEmpty;
+    final nameField = nameReadOnly
+        ? Text(
+            m.nameCtrl.text.trim().isEmpty ? 'Medicine' : m.nameCtrl.text.trim(),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              height: 1.25,
+            ),
+          )
+        : Focus(
+            onFocusChange: (hasFocus) {
+              if (hasFocus) {
+                _showMedicineSuggestionsFor(index);
+              } else {
+                Future.delayed(const Duration(milliseconds: 180), () {
+                  if (!mounted) return;
+                  _clearMedicineSuggestions(onlyIfIndex: index);
+                });
+              }
+            },
+            child: TextField(
+              decoration: const InputDecoration(
+                labelText: 'Medicine name',
+                isDense: true,
+              ),
+              controller: m.nameCtrl,
+              onChanged: (q) => _searchMedicines(q, forIndex: index),
+            ),
+          );
     final priceField = TextField(
-      decoration: const InputDecoration(
-        labelText: 'Price (₹)',
+      decoration: InputDecoration(
+        labelText: nameReadOnly ? null : 'Price (₹)',
+        hintText: nameReadOnly ? '₹' : null,
+        prefixText: nameReadOnly ? '₹ ' : null,
         isDense: true,
+        contentPadding: nameReadOnly
+            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8)
+            : null,
       ),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       controller: m.priceCtrl,
     );
     final linkBtn = IconButton(
       visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      padding: EdgeInsets.zero,
       icon: Icon(
         Icons.medication_outlined,
-        size: 20,
+        size: 18,
         color: m.productId != null ? AppTheme.accent : AppTheme.primary,
       ),
       tooltip: m.productId != null
@@ -3068,8 +3081,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     );
     final removeBtn = IconButton(
       visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-      icon: const Icon(Icons.close, color: AppTheme.danger),
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      padding: EdgeInsets.zero,
+      icon: const Icon(Icons.close, color: AppTheme.danger, size: 18),
       onPressed: () {
         final row = _medicines.removeAt(index);
         _clearMedicineSuggestions();
@@ -3077,6 +3091,60 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         WidgetsBinding.instance.addPostFrameCallback((_) => row.dispose());
       },
     );
+    final categoryHint = prescriptionUnderCategory != null
+        ? _categoryLabel(prescriptionUnderCategory, _MedicineContext.prescription)
+        : (treatmentUnderCategory != null
+            ? _categoryLabel(treatmentUnderCategory, _MedicineContext.treatmentUnder)
+            : null);
+
+    if (nameReadOnly) {
+      return Card(
+        margin: const EdgeInsets.only(bottom: 6),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: m.nameCtrl.text.trim().isEmpty
+                            ? 'Medicine'
+                            : m.nameCtrl.text.trim(),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          height: 1.2,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      if (categoryHint != null)
+                        TextSpan(
+                          text: '  $categoryHint',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                    ],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(width: compact ? 76 : 92, child: priceField),
+              linkBtn,
+              removeBtn,
+            ],
+          ),
+        ),
+      );
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(

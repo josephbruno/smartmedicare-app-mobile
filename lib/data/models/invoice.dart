@@ -443,6 +443,12 @@ class Invoice {
     return map;
   }
 
+  bool hasPaymentMode(String mode) {
+    final key = mode.toLowerCase().trim();
+    if (key.isEmpty || key == 'all') return true;
+    return (paymentsByMode[key] ?? 0) > 0.009;
+  }
+
   /// e.g. "Cash ₹1,000 · UPI ₹2,500" for list/detail/receipts.
   String paymentBreakdownSummary({
     String Function(String mode)? modeLabel,

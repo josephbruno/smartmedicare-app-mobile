@@ -96,10 +96,13 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     switch (value) {
       case 'date':
         await _pickSingleDate();
+        return;
       case 'month_pick':
         await _pickMonth();
+        return;
       case 'custom':
         await _pickDateRange();
+        return;
       default:
         _applyPeriod(value);
     }
@@ -164,11 +167,14 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     });
   }
 
-  String? get _dateFromStr =>
-      _dateFrom != null ? _dateFrom!.toIso8601String().substring(0, 10) : null;
+  String? get _dateFromStr => _ymd(_dateFrom);
 
-  String? get _dateToStr =>
-      _dateTo != null ? _dateTo!.toIso8601String().substring(0, 10) : null;
+  String? get _dateToStr => _ymd(_dateTo);
+
+  String? _ymd(DateTime? d) {
+    if (d == null) return null;
+    return DateFormat('yyyy-MM-dd').format(DateTime(d.year, d.month, d.day));
+  }
 
   InputDecoration _filterDec(String label) => InputDecoration(
         labelText: label,
