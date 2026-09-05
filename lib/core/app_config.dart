@@ -21,6 +21,12 @@ class AppConfig {
     defaultValue: true,
   );
 
+  /// Android sideload APK auto-update (download + system installer).
+  static const bool enableAndroidAutoUpdate = bool.fromEnvironment(
+    'ENABLE_ANDROID_AUTO_UPDATE',
+    defaultValue: true,
+  );
+
   /// Web layout: sidebar + top bar from ~840dp.
   static const double desktopLayoutBreakpoint = 840;
 

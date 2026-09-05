@@ -3,11 +3,13 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../app_config.dart';
+import 'android_apk_installer.dart';
 import 'update_logger.dart';
 import 'update_models.dart';
 import '../network/network_resilience.dart';
@@ -45,21 +47,31 @@ class UpdateService {
     return defaultExeName;
   }
 
-  bool get isSupported =>
-      !AppConfig.isNativeMobile && Platform.isWindows && AppConfig.isDesktopPlatform;
+  bool get isSupported {
+    if (Platform.isWindows) return AppConfig.enableWindowsAutoUpdate;
+    if (Platform.isAndroid) return AppConfig.enableAndroidAutoUpdate;
+    return false;
+  }
+
+  String get updatePlatform {
+    if (Platform.isAndroid) return 'android';
+    return 'windows';
+  }
 
   Future<PackageInfo> currentPackageInfo() => PackageInfo.fromPlatform();
 
   Future<UpdateCheckResult> checkForUpdate() async {
     final info = await currentPackageInfo();
     final build = int.tryParse(info.buildNumber) ?? 0;
-    await UpdateLogger.log('Checking updates current=$build url=${AppConfig.appUpdateCheckUrl}');
+    await UpdateLogger.log(
+      'Checking updates platform=$updatePlatform current=$build url=${AppConfig.appUpdateCheckUrl}',
+    );
 
     try {
       final res = await _dio.get<Map<String, dynamic>>(
         AppConfig.appUpdateCheckUrl,
         queryParameters: {
-          'platform': 'windows',
+          'platform': updatePlatform,
           'current_build': build,
         },
       );
@@ -93,9 +105,10 @@ class UpdateService {
     }
 
     final tempDir = await getTemporaryDirectory();
+    final ext = Platform.isAndroid ? 'apk' : 'zip';
     final zipPath = p.join(
       tempDir.path,
-      'maran_update_${DateTime.now().millisecondsSinceEpoch}.zip',
+      'maran_update_${DateTime.now().millisecondsSinceEpoch}.$ext',
     );
     await UpdateLogger.log('Downloading ${package.url} -> $zipPath');
 
@@ -207,6 +220,19 @@ class UpdateService {
     await Future<void>.delayed(const Duration(milliseconds: 2500));
     await UpdateLogger.log('Exiting application for update');
     exit(0);
+  }
+
+  Future<void> launchAndroidInstaller(File apkFile) async {
+    if (!await apkFile.exists()) {
+      throw UpdateException('Downloaded APK is missing');
+    }
+    await UpdateLogger.log('Launching Android package installer path=${apkFile.path}');
+    try {
+      await AndroidApkInstaller.installApk(apkFile.path);
+    } on PlatformException catch (e) {
+      await UpdateLogger.log('Android install failed: ${e.code} ${e.message}');
+      throw UpdateException(e.message ?? 'Could not open the Android installer');
+    }
   }
 
   Future<Map<String, dynamic>?> consumeLastResult() async {

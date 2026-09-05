@@ -103,6 +103,24 @@ Options: `--skip-build`, `--mandatory`, `--notes "text"`.
 
 Clients call `GET /api/v1/app/updates/check?platform=windows&current_build=N` on startup.
 
+## Android auto-update (build + APK + upload)
+
+Same Laravel API as Windows, with `platform=android` and an `.apk` package.
+
+1. Server already has `APP_UPDATE_DEPLOY_TOKEN` and `php artisan storage:link`.
+2. On your PC (once): `setx MARAN_DEPLOY_TOKEN "same-secret-as-server"`
+3. Bump `version:` in `pubspec.yaml`, then:
+
+```bat
+.\scripts\build-apk-upload-update.bat
+```
+
+Options: `--skip-build`, `--mandatory`, `--notes "text"`.
+
+Step-by-step: `scripts/ANDROID_AUTO_UPDATE_STEPS.txt`.
+
+Android clients call `GET /api/v1/app/updates/check?platform=android&current_build=N` on startup, download the APK into app-private storage, then open the system installer.
+
 ## Tests
 
 ```bash

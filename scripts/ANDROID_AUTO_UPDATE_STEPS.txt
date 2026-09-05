@@ -1,0 +1,176 @@
+Maran Billing — Android APK Auto-Update Steps
+=============================================
+Last updated: 2026-09-05
+
+Overview
+--------
+Two artifacts (same version in pubspec.yaml):
+
+  A) First-time APK   -> sideload on a new clinic tablet
+       flutter build apk --release
+       -> dist\android\MaranBilling-<version>+<build>.apk
+         (also produced by scripts\build-apk-upload-update.bat)
+
+  B) Published APK    -> in-app auto-update for existing installs
+       scripts\build-apk-upload-update.bat
+       -> upload to Laravel API (platform=android)
+
+
+A. One-time server setup (maran-billing-backend)
+------------------------------------------------
+Same as Windows auto-update. Android reuses app_releases + the same token.
+
+1. Deploy latest backend code (android platform + .apk publish allowed).
+
+2. Run migrations if not already done:
+     php artisan migrate
+
+3. Link public storage (so APK download URLs work):
+     php artisan storage:link
+
+4. Add to .env (if missing):
+     APP_URL=https://api-maran.biapps.cloud
+     APP_UPDATE_DEPLOY_TOKEN=<long-random-secret>
+
+5. Ensure large uploads are allowed (~500 MB):
+   - PHP: upload_max_filesize / post_max_size
+   - nginx: client_max_body_size
+   - Then reload PHP-FPM / nginx
+
+6. Optional smoke test:
+     GET https://api-maran.biapps.cloud/api/v1/app/updates/check?platform=android&current_build=1
+
+
+B. One-time PC / signing setup
+------------------------------
+1. Install Flutter (in PATH) and Android SDK.
+
+2. Release signing MUST stay the same for every clinic APK.
+   android\app\build.gradle.kts currently uses the debug keystore for
+   release. Before tablets are in the field, switch to a dedicated
+   release keystore. A later keystore change cannot update existing
+   installs (Android rejects INSTALL_FAILED_UPDATE_INCONSISTENT).
+
+3. Set deploy token (same value as APP_UPDATE_DEPLOY_TOKEN on server):
+     setx MARAN_DEPLOY_TOKEN "your-long-secret"
+
+4. Close and reopen the terminal so the env var is loaded.
+
+5. Optional override:
+     setx MARAN_API_BASE "https://api-maran.biapps.cloud/api/v1"
+
+
+C. First-time APK (new tablets)
+-------------------------------
+1. Bump version in maran-billing-flutter-app\pubspec.yaml
+   Example:
+     version: 1.0.39+40
+   (left of + = versionName, right of + = versionCode / current_build)
+
+2. From maran-billing-flutter-app:
+     flutter build apk --release --dart-define=API_BASE_URL=https://api-maran.biapps.cloud/api/v1
+
+   Or run scripts\build-apk-upload-update.bat (also publishes).
+
+3. Output:
+     build\app\outputs\flutter-apk\app-release.apk
+     dist\android\MaranBilling-<version>+<build>.apk  (after the bat)
+
+4. Install on the tablet:
+   - Copy APK (USB / Drive)
+   - Open it and allow Install unknown apps for Files if Android asks
+   - Keep the same applicationId: com.maranbilling.mobile
+
+
+D. Publish a new APK (existing installs)
+----------------------------------------
+1. Bump version in pubspec.yaml (versionCode MUST increase).
+
+2. From this folder (scripts):
+     build-apk-upload-update.bat
+
+3. Options:
+     build-apk-upload-update.bat --skip-build
+     build-apk-upload-update.bat --mandatory
+     build-apk-upload-update.bat --notes "Critical POS fix"
+
+4. What the bat does:
+   - flutter build apk --release
+   - copies APK to dist\android\
+   - POSTs APK to:
+       POST /api/v1/app/updates/publish
+       Header: X-Deploy-Token
+       Fields: platform=android, package=.apk
+
+5. Verify:
+     GET /api/v1/app/updates/check?platform=android&current_build=1
+   Expect update_available=true and package.url / package.sha256.
+
+6. Typical full release (Windows + Android):
+     a) bump pubspec.yaml version
+     b) build-single-exe.bat + build-zip-upload-update.bat
+     c) build-apk-upload-update.bat
+
+
+E. Client update flow (automatic)
+---------------------------------
+On Android release/profile startup the app:
+1. Calls GET /api/v1/app/updates/check?platform=android&current_build=<build>
+2. If update available:
+   - optional  -> dialog (Later / Update now)
+   - mandatory -> blocking dialog
+3. Downloads APK into app-private cache over HTTPS with progress
+4. Verifies SHA-256
+5. If needed, sends the user to “Install unknown apps” for Maran Billing
+6. Opens the system package installer via FileProvider
+7. User taps Install; Android replaces the app (same signing key required)
+
+User data is preserved (local DB is in the app sandbox, not in the APK).
+
+
+F. Related files
+----------------
+Flutter scripts:
+  scripts\build-apk-upload-update.bat     <- build+copy+upload Android APK
+  scripts\ANDROID_AUTO_UPDATE_STEPS.txt   <- this file
+
+Flutter updater / client:
+  lib\core\update\                        <- check / download / UI
+  lib\core\update\android_apk_installer.dart
+  android\...\MainActivity.kt             <- MethodChannel installer
+  android\...\UpdateFileProvider.kt
+  android\app\src\main\res\xml\file_paths.xml
+
+Backend:
+  GET  /api/v1/app/updates/check?platform=android
+  POST /api/v1/app/updates/publish  (platform=android, .apk)
+  storage/app/public/app-updates/android/ <- stored APK packages
+  table: app_releases  (separate active row from Windows)
+
+
+G. Logs / troubleshooting
+-------------------------
+Client update log (Android):
+  app cache / MaranBilling logs fallback under getTemporaryDirectory()
+
+Common failures:
+  - 403 on publish     -> MARAN_DEPLOY_TOKEN / APP_UPDATE_DEPLOY_TOKEN mismatch
+  - 422 on publish     -> file is not .apk, or platform is not android
+  - upload fails       -> PHP/nginx body size limits
+  - 404 on download    -> php artisan storage:link; check APP_URL
+  - checksum fail      -> re-publish APK; do not hand-edit the file on server
+  - installer fails    -> APK signed with a different key than the installed app
+  - versionCode error  -> pubspec +N must be higher than the installed build
+  - unknown apps       -> Settings -> Apps -> Special access -> Install unknown apps
+                          -> Maran Billing -> Allow
+
+
+K. Quick reference
+------------------
+New clinic tablet:
+  build-apk-upload-update.bat  (or flutter build apk)
+  -> sideload MaranBilling-<version>+<build>.apk
+
+Existing clinic tablet (auto-update):
+  build-apk-upload-update.bat
+  -> user opens app -> Update now -> Android Install

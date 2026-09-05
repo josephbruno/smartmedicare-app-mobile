@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -7,24 +8,30 @@ import 'package:flutter/material.dart';
 import '../app_config.dart';
 import '../messaging/app_messenger.dart';
 import '../network/network_resilience.dart';
+import 'android_apk_installer.dart';
 import 'update_models.dart';
 import 'update_service.dart';
 import 'windows_update_gate.dart';
 
-/// Whether cold-start Windows update check runs on this build/platform.
-bool shouldRunWindowsUpdateFlow() {
-  if (kIsWeb || !Platform.isWindows) return false;
+/// Whether cold-start auto-update check runs on this build/platform.
+bool shouldRunAppUpdateFlow() {
+  if (kIsWeb) return false;
   if (kDebugMode) return false;
-  if (!AppConfig.enableWindowsAutoUpdate) return false;
-  return UpdateService().isSupported;
+  if (Platform.isWindows && AppConfig.enableWindowsAutoUpdate) {
+    return UpdateService().isSupported;
+  }
+  if (Platform.isAndroid && AppConfig.enableAndroidAutoUpdate) {
+    return UpdateService().isSupported;
+  }
+  return false;
 }
 
-/// Runs Windows update check + UI after the first frame.
+/// Runs update check + UI after the first frame (Windows ZIP or Android APK).
 ///
 /// While an update prompt or download is active, [WindowsUpdateGate] blocks
 /// splash from navigating to login/dashboard so the download is not skipped.
-Future<void> runWindowsUpdateFlow(BuildContext context) async {
-  if (!shouldRunWindowsUpdateFlow()) {
+Future<void> runAppUpdateFlow(BuildContext context) async {
+  if (!shouldRunAppUpdateFlow()) {
     WindowsUpdateGate.instance.release();
     return;
   }
@@ -79,6 +86,12 @@ Future<bool?> _showOptionalDialog(BuildContext context, UpdateCheckResult check)
   final notes = check.releaseNotes?.trim().isNotEmpty == true
       ? check.releaseNotes!
       : 'A new version of Maran Billing is available.';
+  final extra = Platform.isAndroid
+      ? 'The Android installer will open after the download. '
+          'If asked, allow Maran Billing to install unknown apps.'
+      : 'If the app is installed under Program Files, Windows may ask for '
+          'permission (UAC) — click Yes.\n'
+          'If installed under AppData (recommended), no admin permission is needed.';
   return showDialog<bool>(
     context: context,
     useRootNavigator: true,
@@ -87,12 +100,7 @@ Future<bool?> _showOptionalDialog(BuildContext context, UpdateCheckResult check)
       canPop: false,
       child: AlertDialog(
         title: Text('Update available (v${check.version})'),
-        content: Text(
-          '$notes\n\n'
-          'If the app is installed under Program Files, Windows may ask for '
-          'permission (UAC) — click Yes.\n'
-          'If installed under AppData (recommended), no admin permission is needed.',
-        ),
+        content: Text('$notes\n\n$extra'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Update now')),
@@ -132,6 +140,7 @@ Future<void> _downloadAndInstall(
   final progress = ValueNotifier<double>(0);
   final cancel = CancelToken();
   var closed = false;
+  var progressVisible = true;
 
   showDialog<void>(
     context: context,
@@ -161,6 +170,7 @@ Future<void> _downloadAndInstall(
               onPressed: () {
                 cancel.cancel('Cancelled by user');
                 closed = true;
+                progressVisible = false;
                 Navigator.pop(ctx);
               },
               child: const Text('Cancel'),
@@ -176,8 +186,25 @@ Future<void> _downloadAndInstall(
       cancelToken: cancel,
       onProgress: (p) => progress.value = p,
     );
-    if (context.mounted && !closed) {
+    if (context.mounted && !closed && progressVisible) {
       Navigator.of(context, rootNavigator: true).pop();
+      progressVisible = false;
+    }
+    if (Platform.isAndroid) {
+      if (!context.mounted) return;
+      final allowed = await _ensureAndroidInstallPermission(context, check.mandatory);
+      if (!allowed) {
+        if (check.mandatory && context.mounted) {
+          await _showMandatoryDialog(context, check);
+          if (context.mounted) {
+            await _downloadAndInstall(context, service, check);
+          }
+        }
+        return;
+      }
+      if (!context.mounted) return;
+      await service.launchAndroidInstaller(file);
+      return;
     }
     await service.launchUpdaterAndExit(
       zipFile: file,
@@ -185,7 +212,10 @@ Future<void> _downloadAndInstall(
     );
   } on UpdateException catch (e) {
     if (context.mounted && !closed) {
-      Navigator.of(context, rootNavigator: true).pop();
+      if (progressVisible) {
+        Navigator.of(context, rootNavigator: true).pop();
+        progressVisible = false;
+      }
       final retry = await showDialog<bool>(
         context: context,
         useRootNavigator: true,
@@ -211,7 +241,10 @@ Future<void> _downloadAndInstall(
   } on DioException catch (e) {
     if (cancel.isCancelled) return;
     if (context.mounted && !closed) {
-      Navigator.of(context, rootNavigator: true).pop();
+      if (progressVisible) {
+        Navigator.of(context, rootNavigator: true).pop();
+        progressVisible = false;
+      }
       AppMessenger.error(
         context,
         humanizeNetworkError(e),
@@ -219,5 +252,98 @@ Future<void> _downloadAndInstall(
     }
   } finally {
     progress.dispose();
+  }
+}
+
+Future<bool> _ensureAndroidInstallPermission(BuildContext context, bool mandatory) async {
+  if (await AndroidApkInstaller.canInstallPackages()) return true;
+  if (!context.mounted) return false;
+
+  final proceed = await showDialog<bool>(
+    context: context,
+    useRootNavigator: true,
+    barrierDismissible: false,
+    builder: (ctx) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: const Text('Allow app installs'),
+        content: const Text(
+          'Android must allow Maran Billing to install updates. '
+          'On the next screen, enable “Allow from this source”, then return here.',
+        ),
+        actions: [
+          if (!mandatory)
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Open settings')),
+        ],
+      ),
+    ),
+  );
+
+  if (proceed != true) return false;
+
+  await AndroidApkInstaller.openUnknownSourcesSettings();
+  final granted = await _waitForAndroidInstallPermission();
+  if (granted) return true;
+
+  if (!context.mounted) return false;
+  if (mandatory) {
+    return _ensureAndroidInstallPermission(context, mandatory);
+  }
+
+  await showDialog<void>(
+    context: context,
+    useRootNavigator: true,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Install not allowed'),
+      content: const Text(
+        'Maran Billing is not allowed to install updates yet. '
+        'Enable “Allow from this source” and try again.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+      ],
+    ),
+  );
+  return false;
+}
+
+Future<bool> _waitForAndroidInstallPermission() async {
+  if (await AndroidApkInstaller.canInstallPackages()) return true;
+
+  final completer = Completer<bool>();
+  Timer? poll;
+  late final AppLifecycleListener listener;
+
+  Future<void> finish(bool value) async {
+    if (completer.isCompleted) return;
+    completer.complete(value);
+  }
+
+  listener = AppLifecycleListener(
+    onResume: () {
+      unawaited(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        await finish(await AndroidApkInstaller.canInstallPackages());
+      }());
+    },
+  );
+
+  poll = Timer.periodic(const Duration(seconds: 1), (_) {
+    unawaited(() async {
+      if (await AndroidApkInstaller.canInstallPackages()) {
+        await finish(true);
+      }
+    }());
+  });
+
+  try {
+    return await completer.future.timeout(
+      const Duration(minutes: 5),
+      onTimeout: () => AndroidApkInstaller.canInstallPackages(),
+    );
+  } finally {
+    poll.cancel();
+    listener.dispose();
   }
 }

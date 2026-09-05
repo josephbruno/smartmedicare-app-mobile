@@ -42,7 +42,7 @@ class MaranBillingApp extends StatefulWidget {
 
 class _MaranBillingAppState extends State<MaranBillingApp> {
   final GlobalKey<NavigatorState> _rootKey = GlobalKey<NavigatorState>();
-  bool _windowsUpdateStarted = false;
+  bool _appUpdateStarted = false;
   late final AuthSession _session;
   late final ApiClient _api;
   late final AppServices _services;
@@ -181,17 +181,17 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
         theme: AppTheme.light(desktop: AppConfig.usesLargeUiScale),
         routerConfig: _router,
         builder: (context, child) {
-          if (!_windowsUpdateStarted) {
-            _windowsUpdateStarted = true;
+          if (!_appUpdateStarted) {
+            _appUpdateStarted = true;
             // Hold splash immediately so a fast splash finish cannot race
             // ahead of the post-frame update check.
-            if (shouldRunWindowsUpdateFlow()) {
+            if (shouldRunAppUpdateFlow()) {
               WindowsUpdateGate.instance.acquire();
             }
             WidgetsBinding.instance.addPostFrameCallback((_) {
               final navCtx = _rootKey.currentContext;
               if (navCtx != null) {
-                unawaited(runWindowsUpdateFlow(navCtx));
+                unawaited(runAppUpdateFlow(navCtx));
               } else {
                 WindowsUpdateGate.instance.release();
               }
