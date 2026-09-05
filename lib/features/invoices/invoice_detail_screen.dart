@@ -36,6 +36,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
   late Future<Invoice> _future;
   bool _downloadingPdf = false;
+  bool _cancelling = false;
 
   @override
   void initState() {
@@ -247,6 +248,117 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     );
   }
 
+  bool _canCancelInvoice(Invoice inv) {
+    final auth = context.read<AuthSession>();
+    return auth.isSuperAdmin &&
+        auth.hasPermission(AppPermissions.invoicesCancel) &&
+        inv.canCancel;
+  }
+
+  Future<void> _handleCancel(Invoice inv) async {
+    if (_cancelling || !_canCancelInvoice(inv)) return;
+
+    final billing = context.read<AppServices>().billing;
+    final codeController = TextEditingController();
+    var submitting = false;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> submit() async {
+              final code = codeController.text.trim();
+              if (code.length != 6) {
+                AppMessenger.error(context, 'Enter the 6-digit invoice security code');
+                return;
+              }
+              setDialogState(() => submitting = true);
+              try {
+                await billing.cancel(inv.id, code: code);
+                if (ctx.mounted) Navigator.pop(ctx, true);
+              } catch (e) {
+                if (context.mounted) {
+                  AppMessenger.error(context, '$e');
+                }
+                if (ctx.mounted) setDialogState(() => submitting = false);
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Cancel invoice'),
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Cancel ${inv.displayInvoiceNumber}? Stock will be restored, payments will be voided, and this invoice will be excluded from sales and payment totals.',
+                      style: const TextStyle(height: 1.4),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: codeController,
+                      enabled: !submitting,
+                      autofocus: true,
+                      obscureText: true,
+                      maxLength: 6,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onSubmitted: (_) {
+                        if (!submitting) submit();
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Security code *',
+                        hintText: '••••••',
+                        helperText: '6-digit branch invoice code',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: submitting ? null : () => Navigator.pop(ctx, false),
+                  child: const Text('Keep invoice'),
+                ),
+                FilledButton(
+                  onPressed: submitting ? null : submit,
+                  style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+                  child: submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Cancel invoice'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    codeController.dispose();
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _cancelling = true);
+    try {
+      await _reload();
+      if (!mounted) return;
+      AppMessenger.success(context, 'Invoice cancelled successfully.');
+    } finally {
+      if (mounted) setState(() => _cancelling = false);
+    }
+  }
+
   Future<void> _handleDownloadPdf(Invoice inv) async {
     if (_downloadingPdf) return;
     setState(() => _downloadingPdf = true);
@@ -357,10 +469,19 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           onSelected: (value) {
             if (value == 'share_link') _handleShareLink(inv);
             if (value == 'whatsapp') _handleWhatsApp(inv);
+            if (value == 'cancel') _handleCancel(inv);
           },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'whatsapp', child: Text('Send WhatsApp')),
-            PopupMenuItem(value: 'share_link', child: Text('Copy share link')),
+          itemBuilder: (_) => [
+            const PopupMenuItem(value: 'whatsapp', child: Text('Send WhatsApp')),
+            const PopupMenuItem(value: 'share_link', child: Text('Copy share link')),
+            if (_canCancelInvoice(inv))
+              const PopupMenuItem(
+                value: 'cancel',
+                child: Text(
+                  'Cancel invoice',
+                  style: TextStyle(color: AppTheme.danger, fontWeight: FontWeight.w600),
+                ),
+              ),
           ],
           child: Container(
             width: 40,
@@ -640,7 +761,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     final notes = inv.notes?.trim();
     final gstRate = _uniformGstRate(inv);
     final halfRate = gstRate != null ? gstRate / 2 : null;
-    final isPaid = inv.status.toLowerCase() == 'paid' || inv.dueAmount <= 0.009;
+    final isPaid = !inv.isCancelled &&
+        (inv.status.toLowerCase() == 'paid' || inv.dueAmount <= 0.009);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -728,7 +850,20 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                 valueColor: const Color(0xFF2563EB),
                 large: true,
               ),
-              if (isPaid) ...[
+              if (inv.isCancelled) ...[
+                const SizedBox(height: 4),
+                const Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '(Cancelled)',
+                    style: TextStyle(
+                      color: AppTheme.danger,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ] else if (isPaid) ...[
                 const SizedBox(height: 4),
                 const Align(
                   alignment: Alignment.centerRight,
@@ -875,6 +1010,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   }
 
   Widget _buildPaymentsCard(List<InvoicePayment> payments) {
+    final activeTotal = payments
+        .where((p) => !p.isCancelled)
+        .fold<double>(0, (s, p) => s + p.amount);
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: _cardDecoration(),
@@ -897,12 +1036,27 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        paymentModeLabel(payments[i].paymentMode),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              paymentModeLabel(payments[i].paymentMode),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: payments[i].isCancelled
+                                    ? AppTheme.textSecondary
+                                    : AppTheme.textPrimary,
+                                decoration: payments[i].isCancelled
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
+                          ),
+                          if (payments[i].isCancelled) ...[
+                            const SizedBox(width: 8),
+                            _statusBadge('Cancelled', AppTheme.danger, compact: true),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -922,15 +1076,20 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                 ),
                 Text(
                   _money(payments[i].amount),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: AppTheme.textPrimary,
+                    color: payments[i].isCancelled
+                        ? AppTheme.textSecondary
+                        : AppTheme.textPrimary,
+                    decoration: payments[i].isCancelled
+                        ? TextDecoration.lineThrough
+                        : null,
                   ),
                 ),
               ],
             ),
           ],
-          if (payments.length > 1) ...[
+          if (payments.length > 1 || payments.any((p) => p.isCancelled)) ...[
             const Divider(height: 24),
             Row(
               children: [
@@ -944,9 +1103,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   ),
                 ),
                 Text(
-                  _money(
-                    payments.fold<double>(0, (s, p) => s + p.amount),
-                  ),
+                  _money(activeTotal),
                   style: const TextStyle(
                     fontWeight: FontWeight.w800,
                     color: AppTheme.accent,
@@ -964,10 +1121,12 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     final canPrint = inv.items != null && inv.items!.isNotEmpty;
     final canReturn = context.watch<AuthSession>().hasPermission(AppPermissions.invoicesCreate) &&
         inv.canReturn;
+    final canCancel = _canCancelInvoice(inv);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wrap = constraints.maxWidth < 640;
+        final extra = (canReturn ? 1 : 0) + (canCancel ? 1 : 0);
+        final wrap = constraints.maxWidth < 640 + extra * 120;
         final buttons = [
           if (canReturn)
             _actionButton(
@@ -975,6 +1134,14 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               icon: Icons.assignment_return_outlined,
               color: const Color(0xFFB45309),
               onPressed: () => context.push('/invoices/${inv.id}/return'),
+            ),
+          if (canCancel)
+            _actionButton(
+              label: 'Cancel Invoice',
+              icon: Icons.cancel_outlined,
+              color: AppTheme.danger,
+              onPressed: _cancelling ? null : () => _handleCancel(inv),
+              loading: _cancelling,
             ),
           _actionButton(
             label: 'Print Invoice',

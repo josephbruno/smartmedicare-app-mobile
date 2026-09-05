@@ -26,6 +26,11 @@ class VisitClinicInfo {
 class VisitPdf {
   VisitPdf._();
 
+  static VisitClinicInfo? _cachedClinic;
+  static int? _cachedBranchId;
+  static DateTime? _cachedAt;
+  static const _clinicTtl = Duration(minutes: 5);
+
   static const _primary = PdfColor.fromInt(0xFF1D4ED8);
   static const _text = PdfColor.fromInt(0xFF0F172A);
   static const _muted = PdfColor.fromInt(0xFF64748B);
@@ -105,7 +110,6 @@ class VisitPdf {
     for (final visit in visits) {
       final petName = visit.pet?.name ?? 'Pet #${visit.petId}';
       final time = _formatTime(visit.visitTime);
-      final typeLabel = _titleCase(visit.visitType);
 
       doc.addPage(
         pw.Page(
@@ -133,7 +137,6 @@ class VisitPdf {
                   visit.visitNumber,
                   visit.visitDate,
                   if (time.isNotEmpty) time,
-                  typeLabel,
                 ]),
               ),
               pw.SizedBox(height: 4),
@@ -184,17 +187,6 @@ class VisitPdf {
                             _divider(),
                             _sectionTitle('Prescriptions'),
                             _medicinesBody(visit),
-                            if ((visit.serviceCharge) > 0) ...[
-                              _divider(),
-                              _sectionTitle('Consultation'),
-                              _bodyText(
-                                _join([
-                                  visit.serviceChargeProduct?.name ??
-                                      'Consultation Fee',
-                                  'Rs ${visit.serviceCharge.toStringAsFixed(0)}',
-                                ]),
-                              ),
-                            ],
                           ],
                         ),
                       ),
@@ -559,14 +551,6 @@ class VisitPdf {
     return '${parts[0]}:${parts[1]}';
   }
 
-  static String _titleCase(String value) {
-    if (value.isEmpty) return value;
-    return value
-        .split('_')
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
-  }
-
   static VisitClinicInfo clinicFromAuth({
     String? shopName,
     String? shopAddress,
@@ -599,6 +583,13 @@ class VisitPdf {
     final shop = auth.currentShop;
     final branchLite = auth.currentBranch;
     final branchId = auth.currentBranchId ?? branchLite?.id;
+
+    if (_cachedClinic != null &&
+        _cachedBranchId == branchId &&
+        _cachedAt != null &&
+        DateTime.now().difference(_cachedAt!) < _clinicTtl) {
+      return _cachedClinic!;
+    }
 
     // 1) Fresh branch from API (authoritative).
     Branch? apiBranch;
@@ -666,7 +657,11 @@ class VisitPdf {
       );
     }
 
-    return VisitClinicInfo(name: name, address: address, phone: phone);
+    final info = VisitClinicInfo(name: name, address: address, phone: phone);
+    _cachedClinic = info;
+    _cachedBranchId = branchId;
+    _cachedAt = DateTime.now();
+    return info;
   }
 
   static Future<void> printVisit(

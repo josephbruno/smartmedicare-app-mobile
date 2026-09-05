@@ -9,6 +9,7 @@ import '../../data/repositories/auth_repository.dart';
 import '../app_config.dart';
 import '../services/permission_service.dart';
 import '../services/receipt_branch_store.dart';
+import '../../data/services/emr_visit_catalog_cache.dart';
 
 const _kTokenKey = 'auth_token';
 const _kUserJsonKey = 'auth_user_json';
@@ -248,6 +249,7 @@ class AuthSession extends ChangeNotifier {
     await prefs.remove(_kUserJsonKey);
     await prefs.remove(_kBranchIdKey);
     await ReceiptBranchStore.clear();
+    EmrVisitCatalogCache.clear();
     notifyListeners();
   }
 }

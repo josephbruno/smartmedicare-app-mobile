@@ -140,6 +140,7 @@ class InvoicePayment {
     required this.paymentDate,
     this.referenceNumber,
     this.notes,
+    this.status = 'completed',
     this.tenderedAmount,
     this.changeReturn,
   });
@@ -150,12 +151,17 @@ class InvoicePayment {
   final String paymentDate;
   final String? referenceNumber;
   final String? notes;
+  /// completed | cancelled
+  final String status;
   /// Cash received from customer (when tendered > applied amount).
   final double? tenderedAmount;
   /// Change handed back by cashier.
   final double? changeReturn;
 
+  bool get isCancelled => status.toLowerCase() == 'cancelled';
+
   bool get hasCashTenderDetail =>
+      !isCancelled &&
       tenderedAmount != null &&
       tenderedAmount! > 0 &&
       (changeReturn ?? 0) > 0;
@@ -197,6 +203,7 @@ class InvoicePayment {
       paymentDate: formatApiDate(j['payment_date']?.toString()),
       referenceNumber: j['reference_number']?.toString(),
       notes: notesRaw,
+      status: j['status']?.toString() ?? 'completed',
       tenderedAmount: tendered,
       changeReturn: change,
     );
@@ -349,6 +356,13 @@ class Invoice {
       status.toLowerCase() != 'cancelled' &&
       returnableItems.any((i) => i.returnableQty > 0.0005);
 
+  bool get isCancelled =>
+      status.toLowerCase() == 'cancelled' || status.toLowerCase() == 'void';
+
+  /// Super admin / invoices.cancel: tax invoices that are not already cancelled
+  /// and have no recorded sale returns.
+  bool get canCancel => type == 'tax_invoice' && !isCancelled && returns.isEmpty;
+
   bool get isReturnInvoice => type == 'return_invoice';
 
   /// Previous invoice this return/credit is against.
@@ -386,12 +400,16 @@ class Invoice {
   bool get isPaid => status == 'paid';
   bool get isUnpaid => status == 'partial' || status == 'confirmed' || status == 'draft';
 
+  List<InvoicePayment> get activePayments => (payments ?? const <InvoicePayment>[])
+      .where((p) => !p.isCancelled)
+      .toList();
+
   /// Cash payments that recorded tendered amount + change (tendered > applied).
   Iterable<InvoicePayment> get cashTenderPayments =>
-      (payments ?? const <InvoicePayment>[]).where((p) => p.hasCashTenderDetail);
+      activePayments.where((p) => p.hasCashTenderDetail);
 
-  Iterable<InvoicePayment> get cashPayments => (payments ?? const <InvoicePayment>[])
-      .where((p) => p.paymentMode.toLowerCase() == 'cash' && p.amount > 0.009);
+  Iterable<InvoicePayment> get cashPayments =>
+      activePayments.where((p) => p.paymentMode.toLowerCase() == 'cash' && p.amount > 0.009);
 
   /// Cash received for list/UI:
   /// - Overpay with change on a settled bill → tendered amount
@@ -428,13 +446,12 @@ class Invoice {
   /// Separate cash summary: only when change was given and/or balance remains.
   bool get hasCashPaymentSummary => hasChangeReturn || hasBalanceDue;
 
-  bool get hasPayments =>
-      (payments ?? const <InvoicePayment>[]).any((p) => p.amount > 0.009);
+  bool get hasPayments => activePayments.any((p) => p.amount > 0.009);
 
   /// Sums applied amounts by `payment_mode` (lowercase keys).
   Map<String, double> get paymentsByMode {
     final map = <String, double>{};
-    for (final p in payments ?? const <InvoicePayment>[]) {
+    for (final p in activePayments) {
       if (p.amount <= 0.009) continue;
       final key = p.paymentMode.toLowerCase().trim();
       if (key.isEmpty) continue;

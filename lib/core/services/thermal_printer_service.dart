@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -9,7 +10,11 @@ import '../../data/models/customer.dart';
 import '../../data/models/invoice.dart';
 import '../desktop/desktop_prefs.dart';
 import 'escpos_receipt_builder.dart';
+import 'tspl_logo_loader_stub.dart'
+    if (dart.library.ui) 'tspl_logo_loader_io.dart' as logo_loader;
 import 'tspl_receipt_builder.dart';
+import 'tspl_times_renderer_stub.dart'
+    if (dart.library.ui) 'tspl_times_renderer_io.dart' as times_font;
 import 'windows_print_bridge.dart';
 
 /// POS receipt printing.
@@ -41,29 +46,32 @@ class ThermalPrinterService {
       // Prefer local USB thermal (TSPL or ESC/POS) whenever direct print is on.
       if (WindowsPrintBridge.isSupported) {
         final preferDirect = await DesktopPrefs.getDirectThermalPrint();
-        final printer = preferDirect ? await _resolvePrinterName() : '';
-        if (preferDirect && printer.isNotEmpty) {
-          final bytes = await _buildReceiptBytes(
-            invoice: invoice,
-            items: items,
-            shopName: shopName,
-            companyName: companyName,
-            shopPhone: shopPhone,
-            shopGstin: shopGstin,
-            shopAddress: shopAddress,
-            billerName: billerName,
-          );
-          final ok = await WindowsPrintBridge.printRaw(
-            printerName: printer,
-            data: bytes,
-          );
-          if (ok) {
-            return ThermalPrintResult.directSuccess;
+        if (preferDirect) {
+          late String printer;
+          late Uint8List bytes;
+          await Future.wait([
+            _resolvePrinterName().then((v) => printer = v),
+            _buildReceiptBytes(
+              invoice: invoice,
+              items: items,
+              shopName: shopName,
+              companyName: companyName,
+              shopPhone: shopPhone,
+              shopGstin: shopGstin,
+              shopAddress: shopAddress,
+              billerName: billerName,
+            ).then((v) => bytes = v),
+          ]);
+          if (printer.isNotEmpty) {
+            final ok = await WindowsPrintBridge.printRaw(
+              printerName: printer,
+              data: bytes,
+            );
+            if (ok) {
+              return ThermalPrintResult.directSuccess;
+            }
+            return ThermalPrintResult.failed;
           }
-          // Do not fall back to a system dialog that would block checkout.
-          return ThermalPrintResult.failed;
-        }
-        if (preferDirect && printer.isEmpty) {
           return ThermalPrintResult.noPrinterConfigured;
         }
       }
@@ -210,26 +218,68 @@ class ThermalPrinterService {
   static Future<List<String>> listWindowsPrinters() =>
       WindowsPrintBridge.listPrinters();
 
+  static String? _cachedPrinterName;
+  static PrintLanguage? _cachedPrinterLanguage;
+
+  static void clearPrinterCache() {
+    _cachedPrinterName = null;
+    _cachedPrinterLanguage = null;
+  }
+
+  /// Resolve printer + rasterize common receipt glyphs so the first bill is instant.
+  static Future<void> warmUp() async {
+    if (!WindowsPrintBridge.isSupported) return;
+    await Future.wait([
+      _resolvePrinterName(),
+      times_font.TsplTimesRenderer.warmCommon(),
+      logo_loader.ensureTsplLogoLoaded(),
+    ]);
+  }
+
   /// Saved printer name for the active language, or auto-pick a matching queue.
   static Future<String> _resolvePrinterName() async {
     final language = await DesktopPrefs.getPrintLanguage();
-    final printers = await WindowsPrintBridge.listPrinters();
-    if (language == PrintLanguage.escpos) {
-      return _resolveEscPosPrinterName(printers);
+    if (_cachedPrinterName != null &&
+        _cachedPrinterName!.isNotEmpty &&
+        _cachedPrinterLanguage == language) {
+      return _cachedPrinterName!;
     }
-    return _resolveTsplPrinterName(printers);
+
+    final saved = language == PrintLanguage.escpos
+        ? (await DesktopPrefs.getEscPosPrinterName()).trim()
+        : (await DesktopPrefs.getThermalPrinterName()).trim();
+    final needsQueueList = saved.isEmpty ||
+        (language == PrintLanguage.tspl && _isSeagullOnlyQueue(saved));
+
+    List<String> printers = const [];
+    if (needsQueueList) {
+      printers = await WindowsPrintBridge.listPrinters();
+    }
+
+    final name = language == PrintLanguage.escpos
+        ? await _resolveEscPosPrinterName(printers, saved)
+        : await _resolveTsplPrinterName(printers, saved);
+    _cachedPrinterName = name;
+    _cachedPrinterLanguage = language;
+    return name;
   }
 
-  static Future<String> _resolveTsplPrinterName(List<String> printers) async {
-    final preferred = _preferTsplQueue(printers);
-    final saved = (await DesktopPrefs.getThermalPrinterName()).trim();
+  static bool _isSeagullOnlyQueue(String saved) {
+    final savedLower = saved.toLowerCase();
+    return savedLower.contains('xprinter') &&
+        !savedLower.contains('tspl') &&
+        !savedLower.contains('generic');
+  }
+
+  static Future<String> _resolveTsplPrinterName(
+    List<String> printers,
+    String saved,
+  ) async {
+    final preferred = printers.isEmpty ? null : _preferTsplQueue(printers);
     if (saved.isNotEmpty) {
-      // Migrate away from Seagull queue when a dedicated TSPL Raw queue exists.
-      final savedLower = saved.toLowerCase();
-      final seagullOnly = savedLower.contains('xprinter') &&
-          !savedLower.contains('tspl') &&
-          !savedLower.contains('generic');
-      if (seagullOnly && preferred != null && preferred != saved) {
+      if (_isSeagullOnlyQueue(saved) &&
+          preferred != null &&
+          preferred != saved) {
         await DesktopPrefs.setThermalPrinterName(preferred);
         return preferred;
       }
@@ -242,10 +292,12 @@ class ThermalPrinterService {
     return preferred;
   }
 
-  static Future<String> _resolveEscPosPrinterName(List<String> printers) async {
-    final preferred = _preferEscPosQueue(printers);
-    final saved = (await DesktopPrefs.getEscPosPrinterName()).trim();
+  static Future<String> _resolveEscPosPrinterName(
+    List<String> printers,
+    String saved,
+  ) async {
     if (saved.isNotEmpty) return saved;
+    final preferred = printers.isEmpty ? null : _preferEscPosQueue(printers);
 
     if (preferred == null || preferred.isEmpty) return '';
     await DesktopPrefs.setEscPosPrinterName(preferred);
@@ -494,7 +546,7 @@ class ThermalPrinterService {
 
   static pw.Widget _buildTotals(Invoice invoice) {
     final payments = (invoice.payments ?? const <InvoicePayment>[])
-        .where((p) => p.amount > 0.009)
+        .where((p) => !p.isCancelled && p.amount > 0.009)
         .toList();
 
     return pw.Column(

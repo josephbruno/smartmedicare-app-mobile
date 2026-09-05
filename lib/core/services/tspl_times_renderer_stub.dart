@@ -4,6 +4,8 @@ import 'dart:typed_data';
 abstract final class TsplTimesRenderer {
   static bool get isSupported => false;
 
+  static Future<void> warmCommon() async {}
+
   static Future<TsplTimesGlyph?> render({
     required String text,
     required double fontSize,

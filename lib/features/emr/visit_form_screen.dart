@@ -20,6 +20,8 @@ import '../../data/models/prescription_under.dart';
 import '../../data/models/treatment_under.dart';
 import '../../data/models/vaccination_category.dart';
 import '../../data/services/emr_master_data_service.dart';
+import '../../data/services/emr_service.dart';
+import '../../data/services/emr_visit_catalog_cache.dart';
 
 /// Which visit form section owns a medicine row (not persisted to API).
 enum _MedicineContext { treatmentUnder, prescription, freeForm }
@@ -81,6 +83,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   final Map<String, List<Product>> _prescriptionUnderMapped = {};
   bool _loadingTreatmentUnderMapped = false;
   bool _loadingPrescriptionUnderMapped = false;
+  final Set<String> _mappedInflight = {};
   PetSummary? _petSummary;
   int? _serviceChargeProductId;
   String? _serviceChargeProductName;
@@ -357,62 +360,162 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   }
 
   Future<void> _bootstrap() async {
-    setState(() => _loading = true);
     final emr = context.read<AppServices>().emr;
     final auth = context.read<AuthSession>();
+    final checkInOnly = _isCheckInOnly;
 
-    try {
-      // Include unavailable doctors so the logged-in doctor still appears.
-      _doctors = _uniqueDoctors(await emr.listDoctors());
-      _defaultComplaintSuggestions = await emr.getComplaints();
-      _complaintSuggestions = List.of(_defaultComplaintSuggestions);
+    _hydrateCatalogCache(checkInOnly: checkInOnly, shopId: auth.currentShop?.id);
+    _applySessionDoctorRules(auth);
 
-      final checkInOnly = _isCheckInOnly;
-      if (!checkInOnly) {
-        _defaultInvestigationSuggestions = await emr.getInvestigations();
-        _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
-        _defaultTreatmentSuggestions = await emr.getTreatmentSuggestions();
-        _defaultMedicineSuggestions = await emr.getMedicineSuggestions();
-      }
-
-      if (_isEdit) {
-        final visit = await emr.getVisit(widget.visitId!);
-        _applyVisit(visit);
-      } else if (_sourceAppointmentId != null) {
-        final appt = await emr.getAppointment(_sourceAppointmentId!);
-        await _prefillFromAppointment(appt);
-      } else if (widget.petId != null) {
-        await _prefillFromPetId(widget.petId!);
-      }
-
-      if (!checkInOnly) {
-        await _loadVaccinationSuggestions();
-        await _loadCategoryCatalogs();
-      }
-
-      // Doctor login: bind doctor_id from session (Doctor UI is hidden).
-      // Admin / branch manager: no doctor_id.
-      // Cashier check-in: optional doctor, default unassigned so any doctor can continue.
-      if (_isAdminSession(auth)) {
-        _doctors = [];
-        _selectedDoctor = null;
-      } else if (auth.hasRole(AppRoles.doctor)) {
-        _lockDoctorToLoggedInUser(auth);
-        if (!_isEdit) {
-          _applyDoctorServiceChargeDefaults();
-        }
-      } else {
-        if (!_isEdit) {
-          _selectedDoctor = null;
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        AppMessenger.show(context,SnackBar(content: Text('$e')));
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
+    final doctorsFuture = emr.listDoctors();
+    final complaintsFuture = emr.getComplaints();
+    unawaited(_refreshDoctorsAndComplaints(
+      doctorsFuture: doctorsFuture,
+      complaintsFuture: complaintsFuture,
+      auth: auth,
+    ));
+    if (!checkInOnly) {
+      unawaited(_loadBackgroundCatalogs(
+        investigationsFuture: emr.getInvestigations(),
+        treatmentsFuture: emr.getTreatmentSuggestions(),
+        medicinesFuture: emr.getMedicineSuggestions(),
+      ));
     }
+
+    final needsVisit =
+        _isEdit || _sourceAppointmentId != null || widget.petId != null;
+    if (needsVisit) {
+      setState(() => _loading = true);
+      try {
+        await _loadVisitContext(emr);
+        if (!mounted) return;
+        _applySessionDoctorRules(auth);
+      } catch (e) {
+        if (mounted) {
+          AppMessenger.show(context, SnackBar(content: Text('$e')));
+        }
+      }
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  void _hydrateCatalogCache({required bool checkInOnly, int? shopId}) {
+    EmrVisitCatalogCache.bindShop(shopId);
+    if (!EmrVisitCatalogCache.hasSuggestions && !EmrVisitCatalogCache.isFresh) {
+      return;
+    }
+    _doctors = _uniqueDoctors(EmrVisitCatalogCache.doctors);
+    _defaultComplaintSuggestions = List.of(EmrVisitCatalogCache.complaints);
+    _complaintSuggestions = List.of(_defaultComplaintSuggestions);
+    if (checkInOnly || !EmrVisitCatalogCache.isFresh) return;
+
+    _defaultInvestigationSuggestions =
+        List.of(EmrVisitCatalogCache.investigations);
+    _investigationSuggestions = List.of(_defaultInvestigationSuggestions);
+    _defaultTreatmentSuggestions = List.of(EmrVisitCatalogCache.treatments);
+    _defaultMedicineSuggestions = List.of(EmrVisitCatalogCache.medicines);
+    _treatmentUnderCategories =
+        List.of(EmrVisitCatalogCache.treatmentUnderCategories);
+    _prescriptionUnderCategories =
+        List.of(EmrVisitCatalogCache.prescriptionUnderCategories);
+    _treatmentUnderMapped
+      ..clear()
+      ..addAll(EmrVisitCatalogCache.treatmentUnderMapped.map(
+        (k, v) => MapEntry(k, List<Product>.of(v)),
+      ));
+    _prescriptionUnderMapped
+      ..clear()
+      ..addAll(EmrVisitCatalogCache.prescriptionUnderMapped.map(
+        (k, v) => MapEntry(k, List<Product>.of(v)),
+      ));
+    if (_treatmentUnderTab == null && _treatmentUnderCategories.isNotEmpty) {
+      _treatmentUnderTab = _treatmentUnderCategories.first.slug;
+    }
+    if (_prescriptionTab == null && _prescriptionUnderCategories.isNotEmpty) {
+      _prescriptionTab = _prescriptionUnderCategories.first.slug;
+    }
+  }
+
+  Future<void> _refreshDoctorsAndComplaints({
+    required Future<List<DoctorLite>> doctorsFuture,
+    required Future<List<String>> complaintsFuture,
+    required AuthSession auth,
+  }) async {
+    try {
+      late List<DoctorLite> doctors;
+      late List<String> complaints;
+      await Future.wait([
+        doctorsFuture.then((v) => doctors = v),
+        complaintsFuture.then((v) => complaints = v),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _doctors = _uniqueDoctors(doctors);
+        _defaultComplaintSuggestions = complaints;
+        _complaintSuggestions = List.of(complaints);
+        _applySessionDoctorRules(auth);
+      });
+      EmrVisitCatalogCache.saveDoctors(_doctors);
+      EmrVisitCatalogCache.saveComplaints(complaints);
+    } catch (_) {}
+  }
+
+  Future<void> _loadVisitContext(EmrService emr) async {
+    if (_isEdit) {
+      final visit = await emr.getVisit(widget.visitId!);
+      _applyVisit(visit);
+    } else if (_sourceAppointmentId != null) {
+      final appt = await emr.getAppointment(_sourceAppointmentId!);
+      await _prefillFromAppointment(appt);
+    } else if (widget.petId != null) {
+      await _prefillFromPetId(widget.petId!);
+    }
+  }
+
+  void _applySessionDoctorRules(AuthSession auth) {
+    if (_isAdminSession(auth)) {
+      _doctors = [];
+      _selectedDoctor = null;
+    } else if (auth.hasRole(AppRoles.doctor)) {
+      _lockDoctorToLoggedInUser(auth);
+      if (!_isEdit) {
+        _applyDoctorServiceChargeDefaults();
+      }
+    } else if (!_isEdit) {
+      _selectedDoctor = null;
+    }
+  }
+
+  Future<void> _loadBackgroundCatalogs({
+    required Future<List<String>> investigationsFuture,
+    required Future<List<TreatmentSuggestion>> treatmentsFuture,
+    required Future<List<MedicineSuggestion>> medicinesFuture,
+  }) async {
+    try {
+      final results = await Future.wait<Object>([
+        investigationsFuture,
+        treatmentsFuture,
+        medicinesFuture,
+      ]);
+      if (!mounted) return;
+      final investigations = results[0] as List<String>;
+      final treatments = results[1] as List<TreatmentSuggestion>;
+      final medicines = results[2] as List<MedicineSuggestion>;
+      setState(() {
+        _defaultInvestigationSuggestions = investigations;
+        _investigationSuggestions = List.of(investigations);
+        _defaultTreatmentSuggestions = treatments;
+        _defaultMedicineSuggestions = medicines;
+      });
+      EmrVisitCatalogCache.saveInvestigations(investigations);
+      EmrVisitCatalogCache.saveTreatments(treatments);
+      EmrVisitCatalogCache.saveMedicines(medicines);
+    } catch (_) {}
+
+    if (!mounted) return;
+    await _loadVaccinationSuggestions();
+    if (!mounted) return;
+    await _loadCategoryCatalogs();
   }
 
   void _applyVisit(PetVisit visit) {
@@ -834,6 +937,17 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       return;
     }
     try {
+      final cached = (query == null || query.isEmpty)
+          ? EmrVisitCatalogCache.vaccinations(species)
+          : null;
+      if (cached != null && cached.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _defaultVaccinationSuggestions = cached;
+          _vaccinationSuggestions = cached;
+          _attachVaccinationTemplates();
+        });
+      }
       final results = await context.read<AppServices>().emr.getVaccinationSuggestions(
             species: species,
             petId: _selectedPet?.id,
@@ -843,6 +957,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       setState(() {
         if (query == null || query.isEmpty) {
           _defaultVaccinationSuggestions = results;
+          EmrVisitCatalogCache.saveVaccinations(species, results);
         }
         _vaccinationSuggestions = results;
         _attachVaccinationTemplates();
@@ -1243,23 +1358,27 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           .emrMasterData
           .listTreatmentUnderCategories();
       if (!mounted) return;
-      setState(() => _treatmentUnderCategories = list);
-      // Prefetch mapped medicines for every active tab.
-      await Future.wait([
-        for (final c in list) _loadMappedMedicinesFor(c.slug, _MedicineContext.treatmentUnder),
-      ]);
-      if (!mounted) return;
-      if (_treatmentUnderTab == null && list.isNotEmpty) {
-        setState(() => _treatmentUnderTab = list.first.slug);
+      EmrVisitCatalogCache.saveTreatmentUnderCategories(list);
+      setState(() {
+        _treatmentUnderCategories = list;
+        _treatmentUnderTab ??= list.isNotEmpty ? list.first.slug : null;
+      });
+      final first =
+          _treatmentUnderTab ?? (list.isNotEmpty ? list.first.slug : null);
+      if (first != null) {
+        await _loadMappedMedicinesFor(first, _MedicineContext.treatmentUnder);
       }
+      if (!mounted) return;
+      unawaited(_prefetchRemainingMapped(
+        slugs: list.map((c) => c.slug),
+        section: _MedicineContext.treatmentUnder,
+        skip: first,
+      ));
     } catch (_) {
-      await Future.wait([
-        for (final key in TreatmentUnderCategory.keys) _loadMappedMedicinesFor(key, _MedicineContext.treatmentUnder),
-      ]);
+      const first = TreatmentUnderCategory.antibiotics;
       if (!mounted) return;
-      if (_treatmentUnderTab == null) {
-        setState(() => _treatmentUnderTab = TreatmentUnderCategory.antibiotics);
-      }
+      setState(() => _treatmentUnderTab ??= first);
+      await _loadMappedMedicinesFor(first, _MedicineContext.treatmentUnder);
     }
   }
 
@@ -1270,24 +1389,40 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           .emrMasterData
           .listPrescriptionUnderCategories();
       if (!mounted) return;
-      setState(() => _prescriptionUnderCategories = list);
-      await Future.wait([
-        for (final c in list) _loadMappedMedicinesFor(c.slug, _MedicineContext.prescription),
-      ]);
-      if (!mounted) return;
-      if (_prescriptionTab == null && list.isNotEmpty) {
-        setState(() => _prescriptionTab = list.first.slug);
+      EmrVisitCatalogCache.savePrescriptionUnderCategories(list);
+      setState(() {
+        _prescriptionUnderCategories = list;
+        _prescriptionTab ??= list.isNotEmpty ? list.first.slug : null;
+      });
+      final first =
+          _prescriptionTab ?? (list.isNotEmpty ? list.first.slug : null);
+      if (first != null) {
+        await _loadMappedMedicinesFor(first, _MedicineContext.prescription);
       }
+      if (!mounted) return;
+      unawaited(_prefetchRemainingMapped(
+        slugs: list.map((c) => c.slug),
+        section: _MedicineContext.prescription,
+        skip: first,
+      ));
     } catch (_) {
-      await Future.wait([
-        for (final key in PrescriptionUnderCategory.keys)
-          _loadMappedMedicinesFor(key, _MedicineContext.prescription),
-      ]);
+      const first = PrescriptionUnderCategory.oral;
       if (!mounted) return;
-      if (_prescriptionTab == null) {
-        setState(() => _prescriptionTab = PrescriptionUnderCategory.oral);
-      }
+      setState(() => _prescriptionTab ??= first);
+      await _loadMappedMedicinesFor(first, _MedicineContext.prescription);
     }
+  }
+
+  Future<void> _prefetchRemainingMapped({
+    required Iterable<String> slugs,
+    required _MedicineContext section,
+    required String? skip,
+  }) async {
+    final rest = slugs.where((s) => s.isNotEmpty && s != skip).toList();
+    if (rest.isEmpty) return;
+    await Future.wait([
+      for (final slug in rest) _loadMappedMedicinesFor(slug, section),
+    ]);
   }
 
   List<String> _categoryKeys(_MedicineContext context) {
@@ -1356,30 +1491,43 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     String category,
     _MedicineContext section,
   ) async {
+    final isPrescription = section == _MedicineContext.prescription;
+    final key = '${isPrescription ? 'p' : 't'}:$category';
+    final target =
+        isPrescription ? _prescriptionUnderMapped : _treatmentUnderMapped;
+    if (target.containsKey(category) || _mappedInflight.contains(key)) return;
+    _mappedInflight.add(key);
+
+    final cached = EmrVisitCatalogCache.mapped(
+      prescription: isPrescription,
+      category: category,
+    );
+    if (cached != null) {
+      _mappedInflight.remove(key);
+      if (!mounted) return;
+      setState(() => target[category] = cached);
+      return;
+    }
+
+    final services = context.read<AppServices>();
     try {
       List<Product> list = [];
       try {
-        list = section == _MedicineContext.prescription
-            ? await context
-                .read<AppServices>()
-                .emrMasterData
-                .listPrescriptionUnderProducts(
-                  category: category,
-                  isActive: true,
-                )
-            : await context
-                .read<AppServices>()
-                .emrMasterData
-                .listTreatmentUnderProducts(
-                  category: category,
-                  isActive: true,
-                );
+        list = isPrescription
+            ? await services.emrMasterData.listPrescriptionUnderProducts(
+                category: category,
+                isActive: true,
+              )
+            : await services.emrMasterData.listTreatmentUnderProducts(
+                category: category,
+                isActive: true,
+              );
       } catch (_) {
         // Visit users may lack master-data permission; use the filtered catalog.
-        final filterKey = section == _MedicineContext.prescription
+        final filterKey = isPrescription
             ? 'prescription_under_category'
             : 'treatment_under_category';
-        list = await context.read<AppServices>().products.list(
+        list = await services.products.list(
               query: {
                 'type': 'medicine',
                 'per_page': 200,
@@ -1391,18 +1539,18 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       list = list
           .where((p) => _productMappedToCategory(p, category, section))
           .toList();
+      EmrVisitCatalogCache.saveMapped(
+        prescription: isPrescription,
+        category: category,
+        products: list,
+      );
       if (!mounted) return;
-      final target = section == _MedicineContext.prescription
-          ? _prescriptionUnderMapped
-          : _treatmentUnderMapped;
       setState(() => target[category] = list);
     } catch (_) {
       if (!mounted) return;
-      if (section == _MedicineContext.prescription) {
-        setState(() => _prescriptionUnderMapped[category] = []);
-      } else {
-        setState(() => _treatmentUnderMapped[category] = []);
-      }
+      setState(() => target[category] = []);
+    } finally {
+      _mappedInflight.remove(key);
     }
   }
 
@@ -1829,7 +1977,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           content: Text('Visit held — resume anytime from Visit Records (open).'),
         ),
       );
-      context.go('/emr/visits/${visit.id}');
+      context.go('/emr/visits/${visit.id}?r=${DateTime.now().millisecondsSinceEpoch}');
     } catch (e) {
       if (mounted) {
         AppMessenger.show(context, SnackBar(content: Text(_apiErrorMessage(e))));
@@ -1855,7 +2003,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ),
           );
         }
-        context.go('/emr/visits/${visit.id}');
+        context.go('/emr/visits/${visit.id}?r=${DateTime.now().millisecondsSinceEpoch}');
       }
     } catch (e) {
       if (mounted) {

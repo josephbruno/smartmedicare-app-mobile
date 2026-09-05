@@ -268,7 +268,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
 
     final byMode = <String, double>{};
     for (final inv in invoices) {
-      for (final p in inv.payments ?? const []) {
+      for (final p in inv.activePayments) {
         byMode[p.paymentMode] = (byMode[p.paymentMode] ?? 0) + p.amount;
       }
     }

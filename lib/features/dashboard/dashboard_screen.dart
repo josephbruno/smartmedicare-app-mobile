@@ -7,6 +7,7 @@ import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/app_config.dart';
+import '../../core/responsive/desktop_layout_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_date_range_picker.dart';
 import '../../data/models/dashboard_data.dart';
@@ -27,18 +28,20 @@ class DashboardScreen extends StatelessWidget {
     }
 
     if (auth.hasRole(AppRoles.doctor)) {
-      return const SingleChildScrollView(
-        physics: AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 28),
-        child: DoctorDashboardSection(),
+      final mobile = ResponsiveLayout.isMobile(context);
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(mobile ? 12 : 16, mobile ? 12 : 16, mobile ? 12 : 16, 28),
+        child: const DoctorDashboardSection(),
       );
     }
 
     if (auth.hasRole(AppRoles.branchManager) && !auth.hasRole(AppRoles.superAdmin)) {
-      return const SingleChildScrollView(
-        physics: AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(24, 24, 24, 36),
-        child: BranchManagerDashboardSection(),
+      final mobile = ResponsiveLayout.isMobile(context);
+      return SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(mobile ? 12 : 24, mobile ? 16 : 24, mobile ? 12 : 24, 36),
+        child: const BranchManagerDashboardSection(),
       );
     }
 
@@ -144,9 +147,10 @@ class _DashboardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = ResponsiveLayout.isMobile(context);
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
+      padding: EdgeInsets.fromLTRB(mobile ? 12 : 24, mobile ? 16 : 24, mobile ? 12 : 24, 36),
       child: _ManagerDashboardContent(d: d),
     );
   }
@@ -164,26 +168,30 @@ class _ManagerDashboardContent extends StatelessWidget {
     return LayoutBuilder(
         builder: (context, constraints) {
           final w = constraints.maxWidth;
-          const spacing = 16.0;
+          final mobile = w < 600;
+          final spacing = mobile ? 10.0 : 16.0;
           final qaCols = w >= 900 ? 4 : (w >= 520 ? 2 : 1);
           final wide = w >= 980;
+          final statCols = w >= 900 ? 4 : 2;
 
           final quickActions = _quickActions(context, auth);
-          final stats = _statCards(context);
+          final stats = _statCards(context, compact: mobile);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _header(),
-              const SizedBox(height: 22),
-              _statCardsRow(stats, spacing: spacing),
-              const SizedBox(height: 30),
+              _header(compact: mobile),
+              SizedBox(height: mobile ? 16 : 22),
+              w >= 900
+                  ? _statCardsRow(stats, spacing: spacing)
+                  : _wrapGrid(w, statCols, spacing, stats),
+              SizedBox(height: mobile ? 20 : 30),
               if (d.branches != null && d.branches!.isNotEmpty)
                 _branchAndSummary(context, wide: wide, width: w, spacing: spacing)
               else
                 _salesSummary(context),
               if (quickActions.isNotEmpty) ...[
-                const SizedBox(height: 30),
+                SizedBox(height: mobile ? 20 : 30),
                 const DashboardSectionHeader(icon: Icons.bolt_rounded, title: 'Quick Actions'),
                 const SizedBox(height: 16),
                 _wrapGrid(w, qaCols, spacing, quickActions),
@@ -194,23 +202,27 @@ class _ManagerDashboardContent extends StatelessWidget {
     );
   }
 
-  Widget _header() {
+  Widget _header({required bool compact}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          children: const [
-            Icon(Icons.insights_rounded, color: AppTheme.primary, size: 22),
-            SizedBox(width: 10),
-            Text(
-              'Business Overview',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+          children: [
+            Icon(Icons.insights_rounded, color: AppTheme.primary, size: compact ? 20 : 22),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Business Overview',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+              ),
             ),
           ],
         ),
-        const Padding(
-          padding: EdgeInsets.only(left: 32, top: 4),
-          child: Text(
+        Padding(
+          padding: EdgeInsets.only(left: compact ? 0 : 32, top: 4),
+          child: const Text(
             "Here's what's happening with your store today.",
             style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
           ),
@@ -219,37 +231,39 @@ class _ManagerDashboardContent extends StatelessWidget {
     );
   }
 
-  List<Widget> _statCards(BuildContext context) {
+  List<Widget> _statCards(BuildContext context, {required bool compact}) {
     return [
       DashboardStatCard(
-        title: "TODAY'S SALES",
-        value: '₹${d.todaySalesTotal.toStringAsFixed(2)}',
-        subtitle: '${d.todaySalesCount} transactions today',
+        title: compact ? 'TODAY' : "TODAY'S SALES",
+        value: formatDashboardPrice(d.todaySalesTotal),
+        subtitle: compact ? '${d.todaySalesCount} bills' : '${d.todaySalesCount} transactions today',
         icon: Icons.point_of_sale_rounded,
         color: AppTheme.primary, // blue
         trend: syntheticTrend(d.todaySalesTotal),
       ),
       DashboardStatCard(
-        title: 'MONTHLY SALES',
-        value: '₹${d.monthlySalesTotal.toStringAsFixed(2)}',
-        subtitle: 'Accumulated this month',
+        title: compact ? 'MONTHLY' : 'MONTHLY SALES',
+        value: formatDashboardPrice(d.monthlySalesTotal),
+        subtitle: compact ? 'This month' : 'Accumulated this month',
         icon: Icons.trending_up_rounded,
         color: const Color(0xFF8B5CF6), // violet
         trend: syntheticTrend(d.monthlySalesTotal),
       ),
       DashboardStatCard(
-        title: 'LOW STOCK ITEMS',
+        title: compact ? 'LOW STOCK' : 'LOW STOCK ITEMS',
         value: '${d.lowStockCount}',
-        subtitle: d.lowStockCount > 0 ? 'Requires reordering' : 'All stocks healthy',
+        subtitle: d.lowStockCount > 0
+            ? (compact ? 'Reorder needed' : 'Requires reordering')
+            : (compact ? 'All healthy' : 'All stocks healthy'),
         icon: Icons.warning_amber_rounded,
         color: AppTheme.warning, // amber
         trend: syntheticTrend(d.lowStockCount),
         onTap: () => context.go('/stock-alerts'),
       ),
       DashboardStatCard(
-        title: 'OUTSTANDING DUES',
-        value: '₹${d.outstandingDues.toStringAsFixed(2)}',
-        subtitle: 'Unpaid invoice balance',
+        title: compact ? 'DUES' : 'OUTSTANDING DUES',
+        value: formatDashboardPrice(d.outstandingDues),
+        subtitle: compact ? 'Unpaid balance' : 'Unpaid invoice balance',
         icon: Icons.account_balance_wallet_outlined,
         color: const Color(0xFF0EA5E9), // sky / teal
         trend: syntheticTrend(d.outstandingDues),
@@ -265,16 +279,18 @@ class _ManagerDashboardContent extends StatelessWidget {
       title: 'Performance by Branch',
       trailing: Wrap(
         spacing: 8,
+        runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          if (canViewReports) _dateRangeChip(context),
+          if (canViewReports) _dateRangeChip(context, compact: width < 600),
           if (canViewReports)
             OutlinedButton.icon(
               onPressed: () => context.go('/reports/sales'),
               icon: const Icon(Icons.assessment_outlined, size: 18),
-              label: const Text('View Report'),
+              label: Text(width < 600 ? 'Report' : 'View Report'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(0, 40),
+                visualDensity: width < 600 ? VisualDensity.compact : VisualDensity.standard,
                 textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
               ),
             ),
@@ -321,11 +337,12 @@ class _ManagerDashboardContent extends StatelessWidget {
     );
   }
 
-  Widget _dateRangeChip(BuildContext context) {
+  Widget _dateRangeChip(BuildContext context, {bool compact = false}) {
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, 1);
-    final label =
-        '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d, y').format(now)}';
+    final label = compact
+        ? DateFormat('MMM d').format(now)
+        : '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d, y').format(now)}';
     return OutlinedButton.icon(
       onPressed: () async {
         final picked = await showAppDateRangePicker(
@@ -367,7 +384,7 @@ class _ManagerDashboardContent extends StatelessWidget {
     final total = data.fold<double>(0, (s, e) => s + e.value);
     return SalesSummaryCard(
       data: data,
-      centerValue: '₹${total.toStringAsFixed(0)}',
+      centerValue: formatDashboardPrice(total),
       fillHeight: fillHeight,
     );
   }

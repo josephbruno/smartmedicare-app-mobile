@@ -18,6 +18,8 @@ import '../../core/desktop/command_palette.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/services/receipt_branch_store.dart';
+import '../../core/services/thermal_printer_service.dart';
+import '../../data/services/emr_visit_catalog_cache.dart';
 import '../../data/local/sync_coordinator.dart';
 import '../../core/connectivity/connectivity_notifier.dart';
 import '../../core/theme/app_theme.dart';
@@ -50,10 +52,19 @@ class _AppShellState extends State<AppShell> {
         auth.fetchMe();
       }
       if (auth.isAuthenticated) {
-        ReceiptBranchStore.sync(
+        unawaited(ReceiptBranchStore.sync(
           branches: context.read<AppServices>().branches,
           auth: auth,
-        );
+        ));
+        final services = context.read<AppServices>();
+        unawaited(EmrVisitCatalogCache.prefetch(
+          emr: services.emr,
+          master: services.emrMasterData,
+          shopId: auth.currentShop?.id,
+        ));
+        if (AppConfig.isDesktopPlatform) {
+          unawaited(ThermalPrinterService.warmUp());
+        }
       }
     });
   }

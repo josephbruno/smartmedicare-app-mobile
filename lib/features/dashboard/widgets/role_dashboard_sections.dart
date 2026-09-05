@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app_services.dart';
+import '../../../core/responsive/desktop_layout_helper.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/session/auth_session.dart';
 import '../../../core/theme/app_theme.dart';
@@ -146,12 +147,13 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
     final branchName = auth.currentBranch?.name ?? 'Your branch';
     final actions = _actions(auth);
     final wide = MediaQuery.sizeOf(context).width >= 1100;
+    final mobile = ResponsiveLayout.isMobile(context);
 
     return RefreshIndicator(
       onRefresh: _refresh,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        padding: EdgeInsets.fromLTRB(mobile ? 12 : 20, 16, mobile ? 12 : 20, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -301,7 +303,7 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
     final metrics = <_CashierMetric>[
       _CashierMetric(
         label: "Today's sales",
-        value: '₹${d.todaySalesTotal.toStringAsFixed(0)}',
+        value: formatDashboardPrice(d.todaySalesTotal),
         hint: '${d.todaySalesCount} bills',
         icon: Icons.payments_rounded,
         color: AppTheme.primary,
@@ -311,9 +313,9 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
       ),
       _CashierMetric(
         label: 'Paid today',
-        value: '₹${d.todaySales.paid.toStringAsFixed(0)}',
+        value: formatDashboardPrice(d.todaySales.paid),
         hint: d.todaySales.due > 0
-            ? 'Due ₹${d.todaySales.due.toStringAsFixed(0)}'
+            ? 'Due ${formatDashboardPrice(d.todaySales.due)}'
             : 'All collected',
         icon: Icons.check_circle_outline_rounded,
         color: AppTheme.accent,
@@ -321,7 +323,7 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
       if (d.outstandingDues > 0)
         _CashierMetric(
           label: 'Outstanding',
-          value: '₹${d.outstandingDues.toStringAsFixed(0)}',
+          value: formatDashboardPrice(d.outstandingDues),
           hint: 'Open dues',
           icon: Icons.account_balance_wallet_outlined,
           color: AppTheme.danger,
@@ -331,7 +333,7 @@ class _CashierDashboardSectionState extends State<CashierDashboardSection> {
         ),
       _CashierMetric(
         label: 'This month',
-        value: '₹${d.monthlySalesTotal.toStringAsFixed(0)}',
+        value: formatDashboardPrice(d.monthlySalesTotal),
         hint: '${d.monthlySales.count} bills',
         icon: Icons.calendar_month_rounded,
         color: const Color(0xFF6366F1),
@@ -510,6 +512,7 @@ class _CashierHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = ResponsiveLayout.isMobile(context);
     return Row(
       children: [
         Expanded(
@@ -521,9 +524,11 @@ class _CashierHeader extends StatelessWidget {
                   Flexible(
                     child: Text(
                       branchName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
-                            fontSize: 20,
+                            fontSize: mobile ? 18 : 20,
                           ),
                     ),
                   ),
@@ -561,14 +566,24 @@ class _CashierHeader extends StatelessWidget {
         ),
         if (showPos) ...[
           const SizedBox(width: 4),
-          FilledButton.icon(
-            onPressed: onOpenPos,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Open POS'),
-            style: FilledButton.styleFrom(
-              textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          if (mobile)
+            FilledButton(
+              onPressed: onOpenPos,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(40, 40),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              child: const Icon(Icons.point_of_sale_rounded, size: 18),
+            )
+          else
+            FilledButton.icon(
+              onPressed: onOpenPos,
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Open POS'),
+              style: FilledButton.styleFrom(
+                textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
             ),
-          ),
         ],
       ],
     );
@@ -696,15 +711,18 @@ class _CashierMetricTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  metric.value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                    color: AppTheme.textPrimary,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    metric.value,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
                 ),
                 Text(
@@ -803,7 +821,7 @@ class _PaymentMixBar extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${s.label} ₹${s.amount.toStringAsFixed(0)}',
+                        '${s.label} ${formatDashboardPrice(s.amount)}',
                         style: const TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
@@ -941,6 +959,7 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthSession>();
+    final mobile = ResponsiveLayout.isMobile(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -949,7 +968,7 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w800,
                 color: AppTheme.textPrimary,
-                fontSize: 22,
+                fontSize: mobile ? 20 : 22,
               ),
         ),
         const SizedBox(height: 4),
@@ -965,32 +984,43 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
             final holds = snap.data?[1] ?? const <PetVisit>[];
             final ready = snap.data?[2] ?? const <PetVisit>[];
             final loading = snap.connectionState != ConnectionState.done;
-            return Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _DoctorStatChip(
-                  label: 'Open visits',
-                  value: loading ? '…' : '${open.length}',
-                  icon: Icons.medical_services_outlined,
-                  color: AppTheme.primary,
-                  onTap: auth.hasPermission(AppPermissions.emrVisitsView)
-                      ? () => context.go('/emr/visits')
-                      : null,
-                ),
-                _DoctorStatChip(
-                  label: 'On hold',
-                  value: loading ? '…' : '${holds.length}',
-                  icon: Icons.pause_circle_outline,
-                  color: AppTheme.warning,
-                ),
-                _DoctorStatChip(
-                  label: 'Sent to cashier',
-                  value: loading ? '…' : '${ready.length}',
-                  icon: Icons.receipt_long_outlined,
-                  color: AppTheme.accent,
-                ),
-              ],
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth;
+                final cols = w >= 520 ? 3 : 2;
+                const gap = 10.0;
+                final tileW = (w - gap * (cols - 1)) / cols;
+                final chips = [
+                  _DoctorStatChip(
+                    label: 'Open visits',
+                    value: loading ? '…' : '${open.length}',
+                    icon: Icons.medical_services_outlined,
+                    color: AppTheme.primary,
+                    onTap: auth.hasPermission(AppPermissions.emrVisitsView)
+                        ? () => context.go('/emr/visits')
+                        : null,
+                  ),
+                  _DoctorStatChip(
+                    label: 'On hold',
+                    value: loading ? '…' : '${holds.length}',
+                    icon: Icons.pause_circle_outline,
+                    color: AppTheme.warning,
+                  ),
+                  _DoctorStatChip(
+                    label: 'Sent to cashier',
+                    value: loading ? '…' : '${ready.length}',
+                    icon: Icons.receipt_long_outlined,
+                    color: AppTheme.accent,
+                  ),
+                ];
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (final chip in chips) SizedBox(width: tileW, child: chip),
+                  ],
+                );
+              },
             );
           },
         ),
@@ -1046,9 +1076,10 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
                     trailing: TextButton(
                       onPressed: () => context.push('/emr/visits/${v.id}/edit'),
                       style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
                         textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                       ),
-                      child: const Text('Continue'),
+                      child: Text(mobile ? 'Open' : 'Continue'),
                     ),
                     onTap: () => context.push('/emr/visits/${v.id}'),
                   ),
@@ -1099,43 +1130,55 @@ class _DoctorDashboardSectionState extends State<DoctorDashboardSection> {
           },
         ),
         const SizedBox(height: 24),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            if (auth.hasPermission(AppPermissions.emrVisitsCreate))
-              QuickActionCard(
-                icon: Icons.add_circle_outline,
-                label: 'New visit',
-                subtitle: 'Start consultation',
-                color: AppTheme.accent,
-                onTap: () => context.push('/emr/visits/new'),
-              ),
-            if (auth.hasPermission(AppPermissions.emrVisitsView))
-              QuickActionCard(
-                icon: Icons.medical_services_outlined,
-                label: 'Visit records',
-                subtitle: 'All visits',
-                color: AppTheme.primary,
-                onTap: () => context.go('/emr/visits'),
-              ),
-            if (auth.hasPermission(AppPermissions.customersView))
-              QuickActionCard(
-                icon: Icons.pets_outlined,
-                label: 'Patients',
-                subtitle: 'Pet directory',
-                color: const Color(0xFF8B5CF6),
-                onTap: () => context.go('/patients'),
-              ),
-            if (auth.hasPermission(AppPermissions.emrRemindersView))
-              QuickActionCard(
-                icon: Icons.notifications_outlined,
-                label: 'Reminders',
-                subtitle: 'Follow-ups due',
-                color: AppTheme.warning,
-                onTap: () => context.go('/emr/reminders'),
-              ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            final cols = w >= 520 ? 2 : 1;
+            const gap = 10.0;
+            final tileW = cols <= 1 ? w : (w - gap * (cols - 1)) / cols;
+            final actions = <Widget>[
+              if (auth.hasPermission(AppPermissions.emrVisitsCreate))
+                QuickActionCard(
+                  icon: Icons.add_circle_outline,
+                  label: 'New visit',
+                  subtitle: 'Start consultation',
+                  color: AppTheme.accent,
+                  onTap: () => context.push('/emr/visits/new'),
+                ),
+              if (auth.hasPermission(AppPermissions.emrVisitsView))
+                QuickActionCard(
+                  icon: Icons.medical_services_outlined,
+                  label: 'Visit records',
+                  subtitle: 'All visits',
+                  color: AppTheme.primary,
+                  onTap: () => context.go('/emr/visits'),
+                ),
+              if (auth.hasPermission(AppPermissions.customersView))
+                QuickActionCard(
+                  icon: Icons.pets_outlined,
+                  label: 'Patients',
+                  subtitle: 'Pet directory',
+                  color: const Color(0xFF8B5CF6),
+                  onTap: () => context.go('/patients'),
+                ),
+              if (auth.hasPermission(AppPermissions.emrRemindersView))
+                QuickActionCard(
+                  icon: Icons.notifications_outlined,
+                  label: 'Reminders',
+                  subtitle: 'Follow-ups due',
+                  color: AppTheme.warning,
+                  onTap: () => context.go('/emr/reminders'),
+                ),
+            ];
+            if (actions.isEmpty) return const SizedBox.shrink();
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                for (final action in actions) SizedBox(width: tileW, child: action),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -1166,7 +1209,7 @@ class _DoctorStatChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Ink(
-          width: 160,
+          width: double.infinity,
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),

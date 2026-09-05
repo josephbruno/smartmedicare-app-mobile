@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -6,6 +7,39 @@ import 'dart:ui' as ui;
 /// TSPL bit convention: **0** = black (print), **1** = white.
 abstract final class TsplTimesRenderer {
   static bool get isSupported => true;
+
+  static var _warmed = false;
+
+  static Future<void> warmCommon() async {
+    if (_warmed) return;
+    _warmed = true;
+    const body = 26.0;
+    const title = 32.0;
+    await Future.wait([
+      render(text: 'Particulars', fontSize: body),
+      render(text: 'MRP', fontSize: body),
+      render(text: 'Price', fontSize: body),
+      render(text: 'Qty', fontSize: body),
+      render(text: 'Amt', fontSize: body),
+      render(text: 'No', fontSize: body),
+      render(text: 'No Of Items :1', fontSize: body),
+      render(text: '**** We care for your pet ****', fontSize: body),
+      render(text: 'Grand Total : 0.00', fontSize: body),
+      render(text: 'Bill Amount : 0.00', fontSize: title, bold: true),
+      render(text: '-' * 40, fontSize: body, maxWidthDots: 480),
+    ]);
+  }
+
+  static const int _maxCacheEntries = 256;
+  static final Map<String, TsplTimesGlyph> _cache = {};
+
+  static String _cacheKey({
+    required String text,
+    required double fontSize,
+    required bool bold,
+    required int? maxWidthDots,
+  }) =>
+      '$fontSize|${bold ? 1 : 0}|${maxWidthDots ?? 0}|$text';
 
   static Future<TsplTimesGlyph?> render({
     required String text,
@@ -16,6 +50,36 @@ abstract final class TsplTimesRenderer {
     final trimmed = text.trimRight();
     if (trimmed.isEmpty) return null;
 
+    final key = _cacheKey(
+      text: trimmed,
+      fontSize: fontSize,
+      bold: bold,
+      maxWidthDots: maxWidthDots,
+    );
+    final cached = _cache[key];
+    if (cached != null) return cached;
+
+    final glyph = await _rasterize(
+      trimmed: trimmed,
+      fontSize: fontSize,
+      bold: bold,
+      maxWidthDots: maxWidthDots,
+    );
+    if (glyph == null) return null;
+
+    if (_cache.length >= _maxCacheEntries) {
+      _cache.remove(_cache.keys.first);
+    }
+    _cache[key] = glyph;
+    return glyph;
+  }
+
+  static Future<TsplTimesGlyph?> _rasterize({
+    required String trimmed,
+    required double fontSize,
+    required bool bold,
+    required int? maxWidthDots,
+  }) async {
     final weight = bold ? ui.FontWeight.w600 : ui.FontWeight.w400;
     const family = 'Times New Roman';
     final layoutW = (maxWidthDots ?? 2000).toDouble();

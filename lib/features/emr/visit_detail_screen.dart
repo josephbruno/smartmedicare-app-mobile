@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/app_config.dart';
+import '../../core/router/app_route_observer.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
@@ -24,9 +25,10 @@ class VisitDetailScreen extends StatefulWidget {
   State<VisitDetailScreen> createState() => _VisitDetailScreenState();
 }
 
-class _VisitDetailScreenState extends State<VisitDetailScreen> {
+class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
   late Future<PetVisit> _future;
   bool _billing = false;
+  bool _routeSubscribed = false;
 
   @override
   void initState() {
@@ -34,8 +36,35 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
     _reload();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_routeSubscribed) return;
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      appShellRouteObserver.subscribe(this, route);
+      _routeSubscribed = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    appShellRouteObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    if (!mounted) return;
+    setState(_reload);
+  }
+
   void _reload() {
     _future = context.read<AppServices>().emr.getVisit(widget.visitId);
+  }
+
+  Future<PetVisit> _freshVisit() {
+    return context.read<AppServices>().emr.getVisit(widget.visitId);
   }
 
   Future<VisitClinicInfo> _clinicInfo() {
@@ -66,8 +95,9 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
     setState(() => _billing = true);
     final services = context.read<AppServices>();
     try {
-      final visit = await services.emr.completeVisit(widget.visitId);
+      await services.emr.completeVisit(widget.visitId);
       if (!mounted) return;
+      final visit = await _freshVisit();
       final clinic = await _clinicInfo();
       if (!mounted) return;
       await VisitPrintPreviewScreen.open(
@@ -245,21 +275,40 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> {
                       visitTypeLabel: _visitTypeLabel(v.visitType),
                       timeLabel: _formatTime(v.visitTime),
                       onPreview: () async {
-                        final clinic = await _clinicInfo();
-                        if (!context.mounted) return;
-                        await VisitPrintPreviewScreen.open(
-                          context,
-                          visit: v,
-                          clinic: clinic,
-                        );
+                        try {
+                          final visit = await _freshVisit();
+                          final clinic = await _clinicInfo();
+                          if (!context.mounted) return;
+                          await VisitPrintPreviewScreen.open(
+                            context,
+                            visit: visit,
+                            clinic: clinic,
+                          );
+                          if (mounted) setState(_reload);
+                        } catch (e) {
+                          if (context.mounted) {
+                            AppMessenger.show(context, SnackBar(content: Text('$e')));
+                          }
+                        }
                       },
                       onDownload: () async {
-                        final clinic = await _clinicInfo();
-                        await VisitPdf.downloadVisit(v, clinic: clinic);
+                        try {
+                          final visit = await _freshVisit();
+                          final clinic = await _clinicInfo();
+                          await VisitPdf.downloadVisit(visit, clinic: clinic);
+                          if (mounted) setState(_reload);
+                        } catch (e) {
+                          if (context.mounted) {
+                            AppMessenger.show(context, SnackBar(content: Text('$e')));
+                          }
+                        }
                       },
                       onEdit: canEdit &&
                               (v.status == 'open' || v.status == 'bill_on_hold')
-                          ? () => context.push('/emr/visits/${v.id}/edit')
+                          ? () async {
+                              await context.push('/emr/visits/${v.id}/edit');
+                              if (mounted) setState(_reload);
+                            }
                           : null,
                       primaryAction: _primaryAction(
                         v: v,

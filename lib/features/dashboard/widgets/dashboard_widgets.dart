@@ -3,8 +3,25 @@ import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/responsive/desktop_layout_helper.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/dashboard_data.dart';
+
+/// Compact INR for dashboard cards: ₹1K, ₹0.5K, ₹1L, ₹0.5L (never the full amount).
+String formatDashboardPrice(num value) {
+  final n = value.toDouble();
+  if (n == 0) return '₹0';
+  final sign = n < 0 ? '-' : '';
+  final abs = n.abs();
+  final useLakh = abs >= 100000;
+  final scaled = useLakh ? abs / 100000 : abs / 1000;
+  final suffix = useLakh ? 'L' : 'K';
+  final rounded = (scaled * 10).round() / 10;
+  final body = rounded == rounded.truncateToDouble()
+      ? rounded.toStringAsFixed(0)
+      : rounded.toStringAsFixed(1);
+  return '$sign₹$body$suffix';
+}
 
 /// Shared color palette used for branch cards and donut segments.
 const List<Color> kChartPalette = [
@@ -125,98 +142,112 @@ class DashboardStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final card = Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: mildCardFill(color),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: mildCardBorder(color), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.08),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: color.withValues(alpha: 0.85),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                    letterSpacing: 0.6,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 18),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              if (trend != null && trend!.length >= 2)
-                SizedBox(
-                  width: 84,
-                  height: 34,
-                  child: Sparkline(data: trend!, color: color),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth.isFinite && constraints.maxWidth < 190;
+        final showTrend = !compact && trend != null && trend!.length >= 2;
+        final radius = compact ? 14.0 : 18.0;
 
-    if (onTap == null) return card;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: card,
-      ),
+        final card = Container(
+          padding: EdgeInsets.all(compact ? 12 : 20),
+          decoration: BoxDecoration(
+            color: mildCardFill(color),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: mildCardBorder(color), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.08),
+                blurRadius: compact ? 8 : 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: color.withValues(alpha: 0.85),
+                        fontWeight: FontWeight.w800,
+                        fontSize: compact ? 10 : 12,
+                        letterSpacing: compact ? 0.15 : 0.6,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: EdgeInsets.all(compact ? 6 : 8),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(compact ? 8 : 10),
+                    ),
+                    child: Icon(icon, color: color, size: compact ? 15 : 18),
+                  ),
+                ],
+              ),
+              SizedBox(height: compact ? 8 : 14),
+              SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: compact ? 18 : 22,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: compact ? 6 : 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: compact ? 11 : 12.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (showTrend)
+                    SizedBox(
+                      width: 84,
+                      height: 34,
+                      child: Sparkline(data: trend!, color: color),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+
+        if (onTap == null) return card;
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(radius),
+            child: card,
+          ),
+        );
+      },
     );
   }
 }
@@ -258,9 +289,10 @@ class SalesSummaryCard extends StatelessWidget {
     final accent = hasData ? chartData.first.color : AppTheme.primary;
 
     // fl_chart: section.radius = ring thickness; outer = centerSpaceRadius + radius.
-    const chartSize = 188.0;
-    const holeRadius = 54.0;
-    const ringThickness = 28.0;
+    final mobile = ResponsiveLayout.isMobile(context);
+    final chartSize = mobile ? 148.0 : 188.0;
+    final holeRadius = mobile ? 42.0 : 54.0;
+    final ringThickness = mobile ? 22.0 : 28.0;
 
     Widget chartBlock() {
       return SizedBox(
@@ -289,17 +321,23 @@ class SalesSummaryCard extends StatelessWidget {
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  centerValue,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: AppTheme.textPrimary,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    centerValue,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  centerCaption,
+                  mobile ? 'Monthly' : centerCaption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 11,
                     color: AppTheme.textSecondary,
@@ -346,7 +384,7 @@ class SalesSummaryCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '₹${d.value.toStringAsFixed(0)}',
+                formatDashboardPrice(d.value),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -371,7 +409,7 @@ class SalesSummaryCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(mobile ? 14 : 20),
       decoration: BoxDecoration(
         color: mildCardFill(accent, strength: 0.06),
         borderRadius: BorderRadius.circular(18),
@@ -462,6 +500,7 @@ class QuickActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = ResponsiveLayout.isMobile(context);
     return Material(
       color: mildCardFill(color),
       borderRadius: BorderRadius.circular(16),
@@ -469,7 +508,7 @@ class QuickActionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(mobile ? 12 : 16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: mildCardBorder(color), width: 1.5),
@@ -477,12 +516,12 @@ class QuickActionCard extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(11),
+                padding: EdgeInsets.all(mobile ? 8 : 11),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: color, size: 22),
+                child: Icon(icon, color: color, size: mobile ? 20 : 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -539,9 +578,11 @@ class BranchPerformanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mobile = ResponsiveLayout.isMobile(context);
+    final iconSize = mobile ? 40.0 : 52.0;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(mobile ? 14 : 18),
       decoration: BoxDecoration(
         color: mildCardFill(color),
         borderRadius: BorderRadius.circular(16),
@@ -554,8 +595,8 @@ class BranchPerformanceCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: iconSize,
+                height: iconSize,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
@@ -567,7 +608,7 @@ class BranchPerformanceCard extends StatelessWidget {
                     BoxShadow(color: color.withValues(alpha: 0.25), blurRadius: 10, offset: const Offset(0, 4)),
                   ],
                 ),
-                child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 26),
+                child: Icon(Icons.storefront_rounded, color: Colors.white, size: mobile ? 20 : 26),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -600,8 +641,8 @@ class BranchPerformanceCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             branch.lowStockCount > 0
-                ? '${branch.lowStockCount} low-stock items · stock value ₹${branch.stockValue.toStringAsFixed(0)}'
-                : 'Stock value ₹${branch.stockValue.toStringAsFixed(0)}',
+                ? '${branch.lowStockCount} low-stock items · stock value ${formatDashboardPrice(branch.stockValue)}'
+                : 'Stock value ${formatDashboardPrice(branch.stockValue)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
@@ -609,10 +650,10 @@ class BranchPerformanceCard extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(child: _metric('TODAY', '₹${branch.todaySales.toStringAsFixed(2)}', AppTheme.textPrimary)),
+              Expanded(child: _metric('TODAY', formatDashboardPrice(branch.todaySales), AppTheme.textPrimary)),
               Container(width: 1.5, height: 30, color: mildCardBorder(color, strength: 0.2)),
               const SizedBox(width: 14),
-              Expanded(child: _metric('MONTHLY', '₹${branch.monthlySales.toStringAsFixed(2)}', color)),
+              Expanded(child: _metric('MONTHLY', formatDashboardPrice(branch.monthlySales), color)),
             ],
           ),
           if (fillHeight) const Spacer(),
@@ -647,11 +688,14 @@ class BranchPerformanceCard extends StatelessWidget {
           style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.textSecondary),
         ),
         const SizedBox(height: 3),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: valueColor),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: valueColor),
+          ),
         ),
       ],
     );
@@ -673,16 +717,39 @@ class DashboardSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final titleRow = Row(
       children: [
         Icon(icon, color: AppTheme.primary, size: 20),
         const SizedBox(width: 10),
-        Text(
-          title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+          ),
         ),
-        const Spacer(),
-        if (trailing != null) trailing!,
+      ],
+    );
+
+    if (trailing == null) return titleRow;
+
+    if (ResponsiveLayout.isMobile(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          titleRow,
+          const SizedBox(height: 10),
+          trailing!,
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: titleRow),
+        const SizedBox(width: 12),
+        trailing!,
       ],
     );
   }

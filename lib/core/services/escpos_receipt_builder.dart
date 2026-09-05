@@ -367,7 +367,9 @@ class EscPosReceiptBuilder {
   }
 
   static String _billTitle(Invoice invoice) {
-    final payments = invoice.payments ?? const <InvoicePayment>[];
+    final payments = (invoice.payments ?? const <InvoicePayment>[])
+        .where((p) => !p.isCancelled)
+        .toList();
     final hasCash = payments.any((p) => p.paymentMode.toLowerCase() == 'cash');
     if (invoice.dueAmount > 0.009) return 'CREDIT BILL';
     if (hasCash || invoice.isPaid) return 'CASH BILL';

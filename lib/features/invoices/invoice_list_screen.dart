@@ -258,6 +258,16 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
   }
 
   Widget _buildPaymentsCell(Invoice inv) {
+    if (inv.isCancelled) {
+      return const Text(
+        'Cancelled',
+        style: TextStyle(
+          color: AppTheme.danger,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
     final map = inv.paymentsByMode;
     if (map.isEmpty) {
       return const Text(

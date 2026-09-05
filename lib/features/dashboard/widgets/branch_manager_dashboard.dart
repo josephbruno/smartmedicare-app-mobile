@@ -50,6 +50,8 @@ class _BranchManagerDashboardSectionState extends State<BranchManagerDashboardSe
           children: [
             Text(
               auth.currentBranch?.name ?? 'Branch overview',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w800,
                 fontSize: 22,
@@ -61,24 +63,22 @@ class _BranchManagerDashboardSectionState extends State<BranchManagerDashboardSe
               style: TextStyle(color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 20),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                SizedBox(
-                  width: 200,
-                  child: DashboardStatCard(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth;
+                final cols = w >= 520 ? 3 : 2;
+                const gap = 10.0;
+                final tileW = cols <= 1 ? w : (w - gap * (cols - 1)) / cols;
+                final cards = [
+                  DashboardStatCard(
                     title: "TODAY'S SALES",
-                    value: '₹${d.todaySalesTotal.toStringAsFixed(0)}',
+                    value: formatDashboardPrice(d.todaySalesTotal),
                     subtitle: '${d.todaySalesCount} invoices',
                     icon: Icons.point_of_sale_rounded,
                     color: AppTheme.primary,
                     trend: const [],
                   ),
-                ),
-                SizedBox(
-                  width: 200,
-                  child: DashboardStatCard(
+                  DashboardStatCard(
                     title: 'LOW STOCK',
                     value: '${d.lowStockCount}',
                     subtitle: 'Items below reorder',
@@ -87,19 +87,23 @@ class _BranchManagerDashboardSectionState extends State<BranchManagerDashboardSe
                     trend: const [],
                     onTap: () => context.go('/stock-alerts'),
                   ),
-                ),
-                SizedBox(
-                  width: 200,
-                  child: DashboardStatCard(
+                  DashboardStatCard(
                     title: 'OUTSTANDING',
-                    value: '₹${d.outstandingDues.toStringAsFixed(0)}',
+                    value: formatDashboardPrice(d.outstandingDues),
                     subtitle: 'Unpaid balance',
                     icon: Icons.account_balance_wallet_outlined,
                     color: d.outstandingDues > 0 ? AppTheme.danger : AppTheme.accent,
                     trend: const [],
                   ),
-                ),
-              ],
+                ];
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (final card in cards) SizedBox(width: tileW, child: card),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 28),
             if (auth.hasPermission(AppPermissions.emrVisitsBill) ||
@@ -112,35 +116,47 @@ class _BranchManagerDashboardSectionState extends State<BranchManagerDashboardSe
               const VisitBillingQueuePanel(),
               const SizedBox(height: 28),
             ],
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                if (auth.hasPermission(AppPermissions.invoicesCreate))
-                  QuickActionCard(
-                    icon: Icons.point_of_sale_rounded,
-                    label: 'POS',
-                    subtitle: 'New sale',
-                    color: AppTheme.primary,
-                    onTap: () => context.go('/pos'),
-                  ),
-                if (auth.hasPermission(AppPermissions.inventoryView))
-                  QuickActionCard(
-                    icon: Icons.warehouse_outlined,
-                    label: 'Inventory',
-                    subtitle: 'Stock levels',
-                    color: AppTheme.warning,
-                    onTap: () => context.go('/inventory'),
-                  ),
-                if (auth.hasPermission(AppPermissions.inventoryTransfer))
-                  QuickActionCard(
-                    icon: Icons.swap_horiz_outlined,
-                    label: 'Stock transfers',
-                    subtitle: 'Send / receive',
-                    color: AppTheme.primary,
-                    onTap: () => context.go('/stock-transfers'),
-                  ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth;
+                final cols = w >= 520 ? 2 : 1;
+                const gap = 10.0;
+                final tileW = cols <= 1 ? w : (w - gap * (cols - 1)) / cols;
+                final actions = <Widget>[
+                  if (auth.hasPermission(AppPermissions.invoicesCreate))
+                    QuickActionCard(
+                      icon: Icons.point_of_sale_rounded,
+                      label: 'POS',
+                      subtitle: 'New sale',
+                      color: AppTheme.primary,
+                      onTap: () => context.go('/pos'),
+                    ),
+                  if (auth.hasPermission(AppPermissions.inventoryView))
+                    QuickActionCard(
+                      icon: Icons.warehouse_outlined,
+                      label: 'Inventory',
+                      subtitle: 'Stock levels',
+                      color: AppTheme.warning,
+                      onTap: () => context.go('/inventory'),
+                    ),
+                  if (auth.hasPermission(AppPermissions.inventoryTransfer))
+                    QuickActionCard(
+                      icon: Icons.swap_horiz_outlined,
+                      label: 'Stock transfers',
+                      subtitle: 'Send / receive',
+                      color: AppTheme.primary,
+                      onTap: () => context.go('/stock-transfers'),
+                    ),
+                ];
+                if (actions.isEmpty) return const SizedBox.shrink();
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (final action in actions) SizedBox(width: tileW, child: action),
+                  ],
+                );
+              },
             ),
           ],
         );

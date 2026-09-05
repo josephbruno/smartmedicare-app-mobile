@@ -249,7 +249,13 @@ class EmrService {
 
   Future<PetVisit> getVisit(int id) async {
     try {
-      final res = await _client.get('/visits/$id');
+      final res = await _client.get(
+        '/visits/$id',
+        queryParameters: {
+          // Bust any intermediate GET cache so print/PDF is never stale.
+          '_ts': DateTime.now().millisecondsSinceEpoch,
+        },
+      );
       return parseEnvelopeData(
         res,
         (data) => PetVisit.fromJson(Map<String, dynamic>.from(data as Map)),
@@ -257,6 +263,11 @@ class EmrService {
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
+  }
+
+  /// Latest full visit records from the show endpoint, in [ids] order.
+  Future<List<PetVisit>> getVisitsFresh(Iterable<int> ids) {
+    return Future.wait(ids.map(getVisit));
   }
 
   Future<PetVisit> createVisit(Map<String, dynamic> body) async {

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../session/auth_session.dart';
+import 'app_route_observer.dart';
 import '../services/permission_service.dart';
 import '../update/windows_update_gate.dart';
 import '../widgets/permission_guard.dart';
@@ -327,6 +328,7 @@ GoRouter createAppRouter({
         builder: (c, s) => const SubscriptionExpiredScreen(),
       ),
       ShellRoute(
+        observers: [appShellRouteObserver],
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(
@@ -587,7 +589,12 @@ GoRouter createAppRouter({
             name: 'VisitDetail',
             builder: (c, s) {
               final id = int.tryParse(s.pathParameters['id'] ?? '') ?? 0;
-              return VisitDetailScreen(visitId: id);
+              // Query `r` forces a new State after save so the screen is not reused.
+              final stamp = s.uri.queryParameters['r'] ?? '';
+              return VisitDetailScreen(
+                key: ValueKey('visit-$id-$stamp'),
+                visitId: id,
+              );
             },
           ),
           GoRoute(

@@ -132,6 +132,7 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
 
   Future<void> _setLanguage(PrintLanguage language) async {
     await DesktopPrefs.setPrintLanguage(language);
+    ThermalPrinterService.clearPrinterCache();
     if (!mounted) return;
     setState(() {
       _language = language;
@@ -148,6 +149,7 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
       await DesktopPrefs.setThermalPrinterName(name);
     }
     await DesktopPrefs.setDirectThermalPrint(true);
+    ThermalPrinterService.clearPrinterCache();
     if (!mounted) return;
     setState(() {
       _printerName = name;

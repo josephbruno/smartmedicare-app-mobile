@@ -4,6 +4,7 @@ import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/router/app_route_observer.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
@@ -20,14 +21,39 @@ class PetVisitSummaryScreen extends StatefulWidget {
   State<PetVisitSummaryScreen> createState() => _PetVisitSummaryScreenState();
 }
 
-class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen> {
+class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen>
+    with RouteAware {
   late Future<({List<PetVisit> visits, VisitClinicInfo clinic})> _future;
   var _busy = false;
+  var _routeSubscribed = false;
 
   @override
   void initState() {
     super.initState();
     _reload();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_routeSubscribed) return;
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      appShellRouteObserver.subscribe(this, route);
+      _routeSubscribed = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    appShellRouteObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    if (!mounted) return;
+    setState(_reload);
   }
 
   void _reload() {
@@ -41,6 +67,12 @@ class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen> {
       );
       return (visits: visits, clinic: clinic);
     }();
+  }
+
+  Future<List<PetVisit>> _freshVisits(List<PetVisit> visits) {
+    return context.read<AppServices>().emr.getVisitsFresh(
+      visits.map((v) => v.id),
+    );
   }
 
   Future<VisitClinicInfo> _clinicInfo() {
@@ -57,7 +89,9 @@ class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen> {
     setState(() => _busy = true);
     try {
       final clinic = await _clinicInfo();
-      await VisitPdf.printVisits(visits, clinic: clinic);
+      final fresh = await _freshVisits(visits);
+      await VisitPdf.printVisits(fresh, clinic: clinic);
+      if (mounted) setState(_reload);
     } catch (e) {
       if (mounted) {
         AppMessenger.show(context, SnackBar(content: Text('$e')));
@@ -72,7 +106,9 @@ class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen> {
     setState(() => _busy = true);
     try {
       final clinic = await _clinicInfo();
-      await VisitPdf.downloadVisits(visits, clinic: clinic);
+      final fresh = await _freshVisits(visits);
+      await VisitPdf.downloadVisits(fresh, clinic: clinic);
+      if (mounted) setState(_reload);
     } catch (e) {
       if (mounted) {
         AppMessenger.show(context, SnackBar(content: Text('$e')));
@@ -154,7 +190,10 @@ class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen> {
                             visit: v,
                             clinic: clinic,
                             wide: wide,
-                            onOpen: () => context.push('/emr/visits/${v.id}'),
+                            onOpen: () async {
+                              await context.push('/emr/visits/${v.id}');
+                              if (mounted) setState(_reload);
+                            },
                           );
                         },
                       ),
@@ -318,19 +357,10 @@ class _VisitSummaryCard extends StatelessWidget {
     return '${parts[0]}:${parts[1]}';
   }
 
-  String _titleCase(String value) {
-    if (value.isEmpty) return value;
-    return value
-        .split('_')
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
-  }
-
   @override
   Widget build(BuildContext context) {
     final petName = visit.pet?.name ?? 'Pet #${visit.petId}';
     final time = _formatTime(visit.visitTime);
-    final typeLabel = _titleCase(visit.visitType);
     final species = [
       visit.pet?.species,
       visit.pet?.breed,
@@ -348,7 +378,6 @@ class _VisitSummaryCard extends StatelessWidget {
       visit.visitNumber,
       visit.visitDate,
       if (time.isNotEmpty) time,
-      typeLabel,
     ].join(' · ');
     final clinicSubtitle = [
       if (clinic.address.trim().isNotEmpty) clinic.address.trim(),
@@ -698,17 +727,6 @@ class _ProceduresColumn extends StatelessWidget {
               ),
             ],
           ],
-        if (visit.serviceCharge > 0) ...[
-          const _DividerLine(),
-          const _SectionTitle('Consultation'),
-          _BodyText(
-            [
-              visit.serviceChargeProduct?.name ?? 'Consultation Fee',
-              '₹${visit.serviceCharge.toStringAsFixed(0)}',
-            ].join(' · '),
-            bold: true,
-          ),
-        ],
       ],
     );
   }
