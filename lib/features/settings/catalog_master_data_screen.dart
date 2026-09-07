@@ -21,11 +21,27 @@ class CatalogMasterDataScreen extends StatefulWidget {
 class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen> {
   bool _loading = false;
   List<Category> _categories = [];
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Category> get _filteredCategories {
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isEmpty) return _categories;
+    return _categories
+        .where((c) => c.name.toLowerCase().contains(q))
+        .toList();
   }
 
   Future<void> _load() async {
@@ -202,16 +218,52 @@ class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen> {
             ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _buildList(canEdit: canEdit, canDelete: canDelete),
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _buildList(canEdit: canEdit, canDelete: canDelete),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: TextField(
+        controller: _searchController,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'Search categories…',
+          isDense: true,
+          prefixIcon: const Icon(Icons.search, size: 20),
+          suffixIcon: _searchQuery.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Clear search',
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                ),
+        ),
+        onChanged: (v) => setState(() => _searchQuery = v),
       ),
     );
   }
 
   Widget _buildList({required bool canEdit, required bool canDelete}) {
+    final filtered = _filteredCategories;
+
     if (_categories.isEmpty) {
       return ListView(
         children: const [
@@ -221,12 +273,26 @@ class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen> {
       );
     }
 
+    if (filtered.isEmpty) {
+      return ListView(
+        children: [
+          const SizedBox(height: 120),
+          Center(
+            child: Text(
+              'No categories match “${_searchQuery.trim()}”',
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+        ],
+      );
+    }
+
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      itemCount: _categories.length,
+      itemCount: filtered.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (_, i) {
-        final c = _categories[i];
+        final c = filtered[i];
         final count = c.productsCount;
         return ListTile(
           title: Text(

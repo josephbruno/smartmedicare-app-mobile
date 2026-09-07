@@ -285,14 +285,18 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
     }
   }
 
-  Future<void> _deactivate(EmrTemplateItem item) async {
+  Future<void> _delete(EmrTemplateItem item) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text('Deactivate ${item.displayName}?'),
+        title: Text('Delete ${item.displayName}?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Deactivate')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -410,8 +414,9 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
                                       onPressed: () => _openForm(item: item),
                                     ),
                                     IconButton(
+                                      tooltip: 'Delete',
                                       icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
-                                      onPressed: () => _deactivate(item),
+                                      onPressed: () => _delete(item),
                                     ),
                                   ],
                                 ),
