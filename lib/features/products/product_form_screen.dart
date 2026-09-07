@@ -37,7 +37,6 @@ class _ProductFormScreenState extends State<ProductFormScreen>
   final _reorder = TextEditingController(text: '5');
 
   int? _categoryId;
-  int? _brandId;
   int? _unitId;
   double _gstRate = 5;
   String _gstType = 'exclusive';
@@ -77,7 +76,6 @@ class _ProductFormScreenState extends State<ProductFormScreen>
   }
 
   List<Category> _categories = [];
-  List<Brand> _brands = [];
   List<Unit> _units = [];
   List<TreatmentUnderCategoryItem> _treatmentUnderCategories = [];
   List<InvestigationUnderCategoryItem> _investigationUnderCategories = [];
@@ -86,6 +84,13 @@ class _ProductFormScreenState extends State<ProductFormScreen>
   bool _saving = false;
 
   bool get _isEdit => widget.productId != null;
+
+  int? get _nosUnitId {
+    for (final u in _units) {
+      if (u.isNos) return u.id;
+    }
+    return null;
+  }
 
   static const _gstRates = <double>[0, 5, 12, 18, 28];
 
@@ -96,25 +101,31 @@ class _ProductFormScreenState extends State<ProductFormScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
+  Future<List<T>> _optionalList<T>(Future<List<T>> future) async {
+    try {
+      return await future;
+    } catch (_) {
+      return <T>[];
+    }
+  }
+
   Future<void> _bootstrap() async {
     setState(() => _loading = true);
     try {
       final products = context.read<AppServices>().products;
       final emrMaster = context.read<AppServices>().emrMasterData;
       final results = await Future.wait([
-        products.listCategories(),
-        products.listBrands(),
-        products.listUnits(),
-        emrMaster.listTreatmentUnderCategories(),
-        emrMaster.listInvestigationUnderCategories(),
+        _optionalList(products.listCategories()),
+        _optionalList(products.listUnits()),
+        _optionalList(emrMaster.listTreatmentUnderCategories()),
+        _optionalList(emrMaster.listInvestigationUnderCategories()),
       ]);
       if (!mounted) return;
       _categories = (results[0] as List<Category>).where((c) => c.isActive).toList();
-      _brands = (results[1] as List<Brand>).where((b) => b.isActive).toList();
-      _units = (results[2] as List<Unit>).where((u) => u.isActive).toList();
-      _treatmentUnderCategories = results[3] as List<TreatmentUnderCategoryItem>;
+      _units = (results[1] as List<Unit>).where((u) => u.isActive).toList();
+      _treatmentUnderCategories = results[2] as List<TreatmentUnderCategoryItem>;
       _investigationUnderCategories =
-          results[4] as List<InvestigationUnderCategoryItem>;
+          results[3] as List<InvestigationUnderCategoryItem>;
 
       final id = widget.productId;
       if (id != null) {
@@ -122,6 +133,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         if (!mounted) return;
         _applyProduct(p);
       }
+      _unitId = _nosUnitId ?? _unitId;
     } catch (e) {
       if (mounted) {
         AppMessenger.error(context, '$e');
@@ -142,8 +154,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
     _mrp.text = _fmtNum(p.mrp);
     _reorder.text = p.reorderLevel.toString();
     _categoryId = p.categoryId;
-    _brandId = p.brandId;
-    _unitId = p.unitId;
+    _unitId = _nosUnitId ?? p.unitId;
     _gstRate = _gstRates.contains(p.gstRate) ? p.gstRate : 5;
     _gstType = p.gstType == 'inclusive' ? 'inclusive' : 'exclusive';
     _trackInventory = p.trackInventory;
@@ -231,8 +242,8 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         'hsn_code': _nullIfEmpty(_hsn.text),
         'description': _nullIfEmpty(_description.text),
         'category_id': _categoryId,
-        'brand_id': _brandId,
-        'unit_id': _unitId,
+        'brand_id': null,
+        'unit_id': _nosUnitId ?? _unitId,
         'purchase_price': purchase,
         'selling_price': selling,
         'mrp': mrp,
@@ -310,20 +321,6 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       textInputAction: TextInputAction.next,
       decoration: _dec('HSN Code', hint: 'HSN code for GST'),
     );
-    final unitField = AppDropdownButtonFormField<int?>(
-      value: _units.any((u) => u.id == _unitId) ? _unitId : null,
-      decoration: _dec('Unit', hint: 'Select unit'),
-      items: [
-        const DropdownMenuItem<int?>(value: null, child: Text('Select unit')),
-        ..._units.map(
-          (u) => DropdownMenuItem(
-            value: u.id,
-            child: Text('${u.name} (${u.abbreviation})'),
-          ),
-        ),
-      ],
-      onChanged: (v) => setState(() => _unitId = v),
-    );
     final categoryField = AppDropdownButtonFormField<int?>(
       value: _categories.any((c) => c.id == _categoryId) ? _categoryId : null,
       decoration: _dec('Category', hint: 'Select category'),
@@ -334,17 +331,6 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         ),
       ],
       onChanged: (v) => setState(() => _categoryId = v),
-    );
-    final brandField = AppDropdownButtonFormField<int?>(
-      value: _brands.any((b) => b.id == _brandId) ? _brandId : null,
-      decoration: _dec('Brand', hint: 'Select brand'),
-      items: [
-        const DropdownMenuItem<int?>(value: null, child: Text('Select brand')),
-        ..._brands.map(
-          (b) => DropdownMenuItem(value: b.id, child: Text(b.name)),
-        ),
-      ],
-      onChanged: (v) => setState(() => _brandId = v),
     );
     final descField = TextField(
       controller: _description,
@@ -361,9 +347,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         if (wide) ...[
           _twoCol(skuField, barcodeField),
           const SizedBox(height: 12),
-          _twoCol(hsnField, unitField),
-          const SizedBox(height: 12),
-          _twoCol(categoryField, brandField),
+          _twoCol(hsnField, categoryField),
         ] else ...[
           skuField,
           const SizedBox(height: 12),
@@ -371,11 +355,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
           const SizedBox(height: 12),
           hsnField,
           const SizedBox(height: 12),
-          unitField,
-          const SizedBox(height: 12),
           categoryField,
-          const SizedBox(height: 12),
-          brandField,
         ],
         const SizedBox(height: 12),
         descField,

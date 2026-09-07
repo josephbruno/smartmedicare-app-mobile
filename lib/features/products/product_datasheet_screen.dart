@@ -3,10 +3,10 @@ import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/product.dart';
 import '../../data/models/product_datasheet.dart';
@@ -26,6 +26,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
   static const _rowHeight = 32.0;
   static const _headerHeight = 36.0;
   static const _rowNumWidth = 44.0;
+  static const _deleteColWidth = 44.0;
 
   ProductDatasheet? _sheet;
   List<Category> _categories = [];
@@ -46,6 +47,12 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
   final Set<int> _barcodeDialogOpen = {};
   OverlayEntry? _nameOverlay;
   int? _overlayRowId;
+
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  String _sortKey = 'rowNo';
+  bool _sortAsc = true;
+  int? _deletingRowId;
 
   static const _navCols = <String>[
     'name',
@@ -119,6 +126,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
     for (final e in _editors.values) {
       e.dispose();
     }
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -215,8 +223,125 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
 
   AppServices get _services => context.read<AppServices>();
 
-  double get _sheetWidth =>
-      _columns.fold<double>(0, (s, c) => s + c.width);
+  bool get _canDeleteRows => context.read<AuthSession>().isSuperAdmin;
+
+  double get _sheetWidth {
+    var w = _columns.fold<double>(0, (s, c) => s + c.width);
+    if (_canDeleteRows) w += _deleteColWidth;
+    return w;
+  }
+
+  List<ProductDatasheetRow> get _allRows => _sheet?.rows ?? [];
+
+  List<ProductDatasheetRow> get _visibleRows {
+    var rows = List<ProductDatasheetRow>.from(_allRows);
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      rows = rows.where((r) {
+        final e = _editors[r.id];
+        final haystack = [
+          r.name,
+          r.barcode,
+          r.sku,
+          r.categoryName,
+          r.brandName,
+          r.unitName,
+          r.status,
+          e?.name.text,
+          e?.barcode.text,
+          e?.categoryName,
+          e?.brandName,
+          e?.unitName,
+          e?.productType,
+          _productTypeLabel(e?.productType),
+        ].whereType<String>().join(' ').toLowerCase();
+        return haystack.contains(q);
+      }).toList();
+    }
+    rows.sort((a, b) {
+      final cmp = _compareRows(a, b);
+      return _sortAsc ? cmp : -cmp;
+    });
+    return rows;
+  }
+
+  static String _productTypeLabel(String? type) {
+    return switch (type) {
+      'product' => 'product',
+      'medicine' => 'medicine',
+      'service' => 'service',
+      _ => '',
+    };
+  }
+
+  int _compareRows(ProductDatasheetRow a, ProductDatasheetRow b) {
+    final ea = _editors[a.id];
+    final eb = _editors[b.id];
+    switch (_sortKey) {
+      case 'name':
+        return _cmpStr(ea?.name.text ?? a.name, eb?.name.text ?? b.name);
+      case 'type':
+        return _cmpStr(ea?.productType, eb?.productType);
+      case 'category':
+        return _cmpStr(
+          ea?.categoryName ?? a.categoryName,
+          eb?.categoryName ?? b.categoryName,
+        );
+      case 'brand':
+        return _cmpStr(ea?.brandName ?? a.brandName, eb?.brandName ?? b.brandName);
+      case 'unit':
+        return _cmpStr(ea?.unitName ?? a.unitName, eb?.unitName ?? b.unitName);
+      case 'barcode':
+        return _cmpStr(ea?.barcode.text ?? a.barcode, eb?.barcode.text ?? b.barcode);
+      case 'mrp':
+        return _cmpNum(
+          _parseSheetNumber(ea?.mrp.text ?? '') ?? a.mrp,
+          _parseSheetNumber(eb?.mrp.text ?? '') ?? b.mrp,
+        );
+      case 'selling':
+        return _cmpNum(
+          _parseSheetNumber(ea?.selling.text ?? '') ?? a.sellingPrice,
+          _parseSheetNumber(eb?.selling.text ?? '') ?? b.sellingPrice,
+        );
+      case 'stock':
+        return _cmpNum(
+          _parseSheetNumber(ea?.stock.text ?? '') ?? a.stockQty,
+          _parseSheetNumber(eb?.stock.text ?? '') ?? b.stockQty,
+        );
+      case 'status':
+        return _cmpStr(a.status, b.status);
+      case 'rowNo':
+      default:
+        return a.rowNo.compareTo(b.rowNo);
+    }
+  }
+
+  static int _cmpStr(String? a, String? b) {
+    final aa = (a ?? '').trim().toLowerCase();
+    final bb = (b ?? '').trim().toLowerCase();
+    if (aa.isEmpty && bb.isEmpty) return 0;
+    if (aa.isEmpty) return 1;
+    if (bb.isEmpty) return -1;
+    return aa.compareTo(bb);
+  }
+
+  static int _cmpNum(double? a, double? b) {
+    if (a == null && b == null) return 0;
+    if (a == null) return 1;
+    if (b == null) return -1;
+    return a.compareTo(b);
+  }
+
+  void _onSortHeader(String key) {
+    setState(() {
+      if (_sortKey == key) {
+        _sortAsc = !_sortAsc;
+      } else {
+        _sortKey = key;
+        _sortAsc = true;
+      }
+    });
+  }
 
   Future<void> _bootstrap() async {
     setState(() {
@@ -262,6 +387,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
         _saving.remove(id);
         _nameSuggestions.remove(id);
         _nameSearching.remove(id);
+        _lastCheckedBarcode.remove(id);
       }
     }
     for (final row in rows) {
@@ -394,7 +520,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
     required int rowDelta,
     required int colDelta,
   }) {
-    final rows = _sheet?.rows ?? [];
+    final rows = _visibleRows;
     if (rows.isEmpty) return;
 
     final rowIndex = rows.indexWhere((r) => r.id == rowId);
@@ -917,11 +1043,68 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
           await _services.productDatasheets.addRows(sheet.id, count: 10);
       if (!mounted) return;
       setState(() {
+        _searchController.clear();
+        _searchQuery = '';
         _sheet = updated;
         _syncEditors(updated.rows);
       });
     } catch (e) {
       if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _confirmDeleteRow(ProductDatasheetRow row) async {
+    if (!_canDeleteRows) return;
+    final label = (row.name ?? _editors[row.id]?.name.text ?? '').trim();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete row?'),
+        content: Text(
+          [
+            'Remove row ${row.rowNo}${label.isEmpty ? '' : ' ($label)'} from this datasheet?',
+            'The catalog product is not deleted.',
+          ].join('\n\n'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    await _deleteRow(row);
+  }
+
+  Future<void> _deleteRow(ProductDatasheetRow row) async {
+    final sheet = _sheet;
+    if (sheet == null || !_canDeleteRows) return;
+    setState(() => _deletingRowId = row.id);
+    try {
+      await _services.productDatasheets.deleteRow(sheet.id, row.id);
+      if (!mounted) return;
+      if (_overlayRowId == row.id) _removeNameOverlay();
+      sheet.rows.removeWhere((r) => r.id == row.id);
+      _syncEditors(sheet.rows);
+      if (_activeRowId == row.id) {
+        _activeRowId = null;
+        _activeColKey = null;
+      }
+      setState(() => _deletingRowId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Row ${row.rowNo} deleted.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _deletingRowId = null);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
   }
@@ -1189,6 +1372,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
               : Column(
                   children: [
                     _buildRibbon(),
+                    _buildToolbar(),
                     _buildFormulaBar(),
                     Expanded(child: _buildExcelGrid()),
                   ],
@@ -1226,6 +1410,11 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
                     _countPill('Ready', c['ready']!, AppTheme.primary),
                     _countPill('Incomplete', c['incomplete']!, AppTheme.warning),
                     _countPill('Error', c['error']!, AppTheme.danger),
+                    if (_searchQuery.trim().isNotEmpty)
+                      Text(
+                        'Showing ${_visibleRows.length} of ${_allRows.length}',
+                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                      ),
                     if (_lastSavedAt != null)
                       Text(
                         'Autosaved $_lastSavedAt',
@@ -1253,6 +1442,145 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
                   )
                 : const Icon(Icons.cloud_upload_outlined, size: 18),
             label: const Text('Sync all'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolbar() {
+    final sortLabel = switch (_sortKey) {
+      'name' => 'Name',
+      'type' => 'Type',
+      'category' => 'Category',
+      'brand' => 'Brand',
+      'unit' => 'Unit',
+      'barcode' => 'Barcode',
+      'mrp' => 'MRP',
+      'selling' => 'Selling',
+      'stock' => 'Stock',
+      'status' => 'Status',
+      _ => 'Row #',
+    };
+    return Container(
+      height: 42,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: _gridLine)),
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 4, 12, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Search name, barcode, category, brand…',
+                hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                prefixIcon: const Icon(Icons.search, size: 18),
+                suffixIcon: _searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        icon: const Icon(Icons.close, size: 16),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                filled: true,
+                fillColor: const Color(0xFFF8F8F8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(4),
+                  borderSide: const BorderSide(color: _gridLine),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(4),
+                  borderSide: const BorderSide(color: _gridLine),
+                ),
+                focusedBorder: const OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(4)),
+                  borderSide: BorderSide(color: Color(0xFF217346), width: 1.5),
+                ),
+              ),
+              textInputAction: TextInputAction.search,
+              onChanged: (v) => setState(() => _searchQuery = v),
+            ),
+          ),
+          const SizedBox(width: 8),
+          PopupMenuButton<String>(
+            tooltip: 'Sort rows',
+            onSelected: (key) {
+              setState(() {
+                if (_sortKey == key) {
+                  _sortAsc = !_sortAsc;
+                } else {
+                  _sortKey = key;
+                  _sortAsc = true;
+                }
+              });
+            },
+            itemBuilder: (ctx) => [
+              for (final opt in const [
+                ('rowNo', 'Row number'),
+                ('name', 'Name'),
+                ('type', 'Product type'),
+                ('category', 'Category'),
+                ('brand', 'Brand'),
+                ('unit', 'Unit'),
+                ('barcode', 'Barcode'),
+                ('mrp', 'MRP'),
+                ('selling', 'Selling price'),
+                ('stock', 'Stock QTY'),
+                ('status', 'Status'),
+              ])
+                PopupMenuItem<String>(
+                  value: opt.$1,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        child: _sortKey == opt.$1
+                            ? Icon(
+                                _sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
+                                size: 14,
+                                color: _excelGreen,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(opt.$2),
+                    ],
+                  ),
+                ),
+            ],
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                border: Border.all(color: _gridLine),
+                borderRadius: BorderRadius.circular(4),
+                color: const Color(0xFFF8F8F8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
+                    size: 14,
+                    color: _sortKey == 'rowNo' ? AppTheme.textSecondary : _excelGreen,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Sort: $sortLabel',
+                    style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                  ),
+                  const Icon(Icons.arrow_drop_down, size: 18, color: AppTheme.textSecondary),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -1321,7 +1649,8 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
   }
 
   Widget _buildExcelGrid() {
-    final rows = _sheet?.rows ?? [];
+    final rows = _visibleRows;
+    final canDelete = context.watch<AuthSession>().isSuperAdmin;
     return Padding(
       padding: const EdgeInsets.all(8),
       child: DecoratedBox(
@@ -1361,6 +1690,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
                         child: Row(
                           children: [
                             for (final col in _columns) _headerCell(col),
+                            if (canDelete) _deleteHeaderCell(),
                           ],
                         ),
                       ),
@@ -1370,7 +1700,16 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
               ),
             ),
             Expanded(
-              child: Row(
+              child: rows.isEmpty
+                  ? Center(
+                      child: Text(
+                        _searchQuery.trim().isEmpty
+                            ? 'No rows yet. Insert rows to start.'
+                            : 'No rows match “${_searchQuery.trim()}”.',
+                        style: const TextStyle(color: AppTheme.textSecondary),
+                      ),
+                    )
+                  : Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Frozen row numbers
@@ -1394,7 +1733,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
                           controller: _vScroll,
                           itemCount: rows.length,
                           itemExtent: _rowHeight,
-                          itemBuilder: (_, i) => _buildSheetRow(rows[i]),
+                          itemBuilder: (_, i) => _buildSheetRow(rows[i], canDelete: canDelete),
                         ),
                       ),
                     ),
@@ -1410,24 +1749,83 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
   }
 
   Widget _cornerCell() {
-    return Container(
-      width: _rowNumWidth,
-      height: _headerHeight,
-      alignment: Alignment.center,
-      decoration: const BoxDecoration(
-        color: _headerBg,
-        border: Border(
-          right: BorderSide(color: _gridLine),
-          bottom: BorderSide(color: _gridLine),
+    final sorted = _sortKey == 'rowNo';
+    return InkWell(
+      onTap: () => _onSortHeader('rowNo'),
+      child: Container(
+        width: _rowNumWidth,
+        height: _headerHeight,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          color: _headerBg,
+          border: Border(
+            right: BorderSide(color: _gridLine),
+            bottom: BorderSide(color: _gridLine),
+          ),
+        ),
+        child: Icon(
+          sorted
+              ? (_sortAsc ? Icons.arrow_upward : Icons.arrow_downward)
+              : Icons.select_all,
+          size: 14,
+          color: sorted ? _excelGreen : AppTheme.textSecondary,
         ),
       ),
-      child: const Icon(Icons.select_all, size: 14, color: AppTheme.textSecondary),
     );
   }
 
   Widget _headerCell(_SheetCol col) {
+    final sorted = _sortKey == col.key;
+    return InkWell(
+      onTap: () => _onSortHeader(col.key),
+      child: Container(
+        width: col.width,
+        height: _headerHeight,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: sorted ? const Color(0xFFDCEFE3) : _headerBg,
+          border: const Border(
+            right: BorderSide(color: _gridLine),
+            bottom: BorderSide(color: _gridLine),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    col.letter,
+                    style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary, height: 1),
+                  ),
+                  if (sorted) ...[
+                    const SizedBox(width: 2),
+                    Icon(
+                      _sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
+                      size: 10,
+                      color: _excelGreen,
+                    ),
+                  ],
+                ],
+              ),
+              Text(
+                col.title,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.1),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _deleteHeaderCell() {
     return Container(
-      width: col.width,
+      width: _deleteColWidth,
       height: _headerHeight,
       alignment: Alignment.center,
       decoration: const BoxDecoration(
@@ -1437,22 +1835,9 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
           bottom: BorderSide(color: _gridLine),
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              col.letter,
-              style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary, height: 1),
-            ),
-            Text(
-              col.title,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.1),
-            ),
-          ],
-        ),
+      child: const Tooltip(
+        message: 'Delete row',
+        child: Icon(Icons.delete_outline, size: 14, color: AppTheme.textSecondary),
       ),
     );
   }
@@ -1480,7 +1865,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
     );
   }
 
-  Widget _buildSheetRow(ProductDatasheetRow row) {
+  Widget _buildSheetRow(ProductDatasheetRow row, {required bool canDelete}) {
     final e = _editors[row.id];
     if (e == null) return const SizedBox(height: _rowHeight);
     final tint = _rowTint(row.status);
@@ -1587,6 +1972,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
             hintText: e.productType == 'service' ? 'N/A' : null,
           ),
           _statusCell(row, tint),
+          if (canDelete) _deleteCell(row, tint),
         ],
       ),
     );
@@ -1894,6 +2280,33 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
                 color: _statusColor(row.status),
               ),
       ),
+    );
+  }
+
+  Widget _deleteCell(ProductDatasheetRow row, Color tint) {
+    final deleting = _deletingRowId == row.id;
+    return Container(
+      width: _deleteColWidth,
+      height: _rowHeight,
+      decoration: _cellBox(tint: tint, active: false),
+      alignment: Alignment.center,
+      child: deleting
+          ? const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Tooltip(
+              message: 'Delete row',
+              child: InkWell(
+                onTap: () => _confirmDeleteRow(row),
+                child: const SizedBox(
+                  width: _deleteColWidth,
+                  height: _rowHeight,
+                  child: Icon(Icons.delete_outline, size: 16, color: AppTheme.danger),
+                ),
+              ),
+            ),
     );
   }
 }

@@ -9,6 +9,7 @@ abstract class AppPermissions {
   static const String categoriesView = 'categories.view';
   static const String categoriesCreate = 'categories.create';
   static const String categoriesEdit = 'categories.edit';
+  static const String categoriesDelete = 'categories.delete';
   static const String brandsView = 'brands.view';
   static const String brandsCreate = 'brands.create';
   static const String brandsEdit = 'brands.edit';
@@ -123,6 +124,7 @@ abstract class AppRoles {
     AppPermissions.categoriesView,
     AppPermissions.categoriesCreate,
     AppPermissions.categoriesEdit,
+    AppPermissions.categoriesDelete,
     AppPermissions.brandsView,
     AppPermissions.brandsCreate,
     AppPermissions.brandsEdit,

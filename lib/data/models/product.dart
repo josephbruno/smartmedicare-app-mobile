@@ -159,6 +159,7 @@ class Category {
     this.slug,
     this.parentId,
     required this.isActive,
+    this.productsCount = 0,
   });
 
   final int id;
@@ -166,6 +167,7 @@ class Category {
   final String? slug;
   final int? parentId;
   final bool isActive;
+  final int productsCount;
 
   factory Category.fromJson(Map<String, dynamic> j) => Category(
         id: intOrNull(j['id']) ?? 0,
@@ -173,6 +175,7 @@ class Category {
         slug: j['slug']?.toString(),
         parentId: intOrNull(j['parent_id']),
         isActive: j['is_active'] as bool? ?? true,
+        productsCount: intOrNull(j['products_count']) ?? 0,
       );
 }
 
@@ -216,4 +219,10 @@ class Unit {
         abbreviation: j['abbreviation']?.toString() ?? '',
         isActive: j['is_active'] as bool? ?? true,
       );
+
+  bool get isNos {
+    final abbr = abbreviation.toLowerCase();
+    final n = name.toLowerCase();
+    return abbr == 'nos' || abbr == 'no' || n == 'nos' || n == 'numbers';
+  }
 }

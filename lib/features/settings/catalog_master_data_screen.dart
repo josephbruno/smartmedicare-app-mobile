@@ -3,11 +3,13 @@ import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/services/permission_service.dart';
+import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/product.dart';
 
-/// Manage product catalog master data: Categories, Brands and Units.
+/// Manage product catalog categories.
 class CatalogMasterDataScreen extends StatefulWidget {
   const CatalogMasterDataScreen({super.key});
 
@@ -16,48 +18,21 @@ class CatalogMasterDataScreen extends StatefulWidget {
       _CatalogMasterDataScreenState();
 }
 
-class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
+class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen> {
   bool _loading = false;
-
   List<Category> _categories = [];
-  List<Brand> _brands = [];
-  List<Unit> _units = [];
-
-  static const _tabLabels = ['Categories', 'Brands', 'Units'];
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: _tabLabels.length, vsync: this);
-    _tabs.addListener(() {
-      if (!_tabs.indexIsChanging) _load();
-    });
     _load();
-  }
-
-  @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final svc = context.read<AppServices>().products;
-      switch (_tabs.index) {
-        case 0:
-          final list = await svc.listCategories();
-          if (mounted) setState(() => _categories = list);
-        case 1:
-          final list = await svc.listBrands();
-          if (mounted) setState(() => _brands = list);
-        case 2:
-          final list = await svc.listUnits();
-          if (mounted) setState(() => _units = list);
-      }
+      final list = await context.read<AppServices>().products.listCategories();
+      if (mounted) setState(() => _categories = list);
     } catch (e) {
       if (mounted) AppMessenger.show(context, SnackBar(content: Text('$e')));
     } finally {
@@ -65,20 +40,13 @@ class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen>
     }
   }
 
-  String get _singular => switch (_tabs.index) {
-        0 => 'Category',
-        1 => 'Brand',
-        _ => 'Unit',
-      };
+  Future<void> _openForm({Category? category}) async {
+    final isEdit = category != null;
+    final nameCtrl = TextEditingController(text: category?.name ?? '');
+    var isActive = category?.isActive ?? true;
 
-  Future<void> _openForm({int? id, String? name, String? extra, bool? active}) async {
-    final isEdit = id != null;
-    final isUnit = _tabs.index == 2;
-    final nameCtrl = TextEditingController(text: name ?? '');
-    final abbrCtrl = TextEditingController(text: extra ?? '');
-    var isActive = active ?? true;
-
-    final title = '${isEdit ? 'Edit' : 'Add'} $_singular';
+    const titlePrefix = 'Category';
+    final title = '${isEdit ? 'Edit' : 'Add'} $titlePrefix';
 
     Widget buildFields(void Function(VoidCallback) setLocal) {
       return Column(
@@ -90,24 +58,13 @@ class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen>
             textCapitalization: TextCapitalization.words,
             decoration: appFormFieldDecoration('Name *'),
           ),
-          if (isUnit) ...[
-            const SizedBox(height: 16),
-            TextField(
-              controller: abbrCtrl,
-              decoration: appFormFieldDecoration(
-                'Abbreviation *',
-                hint: 'e.g. kg, pcs, ml',
-              ),
-            ),
-          ] else ...[
-            const SizedBox(height: 8),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Active'),
-              value: isActive,
-              onChanged: (v) => setLocal(() => isActive = v),
-            ),
-          ],
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Active'),
+            value: isActive,
+            onChanged: (v) => setLocal(() => isActive = v),
+          ),
         ],
       );
     }
@@ -166,49 +123,41 @@ class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen>
       return;
     }
 
-    final body = <String, dynamic>{'name': nameText};
-    if (isUnit) {
-      final abbr = abbrCtrl.text.trim();
-      if (abbr.isEmpty) {
-        AppMessenger.show(
-          context,
-          const SnackBar(content: Text('Abbreviation is required')),
-        );
-        return;
-      }
-      body['abbreviation'] = abbr;
-    } else {
-      body['is_active'] = isActive;
-    }
+    final body = <String, dynamic>{
+      'name': nameText,
+      'is_active': isActive,
+    };
 
     try {
       final svc = context.read<AppServices>().products;
-      switch (_tabs.index) {
-        case 0:
-          isEdit
-              ? await svc.updateCategory(id, body)
-              : await svc.createCategory(body);
-        case 1:
-          isEdit
-              ? await svc.updateBrand(id, body)
-              : await svc.createBrand(body);
-        case 2:
-          isEdit
-              ? await svc.updateUnit(id, body)
-              : await svc.createUnit(body);
+      if (isEdit) {
+        await svc.updateCategory(category.id, body);
+      } else {
+        await svc.createCategory(body);
       }
-      _load();
+      if (!mounted) return;
+      AppMessenger.success(
+        context,
+        isEdit ? 'Category updated' : 'Category created',
+      );
+      await _load();
     } catch (e) {
       if (mounted) AppMessenger.show(context, SnackBar(content: Text('$e')));
     }
   }
 
-  Future<void> _delete(int id, String label) async {
+  Future<void> _delete(Category category) async {
+    final count = category.productsCount;
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text('Delete $label?'),
-        content: const Text('This action cannot be undone.'),
+        title: Text('Delete ${category.name}?'),
+        content: Text(
+          count > 0
+              ? 'This category has $count product${count == 1 ? '' : 's'}. '
+                  'They will be unassigned from this category. This cannot be undone.'
+              : 'This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
@@ -224,16 +173,10 @@ class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen>
     );
     if (ok != true || !mounted) return;
     try {
-      final svc = context.read<AppServices>().products;
-      switch (_tabs.index) {
-        case 0:
-          await svc.deleteCategory(id);
-        case 1:
-          await svc.deleteBrand(id);
-        case 2:
-          await svc.deleteUnit(id);
-      }
-      _load();
+      await context.read<AppServices>().products.deleteCategory(category.id);
+      if (!mounted) return;
+      AppMessenger.success(context, 'Category deleted');
+      await _load();
     } catch (e) {
       if (mounted) AppMessenger.show(context, SnackBar(content: Text('$e')));
     }
@@ -241,123 +184,86 @@ class _CatalogMasterDataScreenState extends State<CatalogMasterDataScreen>
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthSession>();
+    final canCreate = auth.hasPermission(AppPermissions.categoriesCreate);
+    final canEdit = auth.hasPermission(AppPermissions.categoriesEdit);
+    final canDelete = auth.hasPermission(AppPermissions.categoriesDelete);
+
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('Catalog'),
+        title: const Text('Categories'),
         actions: [
-          IconButton(
-            tooltip: 'Add',
-            onPressed: () => _openForm(),
-            icon: const Icon(Icons.add),
-          ),
+          if (canCreate)
+            IconButton(
+              tooltip: 'Add category',
+              onPressed: () => _openForm(),
+              icon: const Icon(Icons.add),
+            ),
         ],
-        bottom: TabBar(
-          controller: _tabs,
-          tabs: _tabLabels.map((l) => Tab(text: l)).toList(),
-        ),
       ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: _loading
             ? const Center(child: CircularProgressIndicator())
-            : _buildList(),
+            : _buildList(canEdit: canEdit, canDelete: canDelete),
       ),
     );
   }
 
-  Widget _buildList() {
-    final tiles = switch (_tabs.index) {
-      0 => _categories
-          .map((c) => _rowTile(
-                id: c.id,
-                title: c.name,
-                subtitle: c.slug,
-                isActive: c.isActive,
-                onEdit: () => _openForm(id: c.id, name: c.name, active: c.isActive),
-                onDelete: () => _delete(c.id, c.name),
-              ))
-          .toList(),
-      1 => _brands
-          .map((b) => _rowTile(
-                id: b.id,
-                title: b.name,
-                subtitle: b.slug,
-                isActive: b.isActive,
-                onEdit: () => _openForm(id: b.id, name: b.name, active: b.isActive),
-                onDelete: () => _delete(b.id, b.name),
-              ))
-          .toList(),
-      _ => _units
-          .map((u) => _rowTile(
-                id: u.id,
-                title: u.name,
-                subtitle: u.abbreviation,
-                isActive: u.isActive,
-                onEdit: () =>
-                    _openForm(id: u.id, name: u.name, extra: u.abbreviation),
-                onDelete: () => _delete(u.id, u.name),
-              ))
-          .toList(),
-    };
-
-    if (tiles.isEmpty) {
+  Widget _buildList({required bool canEdit, required bool canDelete}) {
+    if (_categories.isEmpty) {
       return ListView(
-        children: [
-          const SizedBox(height: 120),
-          Center(child: Text('No ${_tabLabels[_tabs.index].toLowerCase()} yet')),
+        children: const [
+          SizedBox(height: 120),
+          Center(child: Text('No categories yet')),
         ],
       );
     }
 
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      itemCount: tiles.length,
+      itemCount: _categories.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (_, i) => tiles[i],
-    );
-  }
-
-  Widget _rowTile({
-    required int id,
-    required String title,
-    String? subtitle,
-    required bool isActive,
-    required VoidCallback onEdit,
-    required VoidCallback onDelete,
-  }) {
-    return ListTile(
-      title: Text(
-        title,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-      ),
-      subtitle: (subtitle != null && subtitle.isNotEmpty)
-          ? Text(
-              subtitle,
-              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-            )
-          : null,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (!isActive)
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: Text(
-                'Inactive',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-              ),
-            ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: onEdit,
+      itemBuilder: (_, i) {
+        final c = _categories[i];
+        final count = c.productsCount;
+        return ListTile(
+          title: Text(
+            c.name,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
-            onPressed: onDelete,
+          subtitle: Text(
+            count == 1 ? '1 product' : '$count products',
+            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
           ),
-        ],
-      ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!c.isActive)
+                const Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: Text(
+                    'Inactive',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                  ),
+                ),
+              if (canEdit)
+                IconButton(
+                  tooltip: 'Edit',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () => _openForm(category: c),
+                ),
+              if (canDelete)
+                IconButton(
+                  tooltip: 'Delete',
+                  icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
+                  onPressed: () => _delete(c),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
