@@ -123,10 +123,18 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
       final svc = context.read<AppServices>().emrMasterData;
       final q = _search.text.trim();
       final list = switch (_currentKey) {
-        'complaints' => await svc.listComplaints(search: q.isEmpty ? null : q),
-        'review_intervals' =>
-          await svc.listReviewIntervals(search: q.isEmpty ? null : q),
-        'observations' => await svc.listObservations(search: q.isEmpty ? null : q),
+        'complaints' => await svc.listComplaints(
+            search: q.isEmpty ? null : q,
+            isActive: true,
+          ),
+        'review_intervals' => await svc.listReviewIntervals(
+            search: q.isEmpty ? null : q,
+            isActive: true,
+          ),
+        'observations' => await svc.listObservations(
+            search: q.isEmpty ? null : q,
+            isActive: true,
+          ),
         _ => <EmrTemplateItem>[],
       };
       if (mounted) setState(() => _items = list);
@@ -311,7 +319,8 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
         case 'observations':
           await svc.deleteObservation(item.id);
       }
-      _load();
+      if (!mounted) return;
+      setState(() => _items.removeWhere((e) => e.id == item.id));
     } catch (e) {
       if (mounted) AppMessenger.show(context, SnackBar(content: Text('$e')));
     }

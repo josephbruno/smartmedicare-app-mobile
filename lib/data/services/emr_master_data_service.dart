@@ -319,11 +319,17 @@ class EmrMasterDataService {
   final ApiClient _client;
   static const _base = '/emr/master-data';
 
-  Future<List<EmrTemplateItem>> listComplaints({String? search}) =>
-      _list('$_base/complaints', search);
+  Future<List<EmrTemplateItem>> listComplaints({
+    String? search,
+    bool? isActive,
+  }) =>
+      _list('$_base/complaints', search, isActive: isActive);
 
-  Future<List<EmrTemplateItem>> listReviewIntervals({String? search}) =>
-      _list('$_base/review-intervals', search);
+  Future<List<EmrTemplateItem>> listReviewIntervals({
+    String? search,
+    bool? isActive,
+  }) =>
+      _list('$_base/review-intervals', search, isActive: isActive);
 
   Future<List<EmrTemplateItem>> listDiagnoses({String? search}) =>
       _list('$_base/diagnoses', search);
@@ -340,8 +346,11 @@ class EmrMasterDataService {
   Future<List<EmrTemplateItem>> listFrequencies({String? search}) =>
       _list('$_base/frequencies', search);
 
-  Future<List<EmrTemplateItem>> listObservations({String? search}) =>
-      _list('$_base/observations', search);
+  Future<List<EmrTemplateItem>> listObservations({
+    String? search,
+    bool? isActive,
+  }) =>
+      _list('$_base/observations', search, isActive: isActive);
 
   Future<List<EmrTemplateItem>> listInvestigations({String? search}) =>
       _list('$_base/investigations', search);
@@ -872,11 +881,18 @@ class EmrMasterDataService {
 
   Future<void> deleteProcedureKit(int id) => _delete('$_base/procedure-kits/$id');
 
-  Future<List<EmrTemplateItem>> _list(String path, String? search) async {
+  Future<List<EmrTemplateItem>> _list(
+    String path,
+    String? search, {
+    bool? isActive,
+  }) async {
     try {
       final res = await _client.get(
         path,
-        queryParameters: search != null && search.isNotEmpty ? {'search': search} : null,
+        queryParameters: {
+          if (search != null && search.isNotEmpty) 'search': search,
+          if (isActive != null) 'is_active': isActive ? 1 : 0,
+        },
       );
       return parseEnvelopeData(
         res,
