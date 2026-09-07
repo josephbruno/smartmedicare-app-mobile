@@ -6,12 +6,13 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
-class MainActivity : FlutterActivity() {
+/// [FlutterFragmentActivity] is required by local_auth for BiometricPrompt.
+class MainActivity : FlutterFragmentActivity() {
     private val updateChannel = "com.maranbilling.mobile/apk_update"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

@@ -14,6 +14,8 @@ import '../../data/services/emr_visit_catalog_cache.dart';
 const _kTokenKey = 'auth_token';
 const _kUserJsonKey = 'auth_user_json';
 const _kBranchIdKey = 'auth_branch_id';
+const _kBiometricPinKey = 'biometric_unlock_pin';
+const _kBiometricEnabledKey = 'app_biometric_auth';
 
 /// Session + permission state (replaces Pinia auth store).
 /// Call [bindRepository] after [ApiClient] and [AuthRepository] are wired.
@@ -32,6 +34,7 @@ class AuthSession extends ChangeNotifier {
   User? _user;
   int? _currentBranchId;
   bool _isUnlocked = false;
+  bool _biometricEnabled = false;
 
   String? get token => _token;
   User? get user => _user;
@@ -43,6 +46,9 @@ class AuthSession extends ChangeNotifier {
   bool get isUnlocked => _isUnlocked;
 
   bool get hasPinSet => _user?.hasPin ?? false;
+
+  /// User preference: unlock with fingerprint / Face ID when the device allows it.
+  bool get biometricEnabled => _biometricEnabled;
 
   /// Full app access: stored credentials and PIN verified (or fresh login).
   bool get isAuthenticated => hasStoredSession && _isUnlocked;
@@ -137,6 +143,7 @@ class AuthSession extends ChangeNotifier {
     if (b != null && b.isNotEmpty) {
       _currentBranchId = int.tryParse(b);
     }
+    _biometricEnabled = prefs.getBool(_kBiometricEnabledKey) ?? false;
     _isUnlocked = false;
     notifyListeners();
   }
@@ -163,16 +170,77 @@ class AuthSession extends ChangeNotifier {
     _user = updated;
     await _persistUserJson();
     _isUnlocked = true;
+    if (_biometricEnabled) {
+      await _storeBiometricPin(pin);
+    }
     notifyListeners();
   }
 
   Future<void> verifyPin(String pin) async {
     await _repository!.verifyPin(pin);
     _isUnlocked = true;
+    if (_biometricEnabled) {
+      await _storeBiometricPin(pin);
+    }
     if (needsPermissionRefresh) {
       await fetchMe();
     }
     notifyListeners();
+  }
+
+  /// Whether a PIN is stored for biometric unlock (enabled preference + pin present).
+  Future<bool> canUnlockWithBiometrics() async {
+    if (!_biometricEnabled) return false;
+    final pin = await _secure.read(key: _kBiometricPinKey);
+    return pin != null && pin.length == 6;
+  }
+
+  /// After device biometrics succeed, re-verify the stored PIN with the API.
+  Future<void> unlockWithStoredBiometricPin() async {
+    final pin = await _secure.read(key: _kBiometricPinKey);
+    if (pin == null || pin.length != 6) {
+      throw StateError(
+        'Biometric unlock is not set up yet. Enter your PIN once.',
+      );
+    }
+    await verifyPin(pin);
+  }
+
+  /// Enable fingerprint / Face ID unlock. [pin] must be the current valid PIN
+  /// so it can be stored for subsequent biometric unlocks.
+  Future<void> enableBiometricUnlock(String pin) async {
+    if (pin.length != 6) {
+      throw ArgumentError('PIN must be 6 digits');
+    }
+    await _repository!.verifyPin(pin);
+    await _storeBiometricPin(pin);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kBiometricEnabledKey, true);
+    _biometricEnabled = true;
+    _isUnlocked = true;
+    notifyListeners();
+  }
+
+  Future<void> disableBiometricUnlock() async {
+    await _secure.delete(key: _kBiometricPinKey);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kBiometricEnabledKey, false);
+    _biometricEnabled = false;
+    notifyListeners();
+  }
+
+  /// Turn on the preference and cache [pin] after a successful unlock/set.
+  Future<void> rememberPinForBiometrics(String pin) async {
+    if (pin.length != 6) return;
+    await _storeBiometricPin(pin);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kBiometricEnabledKey, true);
+    _biometricEnabled = true;
+    notifyListeners();
+  }
+
+  Future<void> _storeBiometricPin(String pin) async {
+    await _secure.write(key: _kBiometricPinKey, value: pin);
   }
 
   /// Self-service password change for the current account. Other devices are
@@ -192,6 +260,9 @@ class AuthSession extends ChangeNotifier {
         await _repository!.changePin(currentPin: currentPin, newPin: newPin);
     _user = updated;
     await _persistUserJson();
+    if (_biometricEnabled) {
+      await _storeBiometricPin(newPin);
+    }
     notifyListeners();
   }
 
@@ -257,6 +328,7 @@ class AuthSession extends ChangeNotifier {
     _currentBranchId = null;
     _isUnlocked = false;
     await _secure.delete(key: _kTokenKey);
+    await _secure.delete(key: _kBiometricPinKey);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kUserJsonKey);
     await prefs.remove(_kBranchIdKey);

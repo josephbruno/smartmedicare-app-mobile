@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/app_config.dart';
 import '../../core/network/api_exception.dart';
+import '../../core/security/biometric_service.dart';
 import '../../core/session/auth_session.dart';
 import 'widgets/pin_entry_with_keypad.dart';
 import 'widgets/pin_fullscreen_layout.dart';
@@ -32,6 +34,38 @@ class _SetPinScreenState extends State<SetPinScreen> {
     });
   }
 
+  Future<void> _offerBiometrics(String pin) async {
+    if (!AppConfig.isNativeMobile || !mounted) return;
+    final biometrics = BiometricService();
+    final available = await biometrics.canCheckBiometrics();
+    if (!available || !mounted) return;
+
+    final enable = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enable fingerprint unlock?'),
+        content: const Text(
+          'Use your fingerprint next time instead of typing your PIN. '
+          'You can change this later in Account Security.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+
+    if (enable == true && mounted) {
+      await context.read<AuthSession>().rememberPinForBiometrics(pin);
+    }
+  }
+
   Future<void> _onConfirmEntered(String confirmPin) async {
     if (_loading) return;
     if (confirmPin != _pin) {
@@ -51,6 +85,7 @@ class _SetPinScreenState extends State<SetPinScreen> {
     });
     try {
       await context.read<AuthSession>().setPin(_pin);
+      await _offerBiometrics(_pin);
       if (mounted) context.go('/dashboard');
     } on ApiException catch (e) {
       setState(() {
