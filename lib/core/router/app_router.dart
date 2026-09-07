@@ -198,12 +198,7 @@ GoRouter createAppRouter({
       if (need(AppPermissions.productsEdit)) return denied;
     }
     if (path.startsWith('/settings/printer')) {
-      // Local USB thermal config — cashiers on desktop, or anyone who can manage shop.
-      final canPrinter = auth.hasPermission(AppPermissions.shopManage) ||
-          (auth.hasRole(AppRoles.cashier) &&
-              AppConfig.isCashierPlatform &&
-              auth.hasPermission(AppPermissions.invoicesCreate));
-      if (!canPrinter) return denied;
+      if (!auth.canAccessPrinterSettings) return denied;
     } else if (path == '/settings' || path.startsWith('/settings/')) {
       if (path == '/settings' && need(AppPermissions.shopManage)) return denied;
       if (path.startsWith('/settings/users') && need(AppPermissions.usersView)) {

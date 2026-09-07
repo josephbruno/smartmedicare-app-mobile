@@ -2,7 +2,7 @@ name: maran
 description: Maran Billing — Flutter client (MVVM) for Android, iOS, Windows, macOS.
 publish_to: 'none'
 
-version: 1.0.39+40
+version: 1.0.45+46
 
 environment:
   sdk: ^3.5.0

@@ -89,8 +89,14 @@ class _PetVisitSummaryScreenState extends State<PetVisitSummaryScreen>
     try {
       final clinic = await _clinicInfo();
       final fresh = await _freshVisits(visits);
-      await VisitPdf.printVisits(fresh, clinic: clinic);
-      if (mounted) setState(_reload);
+      final result = await VisitPdf.printVisits(fresh, clinic: clinic);
+      if (mounted) {
+        AppMessenger.show(
+          context,
+          SnackBar(content: Text(result.userMessage)),
+        );
+        setState(_reload);
+      }
     } catch (e) {
       if (mounted) {
         AppMessenger.show(context, SnackBar(content: Text('$e')));
@@ -476,6 +482,29 @@ class _VisitSummaryCard extends StatelessWidget {
                 const SizedBox(height: 10),
                 _Panel(child: right),
               ],
+              const SizedBox(height: 10),
+              if (wide)
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: _Panel(child: _ClinicalNotesBlock(visit: visit)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: _Panel(child: _FollowUpBlock(visit: visit)),
+                      ),
+                    ],
+                  ),
+                )
+              else ...[
+                _Panel(child: _ClinicalNotesBlock(visit: visit)),
+                const SizedBox(height: 10),
+                _Panel(child: _FollowUpBlock(visit: visit)),
+              ],
             ],
           ),
         ),
@@ -640,11 +669,53 @@ class _ClinicalColumn extends StatelessWidget {
             if (visit.investigationItems[i].notes.trim().isNotEmpty)
               _BodyText(visit.investigationItems[i].notes),
           ],
-        const _DividerLine(),
-        const _SectionTitle('Follow-up'),
+      ],
+    );
+  }
+}
+
+class _ClinicalNotesBlock extends StatelessWidget {
+  const _ClinicalNotesBlock({required this.visit});
+
+  final PetVisit visit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle('Clinical notes'),
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 13 * 1.35 * 2),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: _BodyText(
+              visit.displayClinicalNotes.isNotEmpty
+                  ? visit.displayClinicalNotes
+                  : '—',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FollowUpBlock extends StatelessWidget {
+  const _FollowUpBlock({required this.visit});
+
+  final PetVisit visit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle('Adv to Review on'),
         if (visit.followUpDate != null) ...[
           _BodyText(visit.followUpDate!, semi: true),
-          if (visit.followUpNotes != null && visit.followUpNotes!.trim().isNotEmpty)
+          if (visit.followUpNotes != null &&
+              visit.followUpNotes!.trim().isNotEmpty)
             _BodyText(visit.followUpNotes!),
         ] else
           const _BodyText('—'),

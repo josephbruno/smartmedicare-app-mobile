@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/app_config.dart';
+import '../../core/desktop/desktop_prefs.dart';
 import '../../core/router/app_route_observer.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
@@ -101,16 +102,33 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
       final visit = await _freshVisit();
       final clinic = await _clinicInfo();
       if (!mounted) return;
-      await VisitPrintPreviewScreen.open(
-        context,
-        visit: visit,
-        clinic: clinic,
-      );
+      final autoPrint = await DesktopPrefs.getAutoPrintSummary();
       if (!mounted) return;
-      AppMessenger.show(
-        context,
-        const SnackBar(content: Text('Visit completed. Bill is on hold.')),
-      );
+      if (autoPrint) {
+        final printed = await VisitPdf.printVisit(visit, clinic: clinic);
+        if (!mounted) return;
+        AppMessenger.show(
+          context,
+          SnackBar(
+            content: Text(
+              printed.isSuccess
+                  ? 'Visit completed. ${printed.userMessage}'
+                  : 'Visit completed. Bill is on hold. ${printed.userMessage}',
+            ),
+          ),
+        );
+      } else {
+        await VisitPrintPreviewScreen.open(
+          context,
+          visit: visit,
+          clinic: clinic,
+        );
+        if (!mounted) return;
+        AppMessenger.show(
+          context,
+          const SnackBar(content: Text('Visit completed. Bill is on hold.')),
+        );
+      }
       setState(_reload);
     } catch (e) {
       if (mounted) {
@@ -158,6 +176,24 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
 
   void _billAtPos() {
     context.push('/pos?visit_id=${widget.visitId}');
+  }
+
+  Future<void> _printSummary() async {
+    try {
+      final visit = await _freshVisit();
+      final clinic = await _clinicInfo();
+      final result = await VisitPdf.printVisit(visit, clinic: clinic);
+      if (!mounted) return;
+      AppMessenger.show(
+        context,
+        SnackBar(content: Text(result.userMessage)),
+      );
+      setState(_reload);
+    } catch (e) {
+      if (mounted) {
+        AppMessenger.show(context, SnackBar(content: Text('$e')));
+      }
+    }
   }
 
   Future<void> _deleteVisit() async {
@@ -275,6 +311,7 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
                       statusLabel: _statusLabel(v.status),
                       visitTypeLabel: _visitTypeLabel(v.visitType),
                       timeLabel: _formatTime(v.visitTime),
+                      onPrint: _printSummary,
                       onPreview: () async {
                         try {
                           final visit = await _freshVisit();
@@ -606,19 +643,22 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
           ),
         ),
       ],
-      if (v.clinicalNotes != null && v.clinicalNotes!.isNotEmpty) ...[
+      if (v.displayClinicalNotes.isNotEmpty) ...[
         const SizedBox(height: 12),
         _SectionCard(
           icon: Icons.notes_outlined,
           iconColor: AppTheme.primary,
           iconBg: const Color(0xFFEFF6FF),
           title: 'Clinical notes',
-          child: Text(
-            v.clinicalNotes!,
-            style: const TextStyle(
-              fontSize: 14,
-              height: 1.55,
-              color: AppTheme.textPrimary,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 14 * 1.55 * 2),
+            child: Text(
+              v.displayClinicalNotes,
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.55,
+                color: AppTheme.textPrimary,
+              ),
             ),
           ),
         ),
@@ -663,7 +703,7 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
           icon: Icons.event_outlined,
           iconColor: const Color(0xFFEA580C),
           iconBg: const Color(0xFFFFF7ED),
-          title: 'Follow-up',
+          title: 'Adv to Review on',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -723,6 +763,7 @@ class _HeaderCard extends StatelessWidget {
     required this.statusLabel,
     required this.visitTypeLabel,
     required this.timeLabel,
+    required this.onPrint,
     required this.onPreview,
     required this.onDownload,
     this.onEdit,
@@ -734,6 +775,7 @@ class _HeaderCard extends StatelessWidget {
   final String statusLabel;
   final String visitTypeLabel;
   final String timeLabel;
+  final VoidCallback onPrint;
   final VoidCallback onPreview;
   final VoidCallback onDownload;
   final VoidCallback? onEdit;
@@ -880,6 +922,11 @@ class _HeaderCard extends StatelessWidget {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    _ActionChipButton(
+                      icon: Icons.print_outlined,
+                      label: 'Print',
+                      onPressed: onPrint,
+                    ),
                     _ActionChipButton(
                       icon: Icons.preview_outlined,
                       label: 'Preview',

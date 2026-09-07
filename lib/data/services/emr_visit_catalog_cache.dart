@@ -20,6 +20,7 @@ class EmrVisitCatalogCache {
 
   static List<DoctorLite> doctors = const [];
   static List<String> complaints = const [];
+  static List<EmrTemplateItem> reviewIntervals = const [];
   static List<String> investigations = const [];
   static List<TreatmentSuggestion> treatments = const [];
   static List<MedicineSuggestion> medicines = const [];
@@ -56,6 +57,11 @@ class EmrVisitCatalogCache {
 
   static void saveComplaints(List<String> value) {
     complaints = List<String>.of(value);
+    touch();
+  }
+
+  static void saveReviewIntervals(List<EmrTemplateItem> value) {
+    reviewIntervals = List<EmrTemplateItem>.of(value);
     touch();
   }
 
@@ -166,6 +172,7 @@ class EmrVisitCatalogCache {
       await Future.wait([
         emr.listDoctors().then(saveDoctors),
         emr.getComplaints().then(saveComplaints),
+        emr.getReviewIntervals().then(saveReviewIntervals),
         emr.getInvestigations().then(saveInvestigations),
         emr.getTreatmentSuggestions().then(saveTreatments),
         emr.getMedicineSuggestions().then(saveMedicines),
@@ -246,6 +253,7 @@ class EmrVisitCatalogCache {
     _inFlight = null;
     doctors = const [];
     complaints = const [];
+    reviewIntervals = const [];
     investigations = const [];
     treatments = const [];
     medicines = const [];

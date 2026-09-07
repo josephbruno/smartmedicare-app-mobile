@@ -37,7 +37,8 @@ Future<bool> showPosCheckoutDialog({
   Customer? customer,
 }) async {
   Customer? billingCustomer = customer;
-  final paidController = TextEditingController(text: grandTotal.toStringAsFixed(2));
+  final paidController = TextEditingController();
+  final paidFocus = FocusNode();
   final upiRefController = TextEditingController();
   final loyaltyController = TextEditingController();
 
@@ -162,9 +163,11 @@ Future<bool> showPosCheckoutDialog({
 
             bool lockPaymentInputs() => paymentSaved && !hasOpenBalance();
 
-            void syncPaidToDue() {
-              if (lockPaymentInputs() || paymentMode != 'cash') return;
-              paidController.text = billDue().toStringAsFixed(2);
+            void focusCashAmount() {
+              if (lockPaymentInputs()) return;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (paidFocus.canRequestFocus) paidFocus.requestFocus();
+              });
             }
 
             double tenderedAmount() =>
@@ -367,13 +370,18 @@ Future<bool> showPosCheckoutDialog({
               // invoice balance (follow-up payment on partial invoice).
               final dueBeforePay = billDue();
 
-              // Capture cash tendered BEFORE any sync — syncPaidToDue() would
-              // overwrite overpayments (e.g. ₹50 on a ₹17 bill) and drop change.
+              // Cash tendered is whatever the cashier typed — never auto-fill
+              // the due amount (change depends on the notes actually received).
               final cashTendered =
                   paymentMode == 'cash' ? tenderedAmount() : null;
               if (paymentMode == 'cash' &&
+                  dueBeforePay > 0.009 &&
                   (cashTendered == null || cashTendered <= 0)) {
-                syncPaidToDue();
+                AppMessenger.show(context,
+                  const SnackBar(content: Text('Enter the cash amount received')),
+                );
+                focusCashAmount();
+                return;
               }
               final amount = paymentAmount();
               final advanceCredit = advanceApplyValue();
@@ -433,7 +441,8 @@ Future<bool> showPosCheckoutDialog({
                   activeInvoice = updated;
                   paymentSaved = true;
                   if (updated.dueAmount > 0.009 && paymentMode == 'cash') {
-                    paidController.text = updated.dueAmount.toStringAsFixed(2);
+                    paidController.clear();
+                    focusCashAmount();
                   }
                   await finishOrContinueSplit(
                     successMessage: updated.dueAmount > 0.009
@@ -481,7 +490,8 @@ Future<bool> showPosCheckoutDialog({
                   // Remaining due is collected via recordPayment, not a new create.
                   paymentSaved = true;
                   if (created.dueAmount > 0.009 && paymentMode == 'cash') {
-                    paidController.text = created.dueAmount.toStringAsFixed(2);
+                    paidController.clear();
+                    focusCashAmount();
                   }
                 } else {
                   const uuid = Uuid();
@@ -568,9 +578,7 @@ Future<bool> showPosCheckoutDialog({
                         ? null
                         : () => setState(() {
                               paymentMode = mode;
-                              if (mode == 'cash') {
-                                syncPaidToDue();
-                              }
+                              if (mode == 'cash') focusCashAmount();
                             }),
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
@@ -664,7 +672,7 @@ Future<bool> showPosCheckoutDialog({
                                 ? null
                                 : () {
                                     loyaltyController.text = '$maxPts';
-                                    setState(() => syncPaidToDue());
+                                    setState(() {});
                                   },
                             style: TextButton.styleFrom(
                               visualDensity: VisualDensity.compact,
@@ -684,9 +692,7 @@ Future<bool> showPosCheckoutDialog({
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
                       ],
-                      onChanged: (_) => setState(() {
-                        syncPaidToDue();
-                      }),
+                      onChanged: (_) => setState(() {}),
                       style: TextStyle(fontSize: alertFs(12)),
                       decoration: InputDecoration(
                         isDense: true,
@@ -808,7 +814,9 @@ Future<bool> showPosCheckoutDialog({
                       ),
                     paymentSummaryRow(
                       'Paid by Customer',
-                      '₹${tendered.toStringAsFixed(2)}',
+                      paymentMode == 'cash' && tendered <= 0
+                          ? '—'
+                          : '₹${tendered.toStringAsFixed(2)}',
                     ),
                     if (paymentMode == 'cash') ...[
                       const Divider(height: 14, color: Color(0xFFE2E8F0)),
@@ -822,7 +830,9 @@ Future<bool> showPosCheckoutDialog({
                             ? '₹${change.toStringAsFixed(2)}'
                             : isBalance
                                 ? '₹${balance.toStringAsFixed(2)}'
-                                : '₹0.00',
+                                : tendered <= 0
+                                    ? '—'
+                                    : '₹0.00',
                         valueColor: isChange
                             ? AppTheme.accent
                             : isBalance
@@ -1008,7 +1018,6 @@ Future<bool> showPosCheckoutDialog({
                     setState(() {
                       paymentMode = 'cash';
                       loyaltyController.clear();
-                      syncPaidToDue();
                     });
                   }
                 });
@@ -1062,7 +1071,6 @@ Future<bool> showPosCheckoutDialog({
                           ? null
                           : (v) => setState(() {
                                 applyAdvance = v;
-                                syncPaidToDue();
                               }),
                     ),
                   ],
@@ -1103,6 +1111,8 @@ Future<bool> showPosCheckoutDialog({
                   if (paymentMode == 'cash') ...[
                     TextField(
                       controller: paidController,
+                      focusNode: paidFocus,
+                      autofocus: true,
                       enabled: !lockPaymentInputs(),
                       onChanged: (_) => setState(() {}),
                       onSubmitted: (_) {
@@ -1124,9 +1134,8 @@ Future<bool> showPosCheckoutDialog({
                       ],
                       decoration: InputDecoration(
                         isDense: true,
-                        labelText: hasOpenBalance()
-                            ? 'Pay remaining (₹)'
-                            : 'Amount Paid (₹)',
+                        labelText: 'Cash received (₹)',
+                        hintText: 'Enter amount received',
                         labelStyle: TextStyle(fontSize: alertFs(12)),
                         filled: true,
                         fillColor: Colors.white,
@@ -1247,7 +1256,7 @@ Future<bool> showPosCheckoutDialog({
                     if (!lockPaymentInputs()) {
                       setState(() {
                         paymentMode = 'cash';
-                        syncPaidToDue();
+                        focusCashAmount();
                       });
                     }
                   },
@@ -1258,7 +1267,6 @@ Future<bool> showPosCheckoutDialog({
                   },
                 },
                 child: Focus(
-                  autofocus: true,
                   child: Theme(
               data: Theme.of(context).copyWith(
                 dialogTheme: DialogThemeData(
@@ -1444,6 +1452,7 @@ Future<bool> showPosCheckoutDialog({
     return completed;
   } finally {
     paidController.dispose();
+    paidFocus.dispose();
     upiRefController.dispose();
     loyaltyController.dispose();
   }

@@ -33,6 +33,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
 
   static const _tabKeys = [
     'complaints',
+    'review_intervals',
     'treatment_under',
     'prescription_under',
     'observations',
@@ -43,6 +44,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
 
   static const _tabLabels = [
     'Complaints',
+    'Adv to Review',
     'Treatment Under',
     'Prescriptions Under',
     'Observations',
@@ -122,6 +124,8 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
       final q = _search.text.trim();
       final list = switch (_currentKey) {
         'complaints' => await svc.listComplaints(search: q.isEmpty ? null : q),
+        'review_intervals' =>
+          await svc.listReviewIntervals(search: q.isEmpty ? null : q),
         'observations' => await svc.listObservations(search: q.isEmpty ? null : q),
         _ => <EmrTemplateItem>[],
       };
@@ -155,12 +159,44 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
       return;
     }
     final isEdit = item != null;
+    final isReview = _currentKey == 'review_intervals';
     final name = TextEditingController(text: item?.name ?? '');
+    final days = TextEditingController(
+      text: item?.days?.toString() ?? '',
+    );
 
     final title =
         isEdit ? 'Edit ${_tabLabels[_tabs.index]}' : 'Add ${_tabLabels[_tabs.index]}';
 
     var isActive = item?.isActive ?? true;
+
+    Widget formFields(void Function(void Function()) setLocal) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: name,
+            decoration: appFormFieldDecoration('Name *'),
+          ),
+          if (isReview) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: days,
+              keyboardType: TextInputType.number,
+              decoration: appFormFieldDecoration('Days *'),
+            ),
+          ],
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Active'),
+            value: isActive,
+            onChanged: (v) => setLocal(() => isActive = v),
+          ),
+        ],
+      );
+    }
 
     final bool? saved;
     if (useCenteredFormDialog(context)) {
@@ -168,23 +204,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
         context: context,
         title: title,
         content: StatefulBuilder(
-          builder: (ctx, setLocal) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextField(
-                controller: name,
-                decoration: appFormFieldDecoration('Name *'),
-              ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Active'),
-                value: isActive,
-                onChanged: (v) => setLocal(() => isActive = v),
-              ),
-            ],
-          ),
+          builder: (ctx, setLocal) => formFields(setLocal),
         ),
         actions: [
           TextButton(
@@ -208,23 +228,7 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
             title: title,
             icon: Icons.medical_information_outlined,
             onClose: () => Navigator.pop(ctx, false),
-            body: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: name,
-                  decoration: appFormFieldDecoration('Name *'),
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Active'),
-                  value: isActive,
-                  onChanged: (v) => setSheet(() => isActive = v),
-                ),
-              ],
-            ),
+            body: formFields(setSheet),
             footer: AppFormFooter(
               primaryLabel: isEdit ? 'Save' : 'Add',
               onCancel: () => Navigator.pop(ctx, false),
@@ -237,24 +241,40 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
 
     if (saved != true || !mounted) return;
 
+    if (isReview) {
+      final parsedDays = int.tryParse(days.text.trim());
+      if (parsedDays == null || parsedDays < 1) {
+        AppMessenger.show(
+          context,
+          const SnackBar(content: Text('Enter a valid number of days')),
+        );
+        return;
+      }
+    }
+
     final body = <String, dynamic>{
       'is_active': isActive,
       'name': name.text.trim(),
+      if (isReview) 'days': int.parse(days.text.trim()),
     };
 
     try {
       final svc = context.read<AppServices>().emrMasterData;
-      if (isEdit) {
+      if (isEdit && item != null) {
         switch (_currentKey) {
           case 'complaints':
-            await svc.updateComplaint(item!.id, body);
+            await svc.updateComplaint(item.id, body);
+          case 'review_intervals':
+            await svc.updateReviewInterval(item.id, body);
           case 'observations':
-            await svc.updateObservation(item!.id, body);
+            await svc.updateObservation(item.id, body);
         }
       } else {
         switch (_currentKey) {
           case 'complaints':
             await svc.createComplaint(body);
+          case 'review_intervals':
+            await svc.createReviewInterval(body);
           case 'observations':
             await svc.createObservation(body);
         }
@@ -282,6 +302,8 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
       switch (_currentKey) {
         case 'complaints':
           await svc.deleteComplaint(item.id);
+        case 'review_intervals':
+          await svc.deleteReviewInterval(item.id);
         case 'observations':
           await svc.deleteObservation(item.id);
       }
@@ -365,6 +387,10 @@ class _EmrMasterDataScreenState extends State<EmrMasterDataScreen>
                               final item = _items[i];
                               return ListTile(
                                 title: Text(item.displayName),
+                                subtitle: _currentKey == 'review_intervals' &&
+                                        item.days != null
+                                    ? Text('Visit date + ${item.days} days')
+                                    : null,
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [

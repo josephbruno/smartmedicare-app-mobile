@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/messaging/app_messenger.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
@@ -41,15 +42,15 @@ class VisitPrintPreviewScreen extends StatefulWidget {
 }
 
 class _VisitPrintPreviewScreenState extends State<VisitPrintPreviewScreen> {
-  late final Future<Uint8List> _pdfBytes;
+  late final Future<({Uint8List bytes, PdfPageFormat format})> _pdf;
 
   @override
   void initState() {
     super.initState();
-    _pdfBytes = _buildOnce();
+    _pdf = _buildOnce();
   }
 
-  Future<Uint8List> _buildOnce() async {
+  Future<({Uint8List bytes, PdfPageFormat format})> _buildOnce() async {
     final services = context.read<AppServices>();
     final auth = context.read<AuthSession>();
     final clinic = widget.clinic ??
@@ -57,14 +58,17 @@ class _VisitPrintPreviewScreenState extends State<VisitPrintPreviewScreen> {
           auth: auth,
           branches: services.branches,
         );
-    final doc = await VisitPdf.build(widget.visit, clinic: clinic);
-    return doc.save();
+    final format = await VisitPdf.resolvePageFormat();
+    final doc = await VisitPdf.build(
+      widget.visit,
+      clinic: clinic,
+      format: format,
+    );
+    return (bytes: await doc.save(), format: format);
   }
 
   @override
   Widget build(BuildContext context) {
-    final pageFormat = PdfPageFormat.a5.landscape;
-
     return Scaffold(
       appBar: AppBar(
         title: Text('Preview · ${widget.visit.visitNumber}'),
@@ -77,8 +81,8 @@ class _VisitPrintPreviewScreenState extends State<VisitPrintPreviewScreen> {
           child: Divider(height: 1, color: Color(0xFFE2E8F0)),
         ),
       ),
-      body: FutureBuilder<Uint8List>(
-        future: _pdfBytes,
+      body: FutureBuilder<({Uint8List bytes, PdfPageFormat format})>(
+        future: _pdf,
         builder: (context, snap) {
           if (snap.hasError) {
             return Center(
@@ -94,12 +98,12 @@ class _VisitPrintPreviewScreenState extends State<VisitPrintPreviewScreen> {
           if (!snap.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final bytes = snap.data!;
+          final data = snap.data!;
           return PdfPreview(
             key: ValueKey('visit-pdf-${widget.visit.id}'),
-            build: (_) async => bytes,
-            initialPageFormat: pageFormat,
-            allowPrinting: true,
+            build: (_) async => data.bytes,
+            initialPageFormat: data.format,
+            allowPrinting: false,
             allowSharing: true,
             canChangePageFormat: false,
             canChangeOrientation: false,
@@ -107,6 +111,23 @@ class _VisitPrintPreviewScreenState extends State<VisitPrintPreviewScreen> {
             shouldRepaint: false,
             pdfFileName: 'visit-${widget.visit.visitNumber}.pdf',
             maxPageWidth: 900,
+            actions: [
+              PdfPreviewAction(
+                icon: const Icon(Icons.print_outlined),
+                onPressed: (context, _, __) async {
+                  final result = await VisitPdf.printVisit(
+                    widget.visit,
+                    clinic: widget.clinic,
+                  );
+                  if (context.mounted) {
+                    AppMessenger.show(
+                      context,
+                      SnackBar(content: Text(result.userMessage)),
+                    );
+                  }
+                },
+              ),
+            ],
             scrollViewDecoration: const BoxDecoration(color: Color(0xFFF1F5F9)),
             pdfPreviewPageDecoration: const BoxDecoration(
               color: Colors.white,

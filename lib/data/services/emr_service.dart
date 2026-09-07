@@ -338,6 +338,25 @@ class EmrService {
     }
   }
 
+  Future<List<EmrTemplateItem>> getReviewIntervals({String? q}) async {
+    try {
+      final res = await _client.get(
+        '/visits/review-intervals',
+        queryParameters: q != null && q.isNotEmpty ? {'q': q} : null,
+      );
+      return parseEnvelopeData(res, (data) {
+        if (data is! List) return <EmrTemplateItem>[];
+        return data
+            .whereType<Map>()
+            .map((e) => EmrTemplateItem.fromJson(Map<String, dynamic>.from(e)))
+            .where((e) => (e.days ?? 0) > 0)
+            .toList();
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
   Future<List<String>> getComplaints({String? q}) async {
     try {
       final res = await _client.get(

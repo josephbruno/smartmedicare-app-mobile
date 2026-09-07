@@ -95,6 +95,18 @@ class AuthSession extends ChangeNotifier {
 
   bool get canAccessSettings => settingsRoute != null;
 
+  /// Local printer setup on this PC (POS thermal + visit summary PDF).
+  bool get canAccessPrinterSettings {
+    if (hasPermission(AppPermissions.shopManage)) return true;
+    if (hasRole(AppRoles.cashier) &&
+        AppConfig.isCashierPlatform &&
+        hasPermission(AppPermissions.invoicesCreate)) {
+      return true;
+    }
+    return AppConfig.isDesktopPlatform &&
+        hasPermission(AppPermissions.emrVisitsEdit);
+  }
+
   /// First settings screen the user is allowed to open.
   String? get settingsRoute {
     if (hasPermission(AppPermissions.shopManage)) return '/settings';

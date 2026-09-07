@@ -9,6 +9,12 @@ enum PrintLanguage {
   escpos,
 }
 
+/// A5 page orientation for visit-summary PDFs on this PC.
+enum SummaryPageOrientation {
+  portrait,
+  landscape,
+}
+
 /// Desktop / POS preferences persisted locally.
 class DesktopPrefs {
   DesktopPrefs._();
@@ -20,6 +26,10 @@ class DesktopPrefs {
   static const _escposPrinterNameKey = 'pos_escpos_printer_name';
   static const _printLanguageKey = 'pos_print_language';
   static const _paperWidthKey = 'pos_thermal_paper_width_mm';
+  static const _directSummaryPrintKey = 'visit_summary_direct_print';
+  static const _autoPrintSummaryKey = 'visit_summary_auto_print';
+  static const _summaryPrinterNameKey = 'visit_summary_printer_name';
+  static const _summaryOrientationKey = 'visit_summary_page_orientation';
 
   static Future<bool> getAutoPrintReceipt() async {
     final p = await SharedPreferences.getInstance();
@@ -113,5 +123,54 @@ class DesktopPrefs {
   static Future<void> setThermalPaperWidthMm(int value) async {
     final p = await SharedPreferences.getInstance();
     await p.setInt(_paperWidthKey, value);
+  }
+
+  /// When true, visit summary PDFs go to [getSummaryPrinterName] with no dialog.
+  static Future<bool> getDirectSummaryPrint() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getBool(_directSummaryPrintKey) ?? true;
+  }
+
+  static Future<void> setDirectSummaryPrint(bool value) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_directSummaryPrintKey, value);
+  }
+
+  /// When true, completing a visit prints the summary immediately.
+  static Future<bool> getAutoPrintSummary() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getBool(_autoPrintSummaryKey) ?? false;
+  }
+
+  static Future<void> setAutoPrintSummary(bool value) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_autoPrintSummaryKey, value);
+  }
+
+  /// Windows/macOS/Linux queue for A5 visit-summary PDFs (not the thermal RAW queue).
+  static Future<String> getSummaryPrinterName() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_summaryPrinterNameKey) ?? '';
+  }
+
+  static Future<void> setSummaryPrinterName(String value) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_summaryPrinterNameKey, value.trim());
+  }
+
+  /// A5 orientation for visit summaries. Defaults to portrait.
+  static Future<SummaryPageOrientation> getSummaryPageOrientation() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_summaryOrientationKey) ==
+            SummaryPageOrientation.landscape.name
+        ? SummaryPageOrientation.landscape
+        : SummaryPageOrientation.portrait;
+  }
+
+  static Future<void> setSummaryPageOrientation(
+    SummaryPageOrientation value,
+  ) async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_summaryOrientationKey, value.name);
   }
 }

@@ -20,6 +20,7 @@ class EmrTemplateItem {
     this.defaultDosage,
     this.defaultFrequency,
     this.defaultDurationDays,
+    this.days,
     this.isActive = true,
   });
 
@@ -33,12 +34,15 @@ class EmrTemplateItem {
   final String? defaultDosage;
   final String? defaultFrequency;
   final int? defaultDurationDays;
+  final int? days;
   final bool isActive;
 
   String get displayName => name ?? label ?? '';
 
   factory EmrTemplateItem.fromJson(Map<String, dynamic> json) => EmrTemplateItem(
-        id: json['id'] as int,
+        id: json['id'] is num
+            ? (json['id'] as num).toInt()
+            : int.tryParse(json['id']?.toString() ?? '') ?? 0,
         name: json['name']?.toString(),
         label: json['label']?.toString(),
         icdCode: json['icd_code']?.toString(),
@@ -52,6 +56,7 @@ class EmrTemplateItem {
         defaultDurationDays: json['default_duration_days'] != null
             ? int.tryParse(json['default_duration_days'].toString())
             : null,
+        days: json['days'] != null ? int.tryParse(json['days'].toString()) : null,
         isActive: json['is_active'] != false,
       );
 }
@@ -317,6 +322,9 @@ class EmrMasterDataService {
   Future<List<EmrTemplateItem>> listComplaints({String? search}) =>
       _list('$_base/complaints', search);
 
+  Future<List<EmrTemplateItem>> listReviewIntervals({String? search}) =>
+      _list('$_base/review-intervals', search);
+
   Future<List<EmrTemplateItem>> listDiagnoses({String? search}) =>
       _list('$_base/diagnoses', search);
 
@@ -395,6 +403,15 @@ class EmrMasterDataService {
       _update('$_base/complaints/$id', body);
 
   Future<void> deleteComplaint(int id) => _delete('$_base/complaints/$id');
+
+  Future<EmrTemplateItem> createReviewInterval(Map<String, dynamic> body) =>
+      _create('$_base/review-intervals', body);
+
+  Future<EmrTemplateItem> updateReviewInterval(int id, Map<String, dynamic> body) =>
+      _update('$_base/review-intervals/$id', body);
+
+  Future<void> deleteReviewInterval(int id) =>
+      _delete('$_base/review-intervals/$id');
 
   Future<EmrTemplateItem> createDiagnosis(Map<String, dynamic> body) =>
       _create('$_base/diagnoses', body);

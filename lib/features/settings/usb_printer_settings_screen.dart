@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import 'widgets/pos_desktop_settings_section.dart';
+import 'widgets/visit_summary_printer_settings_section.dart';
 
 /// Local USB thermal printer setup (XPrinter TSPL or Retsol RTP 80 ESC/POS).
 class UsbPrinterSettingsScreen extends StatelessWidget {
@@ -13,7 +14,7 @@ class UsbPrinterSettingsScreen extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         Text(
-          'USB Thermal Printer',
+          'Printers',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w800,
                 color: AppTheme.textPrimary,
@@ -21,9 +22,8 @@ class UsbPrinterSettingsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'Choose the print language for this computer, then pick the Windows queue. '
-          'Branch 1 uses XPrinter TSPL. Branch 2 uses Retsol RTP 80 ESC/POS. '
-          'Checkout prints the same bill to whichever language is selected — no dialog.',
+          'USB thermal is for POS bills (TSPL or ESC/POS). Visit summary is a separate A5 PDF printer on this computer. '
+          'Pick each queue once — checkout and visit print then go out with no dialog.',
           style: TextStyle(
             color: AppTheme.textSecondary,
             fontSize: 14,
@@ -32,6 +32,7 @@ class UsbPrinterSettingsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         const PosDesktopSettingsSection(printerFocused: true),
+        const VisitSummaryPrinterSettingsSection(),
       ],
     );
   }

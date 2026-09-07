@@ -1166,11 +1166,9 @@ List<_MenuItem> _menuItems(AuthSession auth) {
       _MenuItem(label: 'Species & Breeds', icon: Icons.pets_outlined, path: '/settings/species-breeds'),
     if (can('shop.manage'))
       _MenuItem(label: 'Settings', icon: Icons.settings_outlined, path: '/settings'),
-    if (auth.hasRole(AppRoles.cashier) &&
-        AppConfig.isCashierPlatform &&
-        can(AppPermissions.invoicesCreate))
+    if (auth.canAccessPrinterSettings)
       _MenuItem(
-        label: 'USB Printer',
+        label: 'Printers',
         icon: Icons.print_outlined,
         path: '/settings/printer',
       ),
@@ -1219,7 +1217,7 @@ String _titleForPath(String path) {
   if (path.startsWith('/settings/emr-master-data')) return 'EMR Master Data';
   if (path.startsWith('/settings/species-breeds')) return 'Species & Breeds';
   if (path.startsWith('/settings/security')) return 'Account Security';
-  if (path.startsWith('/settings/printer')) return 'USB Printer';
+  if (path.startsWith('/settings/printer')) return 'Printers';
   if (path.startsWith('/settings/users')) return 'Users';
   if (path.startsWith('/settings/branches')) return 'Branches';
   if (path.startsWith('/settings')) return 'Settings';

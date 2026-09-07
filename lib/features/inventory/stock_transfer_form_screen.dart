@@ -61,9 +61,8 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
         services.branches.list(),
         services.products.listAll(isActive: true),
       ]);
-      final products = (results[1] as List<Product>)
-          .where((p) => !p.isService && p.trackInventory)
-          .toList();
+      final products = (results[1] as List<Product>).where(_isStockItem).toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       setState(() {
         _branches = (results[0] as List<Branch>)
             .where((b) => b.id != branchId)
@@ -115,6 +114,88 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
   void _snack(String msg) {
     if (!mounted) return;
     AppMessenger.show(context, SnackBar(content: Text(msg)));
+  }
+
+  bool _isStockItem(Product p) => !p.isService && p.trackInventory;
+
+  List<Product> _productsForRow(int rowIdx) {
+    final currentId = _rows[rowIdx].productId;
+    final used = _rows
+        .asMap()
+        .entries
+        .where((e) => e.key != rowIdx && e.value.productId != null)
+        .map((e) => e.value.productId!)
+        .toSet();
+    return _products
+        .where((p) => !used.contains(p.id) || p.id == currentId)
+        .toList();
+  }
+
+  String _productLabel(Product p) {
+    final code = p.sku ?? p.barcode;
+    return code == null || code.isEmpty ? p.name : '${p.name} ($code)';
+  }
+
+  String? _productSubtitle(Product p) {
+    final parts = <String>[
+      if (p.brandName != null && p.brandName!.trim().isNotEmpty)
+        p.brandName!.trim(),
+      if (p.categoryName != null && p.categoryName!.trim().isNotEmpty)
+        p.categoryName!.trim(),
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  AppSearchableOption<int> _optionFor(Product p) {
+    return AppSearchableOption(
+      value: p.id,
+      label: _productLabel(p),
+      subtitle: _productSubtitle(p),
+    );
+  }
+
+  void _mergeProducts(Iterable<Product> incoming) {
+    final byId = {for (final p in _products) p.id: p};
+    var changed = false;
+    for (final p in incoming) {
+      if (!_isStockItem(p) || !p.isActive) continue;
+      if (byId.containsKey(p.id)) continue;
+      byId[p.id] = p;
+      changed = true;
+    }
+    if (!changed) return;
+    _products = byId.values.toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
+  Future<List<AppSearchableOption<int>>> _searchCatalog(
+    int rowIdx,
+    String query,
+  ) async {
+    final q = query.trim().replaceAll('%', '').replaceAll('_', ' ').trim();
+    if (q.isEmpty) {
+      return [for (final p in _productsForRow(rowIdx)) _optionFor(p)];
+    }
+    final result = await context.read<AppServices>().products.listPaginated(
+      page: 1,
+      perPage: 80,
+      search: q,
+      isActive: true,
+    );
+    final currentId = _rows[rowIdx].productId;
+    final used = _rows
+        .asMap()
+        .entries
+        .where((e) => e.key != rowIdx && e.value.productId != null)
+        .map((e) => e.value.productId!)
+        .toSet();
+    final goods = result.items
+        .where(_isStockItem)
+        .where((p) => !used.contains(p.id) || p.id == currentId)
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    _mergeProducts(goods);
+    return [for (final p in goods) _optionFor(p)];
   }
 
   @override
@@ -303,15 +384,7 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
 
   Widget _buildRow(int i) {
     final row = _rows[i];
-    final chosen = _rows
-        .asMap()
-        .entries
-        .where((e) => e.key != i)
-        .map((e) => e.value.productId)
-        .toSet();
-    final options = _products
-        .where((p) => !chosen.contains(p.id) || p.id == row.productId)
-        .toList();
+    final options = _productsForRow(i);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -324,11 +397,16 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
         children: [
           Expanded(
             flex: 3,
-            child: AppDropdownButtonFormField<int>(
+            child: AppSearchableDropdownField<int>(
+              key: ValueKey('product-$i-${row.productId}'),
+              label: 'Product',
               value: row.productId,
-              isExpanded: true,
+              searchHint: 'Search name, SKU or barcode…',
+              hint: 'Search item',
+              allowClear: true,
               decoration: InputDecoration(
                 labelText: 'Product',
+                hintText: 'Search item',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(6),
@@ -342,27 +420,14 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
                 filled: true,
                 fillColor: Colors.white,
               ),
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-              items: [
-                for (final p in options)
-                  DropdownMenuItem(
-                    value: p.id,
-                    child: Text(
-                      p.name,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
+              options: [
+                for (final p in options) _optionFor(p),
               ],
+              displayText: (id) {
+                final match = _products.where((p) => p.id == id);
+                return match.isEmpty ? 'Product #$id' : _productLabel(match.first);
+              },
+              asyncSearch: (q) => _searchCatalog(i, q),
               onChanged: (v) => setState(() {
                 row.productId = v;
                 row.qty.clear();

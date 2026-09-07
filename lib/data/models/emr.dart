@@ -417,6 +417,16 @@ class PetVisit {
   List<VisitInvestigationItem> get investigationItems =>
       VisitInvestigationItem.parse(investigation);
 
+  /// Notes shown on visit detail, summary, and PDF.
+  /// Prefers `clinical_notes`; falls back to legacy `observation`.
+  String get displayClinicalNotes {
+    final notes = clinicalNotes?.trim();
+    if (notes != null && notes.isNotEmpty) return notes;
+    final obs = observation?.trim();
+    if (obs != null && obs.isNotEmpty) return obs;
+    return '';
+  }
+
   factory PetVisit.fromJson(Map<String, dynamic> j) {
     final petMap = mapOrNull(j['pet']);
     final doctorMap = mapOrNull(j['doctor']);

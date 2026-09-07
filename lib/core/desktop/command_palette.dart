@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
-import '../../core/app_config.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
@@ -305,15 +304,20 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
   add('Day close report', '/reports/day-close', Icons.summarize_outlined,
       visible: () => can(AppPermissions.cashierDayClose),
       keywords: ['cashier', 'shift', 'eod', 'drawer']);
-  add('USB Printer', '/settings/printer', Icons.print_outlined,
-      visible: () =>
-          can(AppPermissions.shopManage) ||
-          (auth.hasRole(AppRoles.cashier) &&
-              AppConfig.isCashierPlatform &&
-              can(AppPermissions.invoicesCreate)),
-      keywords: ['thermal', 'tspl', 'xprinter', 'receipt', 'print', 'escpos']);
+  add('Printers', '/settings/printer', Icons.print_outlined,
+      visible: () => auth.canAccessPrinterSettings,
+      keywords: [
+        'thermal',
+        'tspl',
+        'xprinter',
+        'receipt',
+        'print',
+        'escpos',
+        'summary',
+        'a5',
+      ]);
   add(
-    auth.settingsRoute == '/settings/printer' ? 'USB Printer settings' : 'Settings',
+    auth.settingsRoute == '/settings/printer' ? 'Printer settings' : 'Settings',
     auth.settingsRoute ?? '/settings',
     auth.settingsRoute == '/settings/printer'
         ? Icons.print_outlined

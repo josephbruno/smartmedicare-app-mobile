@@ -62,6 +62,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   final List<_VaccinationRow> _vaccinations = [];
   List<String> _complaintSuggestions = [];
   List<String> _defaultComplaintSuggestions = [];
+  List<EmrTemplateItem> _reviewIntervals = List.of(_fallbackReviewIntervals);
   List<String> _investigationSuggestions = [];
   List<String> _defaultInvestigationSuggestions = [];
   /// Which chip-field suggestion panel is open (`investigation`).
@@ -97,6 +98,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   static const int _emrLearnMinChars = 6;
   static const Duration _emrLearnDebounce = Duration(milliseconds: 450);
+
+  static final List<EmrTemplateItem> _fallbackReviewIntervals = [
+    EmrTemplateItem(id: 0, name: '21 days', days: 21),
+    EmrTemplateItem(id: 0, name: '365 days', days: 365),
+  ];
 
   String _visitType = 'consultation';
   DateTime _visitDate = DateTime.now();
@@ -372,6 +378,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       complaintsFuture: complaintsFuture,
       auth: auth,
     ));
+    unawaited(_loadReviewIntervals());
     if (!checkInOnly) {
       unawaited(_loadBackgroundCatalogs(
         investigationsFuture: emr.getInvestigations(),
@@ -405,6 +412,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _doctors = _uniqueDoctors(EmrVisitCatalogCache.doctors);
     _defaultComplaintSuggestions = List.of(EmrVisitCatalogCache.complaints);
     _complaintSuggestions = List.of(_defaultComplaintSuggestions);
+    if (EmrVisitCatalogCache.reviewIntervals.isNotEmpty) {
+      _reviewIntervals = List.of(EmrVisitCatalogCache.reviewIntervals);
+    }
     if (checkInOnly || !EmrVisitCatalogCache.isFresh) return;
 
     _defaultInvestigationSuggestions =
@@ -466,6 +476,24 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       });
       EmrVisitCatalogCache.saveDoctors(_doctors);
       EmrVisitCatalogCache.saveComplaints(complaints);
+    } catch (_) {}
+  }
+
+  Future<void> _loadReviewIntervals() async {
+    try {
+      final list = await context.read<AppServices>().emr.getReviewIntervals();
+      if (!mounted) return;
+      setState(() {
+        _reviewIntervals = list.isNotEmpty
+            ? list
+            : List.of(_fallbackReviewIntervals);
+        if (_followUpDate != null) {
+          _followUpPresetDays = _followUpPresetMatching(_followUpDate!);
+        }
+      });
+      if (list.isNotEmpty) {
+        EmrVisitCatalogCache.saveReviewIntervals(list);
+      }
     } catch (_) {}
   }
 
@@ -545,7 +573,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       );
     }
     _complaint.text = visit.chiefComplaint ?? '';
-    _clinicalNotes.text = visit.clinicalNotes ?? '';
+    _clinicalNotes.text = visit.displayClinicalNotes;
     for (final row in _investigations) {
       row.dispose();
     }
@@ -2258,7 +2286,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (serviceCharge > 0 && _serviceChargeProductId != null)
         'service_charge_product_id': _serviceChargeProductId,
       if (_complaintForApi.isNotEmpty) 'chief_complaint': _complaintForApi,
-      if (_clinicalNotes.text.trim().isNotEmpty)
+      if (_isEdit || _clinicalNotes.text.trim().isNotEmpty)
         'clinical_notes': _clinicalNotes.text.trim(),
       if (_isEdit || _investigations.isNotEmpty)
         'investigation':
@@ -3331,25 +3359,66 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           const SizedBox(height: 16),
           TextField(
             controller: _clinicalNotes,
+            minLines: 2,
             maxLines: 3,
             decoration: const InputDecoration(labelText: 'Clinical notes'),
           ),
           const SizedBox(height: 20),
           _formSectionHeader('Adv to Review on', Icons.event_outlined),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+          if (_reviewIntervals.isNotEmpty) ...[
+            const Text(
+              'Quick add',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 6,
+            runSpacing: 6,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _followUpPresetChip(
-                label: '21 days',
-                days: 21,
-              ),
-              _followUpPresetChip(
-                label: '365 days',
-                days: 365,
-              ),
+              ..._reviewIntervals
+                  .where((opt) => (opt.days ?? 0) > 0)
+                  .map((opt) {
+                final days = opt.days ?? 0;
+                final selected = _followUpPresetDays == days;
+                return ActionChip(
+                  avatar: Icon(
+                    selected ? Icons.check : Icons.add,
+                    size: 14,
+                    color: selected
+                        ? const Color(0xFF047857)
+                        : AppTheme.primaryDark,
+                  ),
+                  label: Text(
+                    opt.displayName,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                      color: selected
+                          ? const Color(0xFF047857)
+                          : AppTheme.textPrimary,
+                    ),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  backgroundColor: selected
+                      ? const Color(0xFFECFDF5)
+                      : const Color(0xFFEFF6FF),
+                  surfaceTintColor: Colors.transparent,
+                  side: BorderSide(
+                    color: selected
+                        ? const Color(0xFF6EE7B7)
+                        : const Color(0xFFBFDBFE),
+                  ),
+                  onPressed: () => _applyFollowUpPreset(days),
+                );
+              }),
               _prescriptionFreqChip(
                 label: 'Custom',
                 selected: _followUpDate != null && _followUpPresetDays == null,
@@ -3608,17 +3677,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     );
   }
 
-  Widget _followUpPresetChip({required String label, required int days}) {
-    return _prescriptionFreqChip(
-      label: label,
-      selected: _followUpPresetDays == days,
-      onSelected: (_) => _applyFollowUpPreset(days),
-    );
-  }
-
   int? _followUpPresetMatching(DateTime date) {
     final days = _dateOnly(date).difference(_dateOnly(_visitDate)).inDays;
-    if (days == 21 || days == 365) return days;
+    for (final opt in _reviewIntervals) {
+      if (opt.days == days) return days;
+    }
     return null;
   }
 

@@ -418,6 +418,18 @@ class _InventoryScreenState extends State<InventoryScreen>
                           const TableColumnDef(label: 'Product', flex: 2, cellBuilder: _productCell),
                           const TableColumnDef(label: 'SKU', flex: 1, cellBuilder: _skuCell),
                           const TableColumnDef(
+                            label: 'MRP',
+                            flex: 0.9,
+                            align: TextAlign.right,
+                            cellBuilder: _mrpCell,
+                          ),
+                          const TableColumnDef(
+                            label: 'Selling Price',
+                            flex: 1.1,
+                            align: TextAlign.right,
+                            cellBuilder: _sellingPriceCell,
+                          ),
+                          const TableColumnDef(
                             label: 'Qty',
                             flex: 0.7,
                             align: TextAlign.center,
@@ -504,6 +516,21 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   static Widget _skuCell(BuildContext context, InventoryItem it) =>
       Text(it.product?.sku ?? '—', style: const TextStyle(color: AppTheme.textSecondary));
+
+  static String _money(double? value) {
+    if (value == null) return '—';
+    return '₹${value.toStringAsFixed(2)}';
+  }
+
+  static Widget _mrpCell(BuildContext context, InventoryItem it) => Text(
+        _money(it.product?.mrp),
+        style: const TextStyle(color: AppTheme.textSecondary),
+      );
+
+  static Widget _sellingPriceCell(BuildContext context, InventoryItem it) => Text(
+        _money(it.product?.sellingPrice),
+        style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.primary),
+      );
 
   static Widget _qtyCell(BuildContext context, InventoryItem it) =>
       Text(it.quantity.toStringAsFixed(0));

@@ -10,6 +10,7 @@ import '../../core/theme/app_theme.dart';
 import '../../data/models/shop.dart';
 import 'widgets/loyalty_settings_section.dart';
 import 'widgets/pos_desktop_settings_section.dart';
+import 'widgets/visit_summary_printer_settings_section.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -71,8 +72,10 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
             if (canManage) LoyaltySettingsSection(initial: loyalty),
-            if (AppConfig.isCashierPlatform || AppConfig.usesLargeUiScale)
+            if (AppConfig.isCashierPlatform || AppConfig.usesLargeUiScale) ...[
               const PosDesktopSettingsSection(),
+              const VisitSummaryPrinterSettingsSection(),
+            ],
           ],
         );
       },

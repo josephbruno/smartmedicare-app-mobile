@@ -1,6 +1,6 @@
 Maran Billing — Android APK Auto-Update Steps
 =============================================
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 
 Overview
 --------
@@ -46,10 +46,9 @@ B. One-time PC / signing setup
 1. Install Flutter (in PATH) and Android SDK.
 
 2. Release signing MUST stay the same for every clinic APK.
-   android\app\build.gradle.kts currently uses the debug keystore for
-   release. Before tablets are in the field, switch to a dedicated
-   release keystore. A later keystore change cannot update existing
-   installs (Android rejects INSTALL_FAILED_UPDATE_INCONSISTENT).
+   android\app\build.gradle.kts signs release with android\app\bwiapps.jks
+   (signingConfigs.config, alias key0). A later keystore change cannot
+   update existing installs (Android rejects INSTALL_FAILED_UPDATE_INCONSISTENT).
 
 3. Set deploy token (same value as APP_UPDATE_DEPLOY_TOKEN on server):
      setx MARAN_DEPLOY_TOKEN "your-long-secret"
@@ -64,7 +63,7 @@ C. First-time APK (new tablets)
 -------------------------------
 1. Bump version in maran-billing-flutter-app\pubspec.yaml
    Example:
-     version: 1.0.39+40
+     version: 1.0.45+46
    (left of + = versionName, right of + = versionCode / current_build)
 
 2. From maran-billing-flutter-app:

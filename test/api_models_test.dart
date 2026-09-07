@@ -429,6 +429,37 @@ void main() {
     });
   });
 
+  group('PetVisit clinical notes', () {
+    Map<String, dynamic> visitJson({
+      String? clinicalNotes,
+      String? observation,
+    }) =>
+        {
+          'id': 1,
+          'pet_id': 2,
+          'customer_id': 3,
+          'visit_number': 'VIS-260905-0001',
+          'visit_type': 'consultation',
+          'visit_date': '2026-09-05',
+          'status': 'open',
+          if (clinicalNotes != null) 'clinical_notes': clinicalNotes,
+          if (observation != null) 'observation': observation,
+        };
+
+    test('prefers clinical_notes on summary and PDF', () {
+      final visit = PetVisit.fromJson(visitJson(
+        clinicalNotes: 'Stable, continue fluids',
+        observation: 'Legacy observation',
+      ));
+      expect(visit.displayClinicalNotes, 'Stable, continue fluids');
+    });
+
+    test('falls back to legacy observation when clinical_notes is empty', () {
+      final visit = PetVisit.fromJson(visitJson(observation: 'Alert, eating'));
+      expect(visit.displayClinicalNotes, 'Alert, eating');
+    });
+  });
+
   group('VisitMedicine', () {
     test('reads treatment under from line or nested product', () {
       final fromLine = VisitMedicine.fromJson({

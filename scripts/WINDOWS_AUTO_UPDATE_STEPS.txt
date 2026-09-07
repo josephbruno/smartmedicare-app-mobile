@@ -1,6 +1,6 @@
 Maran Billing — Windows Auto-Update Steps
 =========================================
-Last updated: 2026-08-04
+Last updated: 2026-09-06
 
 Overview
 --------
@@ -64,7 +64,7 @@ Use this for new PCs / clinics. Produces one installer EXE.
 
 1. Bump version in maran-billing-flutter-app\pubspec.yaml
    Example:
-     version: 1.0.1+2
+     version: 1.0.45+46
    (left of + = version name, right of + = build number)
 
 2. Open a terminal in this folder:
@@ -120,7 +120,7 @@ Does NOT create the setup EXE — use section C for that.
 
 1. Bump version in maran-billing-flutter-app\pubspec.yaml
    Example:
-     version: 1.1.0+12
+     version: 1.0.45+46
 
 2. From this folder (scripts):
      build-zip-upload-update.bat
@@ -256,6 +256,11 @@ New clinic PC:
 Existing clinic PC (auto-update):
   build-zip-upload-update.bat
   -> user opens app -> Update now
+
+Current release target (2026-09-06):
+  - pubspec.yaml version: 1.0.45+46
+  - New clinic PC: build-single-exe.bat -> MaranBilling-Setup-1.0.45.exe
+  - Existing clinic PC: build-zip-upload-update.bat -> maran-1.0.45+46.zip
 
 Verified locally (2026-08-04):
   - build-single-exe.bat --skip-build -> MaranBilling-Setup-1.0.1.exe

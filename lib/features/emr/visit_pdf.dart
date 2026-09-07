@@ -1,14 +1,18 @@
+import 'dart:typed_data';
+
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../../core/desktop/desktop_prefs.dart';
 import '../../core/services/receipt_branch_store.dart';
+import '../../core/services/windows_print_bridge.dart';
 import '../../core/session/auth_session.dart';
 import '../../data/models/emr.dart';
 import '../../data/models/shop.dart';
 import '../../data/services/settings_service.dart';
 
-/// Clinic header info for visit print/download (A5 landscape).
+/// Clinic header info for visit print/download (A5).
 class VisitClinicInfo {
   const VisitClinicInfo({
     required this.name,
@@ -39,9 +43,20 @@ class VisitPdf {
   static pw.Font? _fontSemi;
   static pw.Font? _fontBold;
 
-  static final PdfPageFormat _pageFormat = PdfPageFormat.a5.landscape;
+  /// ISO A5: portrait 148 × 210 mm, landscape 210 × 148 mm.
+  static PdfPageFormat pageFormatFor(SummaryPageOrientation orientation) {
+    const short = 148 * PdfPageFormat.mm;
+    const long = 210 * PdfPageFormat.mm;
+    return orientation == SummaryPageOrientation.landscape
+        ? PdfPageFormat(long, short)
+        : PdfPageFormat(short, long);
+  }
 
-  /// Page margins (points). Kept tight for A5 landscape.
+  static Future<PdfPageFormat> resolvePageFormat() async {
+    return pageFormatFor(await DesktopPrefs.getSummaryPageOrientation());
+  }
+
+  /// Page margins (points). Kept tight for A5.
   static const double _marginL = 10;
   static const double _marginR = 10;
   static const double _marginT = 8;
@@ -54,7 +69,6 @@ class VisitPdf {
   static const double _fsBody = 11;
   static const double _fsSection = 11;
   static const double _fsMeta = 9.5;
-  static const double _fsFooter = 8.5;
 
   /// ~4 blank text lines before the clinic header (applied via top margin).
   static const double _headerTopSpace = _fsBody * 1.35 * 4;
@@ -133,16 +147,19 @@ class VisitPdf {
   static Future<pw.Document> build(
     PetVisit visit, {
     VisitClinicInfo? clinic,
+    PdfPageFormat? format,
   }) async {
-    return buildAll([visit], clinic: clinic);
+    return buildAll([visit], clinic: clinic, format: format);
   }
 
-  /// One A5 landscape page per visit (same layout as single-visit print).
+  /// One A5 page per visit (orientation from printer settings).
   static Future<pw.Document> buildAll(
     List<PetVisit> visits, {
     VisitClinicInfo? clinic,
+    PdfPageFormat? format,
   }) async {
     await _ensureFonts();
+    final page = format ?? await resolvePageFormat();
     final doc = pw.Document();
     final clinicName = clinic?.name.trim().isNotEmpty == true
         ? clinic!.name.trim()
@@ -156,7 +173,7 @@ class VisitPdf {
 
       doc.addPage(
         pw.Page(
-          pageFormat: _pageFormat,
+          pageFormat: page,
           // Top margin includes ~4 blank lines so header never sits on the page edge.
           margin: const pw.EdgeInsets.fromLTRB(
             _marginL,
@@ -206,15 +223,6 @@ class VisitPdf {
                             _divider(),
                             _sectionTitle('Investigation'),
                             _investigationBody(visit),
-                            _divider(),
-                            _sectionTitle('Follow-up'),
-                            if (visit.followUpDate != null) ...[
-                              _bodyText(_t(visit.followUpDate), semi: true),
-                              if (visit.followUpNotes != null &&
-                                  visit.followUpNotes!.trim().isNotEmpty)
-                                _bodyText(_t(visit.followUpNotes)),
-                            ] else
-                              _bodyText(_empty),
                           ],
                         ),
                       ),
@@ -237,8 +245,21 @@ class VisitPdf {
                   ],
                 ),
               ),
-              pw.SizedBox(height: 3),
-              _pageFooter(context),
+              pw.SizedBox(height: 4),
+              pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Expanded(
+                    flex: 3,
+                    child: _panel(child: _clinicalNotesBody(visit)),
+                  ),
+                  pw.SizedBox(width: 6),
+                  pw.Expanded(
+                    flex: 2,
+                    child: _panel(child: _followUpBody(visit)),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -398,6 +419,42 @@ class VisitPdf {
     return vitals;
   }
 
+  static pw.Widget _clinicalNotesBody(PetVisit visit) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Clinical notes'),
+        pw.Container(
+          alignment: pw.Alignment.topLeft,
+          constraints: const pw.BoxConstraints(
+            minHeight: _fsBody * 1.35 * 2,
+          ),
+          child: _bodyText(
+            visit.displayClinicalNotes.isNotEmpty
+                ? _t(visit.displayClinicalNotes)
+                : _empty,
+          ),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _followUpBody(PetVisit visit) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Adv to Review on'),
+        if (visit.followUpDate != null) ...[
+          _bodyText(_t(visit.followUpDate), semi: true),
+          if (visit.followUpNotes != null &&
+              visit.followUpNotes!.trim().isNotEmpty)
+            _bodyText(_t(visit.followUpNotes)),
+        ] else
+          _bodyText(_empty),
+      ],
+    );
+  }
+
   static pw.Widget _investigationBody(PetVisit visit) {
     final items = visit.investigationItems;
     if (items.isEmpty) return _bodyText(_empty);
@@ -530,28 +587,6 @@ class VisitPdf {
     );
   }
 
-  static pw.Widget _pageFooter(pw.Context context) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.only(top: 2),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(top: pw.BorderSide(color: _border, width: 0.5)),
-      ),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text(
-            'Powered by bestwaveinnovation.com',
-            style: _regularStyle(_fsFooter),
-          ),
-          pw.Text(
-            'Page ${context.pageNumber}',
-            style: _regularStyle(_fsFooter),
-          ),
-        ],
-      ),
-    );
-  }
-
   static String _formatTime(String? t) {
     if (t == null || t.isEmpty) return '';
     final parts = t.split(':');
@@ -672,11 +707,15 @@ class VisitPdf {
     return info;
   }
 
-  static Future<void> printVisit(
+  static Future<VisitPrintResult> printVisit(
     PetVisit visit, {
     VisitClinicInfo? clinic,
-  }) async {
-    await printVisits([visit], clinic: clinic, name: 'Visit ${visit.visitNumber}');
+  }) {
+    return printVisits(
+      [visit],
+      clinic: clinic,
+      name: 'Visit ${visit.visitNumber}',
+    );
   }
 
   static Future<void> downloadVisit(
@@ -690,22 +729,195 @@ class VisitPdf {
     );
   }
 
-  static Future<void> printVisits(
+  static Future<VisitPrintResult> printVisits(
     List<PetVisit> visits, {
     VisitClinicInfo? clinic,
     String? name,
   }) async {
-    if (visits.isEmpty) return;
-    final doc = await buildAll(visits, clinic: clinic);
+    if (visits.isEmpty) return VisitPrintResult.failed;
+    final page = await resolvePageFormat();
+    final doc = await buildAll(visits, clinic: clinic, format: page);
     final label = name ??
         (visits.length == 1
             ? 'Visit ${visits.first.visitNumber}'
             : 'Visit summary (${visits.length})');
-    await Printing.layoutPdf(
-      onLayout: (_) => doc.save(),
-      format: _pageFormat,
+    return _sendPdf(
+      bytes: await doc.save(),
       name: label,
+      format: page,
     );
+  }
+
+  /// Sample A5 page to verify the saved summary printer and orientation.
+  static Future<VisitPrintResult> printSample({
+    required bool dialog,
+    VisitClinicInfo? clinic,
+  }) async {
+    final page = await resolvePageFormat();
+    final doc = await build(sampleVisit(), clinic: clinic, format: page);
+    return _sendPdf(
+      bytes: await doc.save(),
+      name: 'Visit summary test',
+      format: page,
+      forceDialog: dialog,
+      requireSavedPrinter: !dialog,
+    );
+  }
+
+  static Future<List<String>> listPrinterNames() async {
+    final names = <String>{};
+    try {
+      for (final printer in await Printing.listPrinters()) {
+        final name = printer.name.trim();
+        if (name.isNotEmpty) names.add(name);
+      }
+    } catch (_) {}
+    if (names.isEmpty && WindowsPrintBridge.isSupported) {
+      try {
+        names.addAll(await WindowsPrintBridge.listPrinters());
+      } catch (_) {}
+    }
+    final list = names.toList()..sort();
+    return list;
+  }
+
+  static PetVisit sampleVisit() {
+    final now = DateTime.now();
+    final date =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final time =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    return PetVisit(
+      id: 0,
+      petId: 0,
+      customerId: 0,
+      visitNumber: 'VS-TEST',
+      visitType: 'consultation',
+      visitDate: date,
+      visitTime: time,
+      chiefComplaint:
+          'TEST PRINT — Visit summary sample. Check A5 paper, orientation, margins, and layout.',
+      temperature: 39.2,
+      weight: 12,
+      heartRate: 90,
+      respiratoryRate: 24,
+      clinicalNotes:
+          'Sample clinical notes. If this page looks correct, real visit summaries will print the same.',
+      investigation: 'CBC | Sample\nX-Ray chest',
+      followUpDate: date,
+      followUpNotes: 'Recheck in 5 days',
+      status: 'completed',
+      pet: PetSearchResult(
+        id: 0,
+        customerId: 0,
+        name: 'Sample Pet',
+        species: 'Canine',
+        breed: 'Indie',
+        customerName: 'Test Owner',
+        customerPhone: '0000000000',
+      ),
+      doctor: DoctorLite(id: 0, name: 'Test'),
+      treatments: [
+        VisitTreatment(
+          treatmentName: 'Wound dressing',
+          quantity: 1,
+          notes: 'Sample',
+        ),
+      ],
+      medicines: [
+        VisitMedicine(
+          medicineName: 'Amoxicillin 250mg',
+          frequency: 'BID',
+          durationDays: 5,
+          prescriptionUnderCategory: 'antibiotics',
+        ),
+        VisitMedicine(
+          medicineName: 'Meloxicam 0.5ml',
+          frequency: 'SID',
+          treatmentUnderCategory: 'nsaids',
+        ),
+      ],
+    );
+  }
+
+  static Future<VisitPrintResult> _sendPdf({
+    required Uint8List bytes,
+    required String name,
+    PdfPageFormat? format,
+    bool forceDialog = false,
+    bool requireSavedPrinter = false,
+  }) async {
+    final page = format ?? await resolvePageFormat();
+    final direct = !forceDialog && await DesktopPrefs.getDirectSummaryPrint();
+    if (direct) {
+      final saved = (await DesktopPrefs.getSummaryPrinterName()).trim();
+      if (saved.isEmpty) {
+        if (requireSavedPrinter) return VisitPrintResult.noPrinterConfigured;
+      } else {
+        final printer = await _resolvePrinter(requireSaved: true);
+        if (printer == null) {
+          if (requireSavedPrinter) return VisitPrintResult.noPrinterConfigured;
+        } else {
+          try {
+            final info = await Printing.info();
+            if (info.directPrint) {
+              final ok = await Printing.directPrintPdf(
+                printer: printer,
+                onLayout: (_) async => bytes,
+                format: page,
+                name: name,
+                usePrinterSettings: false,
+                dynamicLayout: false,
+              );
+              if (ok) return VisitPrintResult.directSuccess;
+              if (requireSavedPrinter) return VisitPrintResult.failed;
+            } else if (requireSavedPrinter) {
+              return VisitPrintResult.unsupported;
+            }
+          } catch (_) {
+            if (requireSavedPrinter) return VisitPrintResult.failed;
+          }
+        }
+      }
+    }
+
+    try {
+      await Printing.layoutPdf(
+        onLayout: (_) async => bytes,
+        format: page,
+        name: name,
+        usePrinterSettings: false,
+        dynamicLayout: false,
+      );
+      return VisitPrintResult.dialogOpened;
+    } catch (_) {
+      return VisitPrintResult.failed;
+    }
+  }
+
+  static Future<Printer?> _resolvePrinter({bool requireSaved = false}) async {
+    final saved = (await DesktopPrefs.getSummaryPrinterName()).trim();
+    if (requireSaved && saved.isEmpty) return null;
+
+    List<Printer> printers = const [];
+    try {
+      printers = await Printing.listPrinters();
+    } catch (_) {}
+
+    if (saved.isNotEmpty) {
+      for (final printer in printers) {
+        if (printer.name == saved || printer.url == saved) return printer;
+      }
+      return Printer(url: saved, name: saved);
+    }
+
+    for (final printer in printers) {
+      if (printer.isDefault && printer.isAvailable) return printer;
+    }
+    for (final printer in printers) {
+      if (printer.isAvailable) return printer;
+    }
+    return null;
   }
 
   static Future<void> downloadVisits(
@@ -725,4 +937,33 @@ class VisitPdf {
       filename: filename ?? 'visit-summary-$petName.pdf',
     );
   }
+}
+
+enum VisitPrintResult {
+  directSuccess,
+  dialogOpened,
+  failed,
+  unsupported,
+  noPrinterConfigured,
+}
+
+extension VisitPrintResultMessage on VisitPrintResult {
+  String get userMessage {
+    switch (this) {
+      case VisitPrintResult.directSuccess:
+        return 'Visit summary sent to printer';
+      case VisitPrintResult.dialogOpened:
+        return 'Print dialog opened';
+      case VisitPrintResult.failed:
+          return 'Print failed — check A5 paper and the portrait/landscape setting';
+      case VisitPrintResult.unsupported:
+        return 'Direct summary print is available on this computer\'s desktop app only';
+      case VisitPrintResult.noPrinterConfigured:
+        return 'Select a visit summary printer in Printers settings first';
+    }
+  }
+
+  bool get isSuccess =>
+      this == VisitPrintResult.directSuccess ||
+      this == VisitPrintResult.dialogOpened;
 }
