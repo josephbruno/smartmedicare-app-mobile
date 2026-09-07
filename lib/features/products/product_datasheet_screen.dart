@@ -233,30 +233,15 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
 
   List<ProductDatasheetRow> get _allRows => _sheet?.rows ?? [];
 
+  String get _activeSearchQuery => _searchController.text.trim();
+
+  bool get _hasActiveSearch => _activeSearchQuery.isNotEmpty;
+
   List<ProductDatasheetRow> get _visibleRows {
     var rows = List<ProductDatasheetRow>.from(_allRows);
-    final q = _searchQuery.trim().toLowerCase();
+    final q = _activeSearchQuery.toLowerCase();
     if (q.isNotEmpty) {
-      rows = rows.where((r) {
-        final e = _editors[r.id];
-        final haystack = [
-          r.name,
-          r.barcode,
-          r.sku,
-          r.categoryName,
-          r.brandName,
-          r.unitName,
-          r.status,
-          e?.name.text,
-          e?.barcode.text,
-          e?.categoryName,
-          e?.brandName,
-          e?.unitName,
-          e?.productType,
-          _productTypeLabel(e?.productType),
-        ].whereType<String>().join(' ').toLowerCase();
-        return haystack.contains(q);
-      }).toList();
+      rows = rows.where((r) => _rowMatchesSearch(r, q)).toList();
     }
     rows.sort((a, b) {
       final cmp = _compareRows(a, b);
@@ -265,13 +250,66 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
     return rows;
   }
 
-  static String _productTypeLabel(String? type) {
-    return switch (type) {
-      'product' => 'product',
-      'medicine' => 'medicine',
-      'service' => 'service',
-      _ => '',
-    };
+  /// Match only searchable sheet fields (never type/status — those caused
+  /// loose hits). Uses live editor text when present, and resolves
+  /// category/brand labels from ids so stale names cannot false-match.
+  bool _rowMatchesSearch(ProductDatasheetRow r, String q) {
+    final e = _editors[r.id];
+    final fields = <String?>[
+      e?.name.text ?? r.name,
+      e?.barcode.text ?? r.barcode,
+      r.sku,
+      _resolvedCategoryName(r, e),
+      _resolvedBrandName(r, e),
+    ];
+    for (final raw in fields) {
+      final value = (raw ?? '').trim().toLowerCase();
+      if (value.isNotEmpty && value.contains(q)) return true;
+    }
+    return false;
+  }
+
+  String? _resolvedCategoryName(ProductDatasheetRow r, _RowEditors? e) {
+    final id = e?.categoryId ?? r.categoryId;
+    if (id != null) {
+      for (final c in _categories) {
+        if (c.id == id) return c.name;
+      }
+    }
+    return e?.categoryName ?? r.categoryName;
+  }
+
+  String? _resolvedBrandName(ProductDatasheetRow r, _RowEditors? e) {
+    final id = e?.brandId ?? r.brandId;
+    if (id != null) {
+      for (final b in _brands) {
+        if (b.id == id) return b.name;
+      }
+    }
+    return e?.brandName ?? r.brandName;
+  }
+
+  void _setSearchQuery(String value) {
+    final wasEmpty = _searchQuery.trim().isEmpty;
+    setState(() => _searchQuery = value);
+    // Jump to top when starting/clearing a filter, not on every keystroke.
+    if (wasEmpty != value.trim().isEmpty || value.trim().isEmpty) {
+      _scrollGridToTop();
+    }
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() => _searchQuery = '');
+    _scrollGridToTop();
+  }
+
+  void _scrollGridToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_vScroll.hasClients) _vScroll.jumpTo(0);
+      if (_rowNumScroll.hasClients) _rowNumScroll.jumpTo(0);
+    });
   }
 
   int _compareRows(ProductDatasheetRow a, ProductDatasheetRow b) {
@@ -341,6 +379,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
         _sortAsc = true;
       }
     });
+    _scrollGridToTop();
   }
 
   Future<void> _bootstrap() async {
@@ -1043,11 +1082,10 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
           await _services.productDatasheets.addRows(sheet.id, count: 10);
       if (!mounted) return;
       setState(() {
-        _searchController.clear();
-        _searchQuery = '';
         _sheet = updated;
         _syncEditors(updated.rows);
       });
+      // Keep current search/sort — filtered view stays until user clears.
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -1410,7 +1448,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
                     _countPill('Ready', c['ready']!, AppTheme.primary),
                     _countPill('Incomplete', c['incomplete']!, AppTheme.warning),
                     _countPill('Error', c['error']!, AppTheme.danger),
-                    if (_searchQuery.trim().isNotEmpty)
+                    if (_hasActiveSearch)
                       Text(
                         'Showing ${_visibleRows.length} of ${_allRows.length}',
                         style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
@@ -1480,15 +1518,12 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
                 hintText: 'Search name, barcode, category, brand…',
                 hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
                 prefixIcon: const Icon(Icons.search, size: 18),
-                suffixIcon: _searchQuery.isEmpty
+                suffixIcon: !_hasActiveSearch
                     ? null
                     : IconButton(
                         tooltip: 'Clear search',
                         icon: const Icon(Icons.close, size: 16),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
+                        onPressed: _clearSearch,
                       ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 filled: true,
@@ -1507,7 +1542,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
                 ),
               ),
               textInputAction: TextInputAction.search,
-              onChanged: (v) => setState(() => _searchQuery = v),
+              onChanged: _setSearchQuery,
             ),
           ),
           const SizedBox(width: 8),
@@ -1522,6 +1557,7 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
                   _sortAsc = true;
                 }
               });
+              _scrollGridToTop();
             },
             itemBuilder: (ctx) => [
               for (final opt in const [
@@ -1703,9 +1739,9 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
               child: rows.isEmpty
                   ? Center(
                       child: Text(
-                        _searchQuery.trim().isEmpty
+                        !_hasActiveSearch
                             ? 'No rows yet. Insert rows to start.'
-                            : 'No rows match “${_searchQuery.trim()}”.',
+                            : 'No rows match “$_activeSearchQuery”.',
                         style: const TextStyle(color: AppTheme.textSecondary),
                       ),
                     )
@@ -1733,7 +1769,10 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
                           controller: _vScroll,
                           itemCount: rows.length,
                           itemExtent: _rowHeight,
-                          itemBuilder: (_, i) => _buildSheetRow(rows[i], canDelete: canDelete),
+                          itemBuilder: (_, i) => _buildSheetRow(
+                            rows[i],
+                            canDelete: canDelete,
+                          ),
                         ),
                       ),
                     ),
