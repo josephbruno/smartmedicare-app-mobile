@@ -68,6 +68,27 @@ class AuthSession extends ChangeNotifier {
 
   ShopLite? get currentShop => _user?.shop;
 
+  String get clinicType => currentShop?.clinicType ?? 'veterinary';
+
+  String get facilityType => currentShop?.facilityType ?? 'clinic';
+
+  bool get isVeterinary => clinicType == 'veterinary';
+
+  bool get isHuman => clinicType == 'human';
+
+  bool hasCapability(String capability) =>
+      currentShop?.hasCapability(capability) ?? false;
+
+  String get patientLabel => isVeterinary ? 'Pet / Patient' : 'Patient';
+
+  String get patientsLabel => isVeterinary ? 'Pets / Patients' : 'Patients';
+
+  String get responsiblePartyLabel =>
+      isVeterinary ? 'Owner' : 'Responsible Party';
+
+  String get responsiblePartiesLabel =>
+      isVeterinary ? 'Owners' : 'Responsible Parties';
+
   bool hasPermission(String permission) {
     if (isSuperAdmin) return true;
     final perms = _user?.permissions ?? [];
@@ -281,6 +302,18 @@ class AuthSession extends ChangeNotifier {
       notifyListeners();
     } catch (_) {
       await logout();
+    }
+  }
+
+  /// Background refresh (plan, validity, permissions) that never signs the user out.
+  Future<void> refreshMe() async {
+    if (_token == null || _token!.isEmpty || _repository == null) return;
+    try {
+      _user = await _repository!.me();
+      await _persistUserJson();
+      notifyListeners();
+    } catch (_) {
+      // Offline or transient failure: keep the cached session.
     }
   }
 

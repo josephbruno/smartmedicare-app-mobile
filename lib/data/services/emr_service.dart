@@ -21,7 +21,8 @@ class EmrService {
         '/pets',
         queryParameters: {'search': query, 'per_page': 20},
       );
-      return parseEnvelopeData(res, (data) => listFromData(data, PetSearchResult.fromJson));
+      return parseEnvelopeData(
+          res, (data) => listFromData(data, PetSearchResult.fromJson));
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -44,14 +45,15 @@ class EmrService {
       final query = <String, dynamic>{};
       if (available != null) query['available'] = available;
       final res = await _client.get('/doctors', queryParameters: query);
-      return parseEnvelopeData(res, (data) => listFromData(data, DoctorLite.fromJson));
+      return parseEnvelopeData(
+          res, (data) => listFromData(data, DoctorLite.fromJson));
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
   }
 
   Future<List<PetSearchResult>> listPets({Map<String, dynamic>? query}) async {
-    final result = await listPetsPaginated(
+    final result = await listPatientsPaginated(
       page: int.tryParse(query?['page']?.toString() ?? '') ?? 1,
       perPage: int.tryParse(query?['per_page']?.toString() ?? '') ?? 20,
       search: query?['search']?.toString(),
@@ -59,7 +61,27 @@ class EmrService {
     return result.items;
   }
 
-  Future<({List<PetSearchResult> items, PaginationMeta? meta})> listPetsPaginated({
+  Future<({List<PetSearchResult> items, PaginationMeta? meta})>
+      listPetsPaginated({
+    int page = 1,
+    int perPage = 20,
+    String? search,
+    String? species,
+    String? gender,
+    bool? isActive,
+  }) async {
+    return listPatientsPaginated(
+      page: page,
+      perPage: perPage,
+      search: search,
+      species: species,
+      gender: gender,
+      isActive: isActive,
+    );
+  }
+
+  Future<({List<PetSearchResult> items, PaginationMeta? meta})>
+      listPatientsPaginated({
     int page = 1,
     int perPage = 20,
     String? search,
@@ -68,7 +90,7 @@ class EmrService {
     bool? isActive,
   }) async {
     try {
-      final res = await _client.get('/pets', queryParameters: {
+      final res = await _client.get('/patients', queryParameters: {
         'page': page,
         'per_page': perPage,
         if (search != null && search.isNotEmpty) 'search': search,
@@ -84,7 +106,7 @@ class EmrService {
 
   Future<void> addPetNote(int petId, Map<String, dynamic> body) async {
     try {
-      await _client.post('/pets/$petId/notes', data: body);
+      await _client.post('/patients/$petId/notes', data: body);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -94,7 +116,7 @@ class EmrService {
 
   Future<List<PatientAppointment>> todayAppointments() async {
     try {
-      final res = await _client.get('/patient-appointments/today');
+      final res = await _client.get('/clinical-appointments/today');
       return parseEnvelopeData(
         res,
         (data) => listFromData(data, PatientAppointment.fromJson),
@@ -126,7 +148,7 @@ class EmrService {
     String? dateTo,
   }) async {
     try {
-      final res = await _client.get('/patient-appointments', queryParameters: {
+      final res = await _client.get('/clinical-appointments', queryParameters: {
         'page': page,
         'per_page': perPage,
         if (status != null && status.isNotEmpty) 'status': status,
@@ -142,22 +164,25 @@ class EmrService {
 
   Future<PatientAppointment> getAppointment(int id) async {
     try {
-      final res = await _client.get('/patient-appointments/$id');
+      final res = await _client.get('/clinical-appointments/$id');
       return parseEnvelopeData(
         res,
-        (data) => PatientAppointment.fromJson(Map<String, dynamic>.from(data as Map)),
+        (data) =>
+            PatientAppointment.fromJson(Map<String, dynamic>.from(data as Map)),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
   }
 
-  Future<PatientAppointment> createAppointment(Map<String, dynamic> body) async {
+  Future<PatientAppointment> createAppointment(
+      Map<String, dynamic> body) async {
     try {
-      final res = await _client.post('/patient-appointments', data: body);
+      final res = await _client.post('/clinical-appointments', data: body);
       return parseEnvelopeData(
         res,
-        (data) => PatientAppointment.fromJson(Map<String, dynamic>.from(data as Map)),
+        (data) =>
+            PatientAppointment.fromJson(Map<String, dynamic>.from(data as Map)),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
@@ -169,10 +194,11 @@ class EmrService {
     Map<String, dynamic> body,
   ) async {
     try {
-      final res = await _client.put('/patient-appointments/$id', data: body);
+      final res = await _client.put('/clinical-appointments/$id', data: body);
       return parseEnvelopeData(
         res,
-        (data) => PatientAppointment.fromJson(Map<String, dynamic>.from(data as Map)),
+        (data) =>
+            PatientAppointment.fromJson(Map<String, dynamic>.from(data as Map)),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
@@ -181,7 +207,7 @@ class EmrService {
 
   Future<void> confirmAppointment(int id) async {
     try {
-      await _client.post('/patient-appointments/$id/confirm');
+      await _client.post('/clinical-appointments/$id/confirm');
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -189,7 +215,7 @@ class EmrService {
 
   Future<void> cancelAppointment(int id) async {
     try {
-      await _client.post('/patient-appointments/$id/cancel');
+      await _client.post('/clinical-appointments/$id/cancel');
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -216,10 +242,11 @@ class EmrService {
     int? petId,
   }) async {
     try {
-      final res = await _client.get('/visits', queryParameters: {
+      final res = await _client.get('/clinical-visits', queryParameters: {
         'page': page,
         'per_page': perPage,
-        if (status != null && status.isNotEmpty && status != 'all') 'status': status,
+        if (status != null && status.isNotEmpty && status != 'all')
+          'status': status,
         if (search != null && search.isNotEmpty) 'search': search,
         if (petId != null) 'pet_id': petId,
       });
@@ -230,7 +257,8 @@ class EmrService {
   }
 
   /// All visits for one pet (paginates until exhausted). Includes clinical lines.
-  Future<List<PetVisit>> listVisitsForPet(int petId, {int perPage = 100}) async {
+  Future<List<PetVisit>> listVisitsForPet(int petId,
+      {int perPage = 100}) async {
     final all = <PetVisit>[];
     var page = 1;
     while (true) {
@@ -250,7 +278,7 @@ class EmrService {
   Future<PetVisit> getVisit(int id) async {
     try {
       final res = await _client.get(
-        '/visits/$id',
+        '/clinical-visits/$id',
         queryParameters: {
           // Bust any intermediate GET cache so print/PDF is never stale.
           '_ts': DateTime.now().millisecondsSinceEpoch,
@@ -272,7 +300,7 @@ class EmrService {
 
   Future<PetVisit> createVisit(Map<String, dynamic> body) async {
     try {
-      final res = await _client.post('/visits', data: body);
+      final res = await _client.post('/clinical-visits', data: body);
       return parseEnvelopeData(
         res,
         (data) => PetVisit.fromJson(Map<String, dynamic>.from(data as Map)),
@@ -284,7 +312,7 @@ class EmrService {
 
   Future<PetVisit> updateVisit(int id, Map<String, dynamic> body) async {
     try {
-      final res = await _client.put('/visits/$id', data: body);
+      final res = await _client.put('/clinical-visits/$id', data: body);
       return parseEnvelopeData(
         res,
         (data) => PetVisit.fromJson(Map<String, dynamic>.from(data as Map)),
@@ -296,7 +324,7 @@ class EmrService {
 
   Future<void> deleteVisit(int id) async {
     try {
-      await _client.delete('/visits/$id');
+      await _client.delete('/clinical-visits/$id');
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -304,7 +332,7 @@ class EmrService {
 
   Future<Invoice> billVisit(int id) async {
     try {
-      final res = await _client.post('/visits/$id/bill');
+      final res = await _client.post('/clinical-visits/$id/bill');
       return parseEnvelopeData(
         res,
         (data) => Invoice.fromJson(Map<String, dynamic>.from(data as Map)),
@@ -316,7 +344,7 @@ class EmrService {
 
   Future<PetVisit> completeVisit(int id) async {
     try {
-      final res = await _client.post('/visits/$id/complete');
+      final res = await _client.post('/clinical-visits/$id/complete');
       return parseEnvelopeData(
         res,
         (data) => PetVisit.fromJson(Map<String, dynamic>.from(data as Map)),
@@ -328,7 +356,7 @@ class EmrService {
 
   Future<PetVisit> releaseVisitForBilling(int id) async {
     try {
-      final res = await _client.post('/visits/$id/release-billing');
+      final res = await _client.post('/clinical-visits/$id/release-billing');
       return parseEnvelopeData(
         res,
         (data) => PetVisit.fromJson(Map<String, dynamic>.from(data as Map)),
@@ -458,7 +486,8 @@ class EmrService {
         if (data is! List) return <TreatmentSuggestion>[];
         return data
             .whereType<Map>()
-            .map((e) => TreatmentSuggestion.fromJson(Map<String, dynamic>.from(e)))
+            .map((e) =>
+                TreatmentSuggestion.fromJson(Map<String, dynamic>.from(e)))
             .toList();
       });
     } on DioException catch (e) {
@@ -502,7 +531,8 @@ class EmrService {
         if (data is! List) return <VaccinationTemplate>[];
         return data
             .whereType<Map>()
-            .map((e) => VaccinationTemplate.fromJson(Map<String, dynamic>.from(e)))
+            .map((e) =>
+                VaccinationTemplate.fromJson(Map<String, dynamic>.from(e)))
             .toList();
       });
     } on DioException catch (e) {
@@ -520,7 +550,8 @@ class EmrService {
         if (data is! List) return <MedicineSuggestion>[];
         return data
             .whereType<Map>()
-            .map((e) => MedicineSuggestion.fromJson(Map<String, dynamic>.from(e)))
+            .map((e) =>
+                MedicineSuggestion.fromJson(Map<String, dynamic>.from(e)))
             .toList();
       });
     } on DioException catch (e) {
@@ -560,12 +591,15 @@ class EmrService {
 
   // ── Timeline & pet records ────────────────────────────────────────
 
-  Future<TimelineResponse> getTimeline(int petId, {Map<String, dynamic>? query}) async {
+  Future<TimelineResponse> getTimeline(int petId,
+      {Map<String, dynamic>? query}) async {
     try {
-      final res = await _client.get('/pets/$petId/timeline', queryParameters: query);
+      final res =
+          await _client.get('/pets/$petId/timeline', queryParameters: query);
       return parseEnvelopeData(
         res,
-        (data) => TimelineResponse.fromJson(Map<String, dynamic>.from(data as Map)),
+        (data) =>
+            TimelineResponse.fromJson(Map<String, dynamic>.from(data as Map)),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
@@ -575,13 +609,15 @@ class EmrService {
   Future<List<PetDeworming>> listDeworming(int petId) async {
     try {
       final res = await _client.get('/pets/$petId/deworming');
-      return parseEnvelopeData(res, (data) => listFromData(data, PetDeworming.fromJson));
+      return parseEnvelopeData(
+          res, (data) => listFromData(data, PetDeworming.fromJson));
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
   }
 
-  Future<PetDeworming> addDeworming(int petId, Map<String, dynamic> body) async {
+  Future<PetDeworming> addDeworming(
+      int petId, Map<String, dynamic> body) async {
     try {
       final res = await _client.post('/pets/$petId/deworming', data: body);
       return parseEnvelopeData(
@@ -604,7 +640,8 @@ class EmrService {
   Future<List<PetSurgery>> listSurgeries(int petId) async {
     try {
       final res = await _client.get('/pets/$petId/surgeries');
-      return parseEnvelopeData(res, (data) => listFromData(data, PetSurgery.fromJson));
+      return parseEnvelopeData(
+          res, (data) => listFromData(data, PetSurgery.fromJson));
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -625,7 +662,8 @@ class EmrService {
   Future<List<PetLabReport>> listLabReports(int petId) async {
     try {
       final res = await _client.get('/pets/$petId/lab-reports');
-      return parseEnvelopeData(res, (data) => listFromData(data, PetLabReport.fromJson));
+      return parseEnvelopeData(
+          res, (data) => listFromData(data, PetLabReport.fromJson));
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -633,7 +671,8 @@ class EmrService {
 
   Future<PetLabReport> uploadLabReport(int petId, FormData formData) async {
     try {
-      final res = await _client.post('/pets/$petId/lab-reports', data: formData);
+      final res =
+          await _client.post('/pets/$petId/lab-reports', data: formData);
       return parseEnvelopeData(
         res,
         (data) => PetLabReport.fromJson(Map<String, dynamic>.from(data as Map)),
@@ -651,12 +690,14 @@ class EmrService {
     }
   }
 
-  String labReportDownloadUrl(int id) => '${AppConfig.apiBaseUrl}/lab-reports/$id/download';
+  String labReportDownloadUrl(int id) =>
+      '${AppConfig.apiBaseUrl}/lab-reports/$id/download';
 
   Future<List<PetDocument>> listDocuments(int petId) async {
     try {
       final res = await _client.get('/pets/$petId/documents');
-      return parseEnvelopeData(res, (data) => listFromData(data, PetDocument.fromJson));
+      return parseEnvelopeData(
+          res, (data) => listFromData(data, PetDocument.fromJson));
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -682,7 +723,8 @@ class EmrService {
     }
   }
 
-  String documentDownloadUrl(int id) => '${AppConfig.apiBaseUrl}/documents/$id/download';
+  String documentDownloadUrl(int id) =>
+      '${AppConfig.apiBaseUrl}/documents/$id/download';
 
   // ── Reminders ───────────────────────────────────────────────────
 
@@ -691,7 +733,8 @@ class EmrService {
       final res = await _client.get('/reminders/dashboard');
       return parseEnvelopeData(
         res,
-        (data) => ReminderSummary.fromJson(Map<String, dynamic>.from(data as Map)),
+        (data) =>
+            ReminderSummary.fromJson(Map<String, dynamic>.from(data as Map)),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);

@@ -12,6 +12,9 @@ class Shop {
     required this.timezone,
     required this.isActive,
     this.settings,
+    this.clinicType = 'veterinary',
+    this.facilityType = 'clinic',
+    this.capabilities = const [],
   });
 
   final int id;
@@ -26,6 +29,11 @@ class Shop {
   final String timezone;
   final bool isActive;
   final ShopSettings? settings;
+  final String clinicType;
+  final String facilityType;
+  final List<String> capabilities;
+
+  bool hasCapability(String capability) => capabilities.contains(capability);
 
   factory Shop.fromJson(Map<String, dynamic> j) => Shop(
         id: (j['id'] as num?)?.toInt() ?? 0,
@@ -39,8 +47,15 @@ class Shop {
         currency: j['currency']?.toString() ?? 'INR',
         timezone: j['timezone']?.toString() ?? 'Asia/Kolkata',
         isActive: j['is_active'] as bool? ?? true,
+        clinicType: j['clinic_type']?.toString() ?? 'veterinary',
+        facilityType: j['facility_type']?.toString() ?? 'clinic',
+        capabilities: (j['capabilities'] as List?)
+                ?.map((item) => item.toString())
+                .toList() ??
+            const [],
         settings: j['settings'] is Map
-            ? ShopSettings.fromJson(Map<String, dynamic>.from(j['settings'] as Map))
+            ? ShopSettings.fromJson(
+                Map<String, dynamic>.from(j['settings'] as Map))
             : null,
       );
 }
@@ -147,8 +162,10 @@ class ShopSettings {
   final String invoicePrefix;
   final int invoiceStartNumber;
   final bool enableLoyalty;
+
   /// ₹ spent to earn 1 point (maps to loyalty_programs.earn_per_amount).
   final double loyaltyEarnPerAmount;
+
   /// ₹ value of 1 point when redeeming.
   final double loyaltyRedeemPerPoint;
   final int loyaltyRedemptionMinPoints;

@@ -42,6 +42,7 @@ import '../../features/inventory/stock_alerts_screen.dart';
 import '../../features/inventory/stock_transfer_detail_screen.dart';
 import '../../features/inventory/stock_transfer_form_screen.dart';
 import '../../features/inventory/stock_transfer_list_screen.dart';
+import '../../features/ipd/ipd_admissions_screen.dart';
 import '../../features/invoices/invoice_detail_screen.dart';
 import '../../features/invoices/invoice_list_screen.dart';
 import '../../features/pos/pos_screen.dart';
@@ -74,6 +75,7 @@ import '../../features/settings/settings_screen.dart';
 import '../../features/settings/usb_printer_settings_screen.dart';
 import '../../features/settings/users_screen.dart';
 import '../../features/shell/app_shell.dart';
+import '../../features/subscription/subscription_screen.dart';
 
 GoRouter createAppRouter({
   required AuthSession auth,
@@ -82,6 +84,35 @@ GoRouter createAppRouter({
   String? permissionRedirect(String path) {
     final denied = auth.homeRoute;
     bool need(String perm) => !auth.hasPermission(perm);
+
+    if (path.startsWith('/patients') && !auth.hasCapability('patients')) {
+      return denied;
+    }
+    if (path.startsWith('/emr/visits') &&
+        !auth.hasCapability('clinical_visits')) {
+      return denied;
+    }
+    if (path.startsWith('/emr/appointments') &&
+        !auth.hasCapability('appointments')) {
+      return denied;
+    }
+    if (path.startsWith('/ipd') &&
+        (!auth.hasCapability('ipd') || need(AppPermissions.emrVisitsView))) {
+      return denied;
+    }
+    final requiresCurrentAnimalDomain = path.startsWith('/emr/pets/') ||
+        path.startsWith('/emr/reminders') ||
+        path.startsWith('/reports/visits');
+    if (requiresCurrentAnimalDomain && !auth.hasCapability('animal_profiles')) {
+      return denied;
+    }
+    if (path.startsWith('/settings/species-breeds') &&
+        !auth.hasCapability('species_breeds')) {
+      return denied;
+    }
+    if (path.contains('/deworming') && !auth.hasCapability('deworming')) {
+      return denied;
+    }
 
     if (path.startsWith('/pos')) {
       if (need(AppPermissions.invoicesCreate)) return denied;
@@ -144,22 +175,27 @@ GoRouter createAppRouter({
       }
     }
     if (path.startsWith('/emr/pets/')) {
-      if (path.contains('/deworming') && need(AppPermissions.emrDewormingView)) {
+      if (path.contains('/deworming') &&
+          need(AppPermissions.emrDewormingView)) {
         return denied;
       }
-      if (path.contains('/surgeries') && need(AppPermissions.emrSurgeriesView)) {
+      if (path.contains('/surgeries') &&
+          need(AppPermissions.emrSurgeriesView)) {
         return denied;
       }
-      if (path.contains('/lab-reports') && need(AppPermissions.emrLabReportsView)) {
+      if (path.contains('/lab-reports') &&
+          need(AppPermissions.emrLabReportsView)) {
         return denied;
       }
-      if (path.contains('/documents') && need(AppPermissions.emrDocumentsView)) {
+      if (path.contains('/documents') &&
+          need(AppPermissions.emrDocumentsView)) {
         return denied;
       }
       if (path.contains('/timeline') && need(AppPermissions.emrVisitsView)) {
         return denied;
       }
-      if (path.contains('/visit-summary') && need(AppPermissions.emrVisitsView)) {
+      if (path.contains('/visit-summary') &&
+          need(AppPermissions.emrVisitsView)) {
         return denied;
       }
     }
@@ -180,7 +216,8 @@ GoRouter createAppRouter({
     }
     if (path.startsWith('/reports/day-close')) {
       if (need(AppPermissions.cashierDayClose)) return denied;
-    } else if (path.startsWith('/reports/payments') || path.startsWith('/reports/sales')) {
+    } else if (path.startsWith('/reports/payments') ||
+        path.startsWith('/reports/sales')) {
       if (need(AppPermissions.reportsView)) return denied;
     } else if (path.startsWith('/reports')) {
       if (need(AppPermissions.reportsView) || !auth.isSuperAdmin) return denied;
@@ -201,10 +238,12 @@ GoRouter createAppRouter({
       if (!auth.canAccessPrinterSettings) return denied;
     } else if (path == '/settings' || path.startsWith('/settings/')) {
       if (path == '/settings' && need(AppPermissions.shopManage)) return denied;
-      if (path.startsWith('/settings/users') && need(AppPermissions.usersView)) {
+      if (path.startsWith('/settings/users') &&
+          need(AppPermissions.usersView)) {
         return denied;
       }
-      if (path.startsWith('/settings/branches') && need(AppPermissions.branchManage)) {
+      if (path.startsWith('/settings/branches') &&
+          need(AppPermissions.branchManage)) {
         return denied;
       }
     }
@@ -509,6 +548,11 @@ GoRouter createAppRouter({
             },
           ),
           GoRoute(
+            path: '/ipd/admissions',
+            name: 'IpdAdmissions',
+            builder: (c, s) => const IpdAdmissionsScreen(),
+          ),
+          GoRoute(
             path: '/emr/pets/:petId/timeline',
             name: 'PetTimeline',
             builder: (c, s) {
@@ -677,6 +721,15 @@ GoRouter createAppRouter({
             builder: (c, s) => const PermissionGuard(
               permission: AppPermissions.shopManage,
               child: SettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/settings/subscription',
+            name: 'MySubscription',
+            // Super admin only; other staff see the trial / expiry banner.
+            builder: (c, s) => AccessGuard(
+              allow: (session) => session.isSuperAdmin,
+              child: const SubscriptionScreen(),
             ),
           ),
           GoRoute(

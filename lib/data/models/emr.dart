@@ -29,6 +29,10 @@ class PetSearchResult {
     required this.id,
     required this.customerId,
     required this.name,
+    this.patientType = 'animal',
+    this.patientNumber,
+    this.phone,
+    this.bloodGroup,
     this.species,
     this.breed,
     this.gender,
@@ -39,6 +43,10 @@ class PetSearchResult {
   final int id;
   final int customerId;
   final String name;
+  final String patientType;
+  final String? patientNumber;
+  final String? phone;
+  final String? bloodGroup;
   final String? species;
   final String? breed;
   final String? gender;
@@ -47,7 +55,8 @@ class PetSearchResult {
 
   String get displayLabel {
     final owner = customerName ?? 'Owner';
-    final details = [species, breed].where((e) => e != null && e.isNotEmpty).join(', ');
+    final details =
+        [species, breed].where((e) => e != null && e.isNotEmpty).join(', ');
     return details.isEmpty ? '$name ($owner)' : '$name — $details ($owner)';
   }
 
@@ -57,6 +66,10 @@ class PetSearchResult {
       id: id,
       customerId: customerId != 0 ? customerId : customer.id,
       name: name,
+      patientType: patientType,
+      patientNumber: patientNumber,
+      phone: phone,
+      bloodGroup: bloodGroup,
       species: species,
       breed: breed,
       gender: gender,
@@ -69,11 +82,16 @@ class PetSearchResult {
     Map<String, dynamic> j, {
     CustomerLite? customerOverride,
   }) {
-    final customer = customerOverride ?? CustomerLite.fromJson(mapOrNull(j['customer']));
+    final customer =
+        customerOverride ?? CustomerLite.fromJson(mapOrNull(j['customer']));
     return PetSearchResult(
       id: intOrNull(j['id']) ?? 0,
       customerId: intOrNull(j['customer_id']) ?? customer.id,
       name: j['name']?.toString() ?? '',
+      patientType: j['patient_type']?.toString() ?? 'animal',
+      patientNumber: j['patient_number']?.toString(),
+      phone: j['phone']?.toString(),
+      bloodGroup: j['blood_group']?.toString(),
       species: j['species']?.toString(),
       breed: j['breed']?.toString(),
       gender: j['gender']?.toString(),
@@ -170,7 +188,8 @@ class PetUpcomingReminder {
   final String name;
   final String dueDate;
 
-  factory PetUpcomingReminder.fromJson(Map<String, dynamic> j) => PetUpcomingReminder(
+  factory PetUpcomingReminder.fromJson(Map<String, dynamic> j) =>
+      PetUpcomingReminder(
         type: j['type']?.toString() ?? '',
         name: j['name']?.toString() ?? '',
         dueDate: j['due_date']?.toString() ?? '',
@@ -241,11 +260,11 @@ class PatientAppointment {
 
   factory PatientAppointment.fromJson(Map<String, dynamic> j) {
     final customer = CustomerLite.fromJson(mapOrNull(j['customer']));
-    final petMap = mapOrNull(j['pet']);
+    final petMap = mapOrNull(j['patient']) ?? mapOrNull(j['pet']);
     final doctorMap = mapOrNull(j['doctor']);
     return PatientAppointment(
       id: intOrNull(j['id']) ?? 0,
-      petId: intOrNull(j['pet_id']) ?? 0,
+      petId: intOrNull(j['patient_id']) ?? intOrNull(j['pet_id']) ?? 0,
       customerId: intOrNull(j['customer_id']) ?? customer.id,
       doctorId: intOrNull(j['doctor_id']),
       appointmentNumber: j['appointment_number']?.toString(),
@@ -283,9 +302,7 @@ class VisitInvestigationItem {
     if (text.isEmpty) return const [];
 
     final useLined = text.contains('\n') || text.contains(_noteSep);
-    final parts = useLined
-        ? text.split(RegExp(r'\r?\n'))
-        : text.split(',');
+    final parts = useLined ? text.split(RegExp(r'\r?\n')) : text.split(',');
 
     final items = <VisitInvestigationItem>[];
     for (final part in parts) {
@@ -358,7 +375,14 @@ class PetVisit {
     this.visitTime,
     this.chiefComplaint,
     this.temperature,
+    this.systolicBp,
+    this.diastolicBp,
+    this.oxygenSaturation,
     this.weight,
+    this.heightCm,
+    this.bmi,
+    this.bloodGlucose,
+    this.painScore,
     this.heartRate,
     this.respiratoryRate,
     this.clinicalNotes,
@@ -392,7 +416,14 @@ class PetVisit {
   final String? visitTime;
   final String? chiefComplaint;
   final double? temperature;
+  final int? systolicBp;
+  final int? diastolicBp;
+  final double? oxygenSaturation;
   final double? weight;
+  final double? heightCm;
+  final double? bmi;
+  final double? bloodGlucose;
+  final int? painScore;
   final int? heartRate;
   final int? respiratoryRate;
   final String? clinicalNotes;
@@ -428,7 +459,7 @@ class PetVisit {
   }
 
   factory PetVisit.fromJson(Map<String, dynamic> j) {
-    final petMap = mapOrNull(j['pet']);
+    final petMap = mapOrNull(j['patient']) ?? mapOrNull(j['pet']);
     final doctorMap = mapOrNull(j['doctor']);
     final serviceProductMap = mapOrNull(j['service_charge_product']);
     List<VisitDiagnosis>? diagnoses;
@@ -457,7 +488,7 @@ class PetVisit {
     }
     return PetVisit(
       id: intOrNull(j['id']) ?? 0,
-      petId: intOrNull(j['pet_id']) ?? 0,
+      petId: intOrNull(j['patient_id']) ?? intOrNull(j['pet_id']) ?? 0,
       customerId: intOrNull(j['customer_id']) ?? 0,
       doctorId: intOrNull(j['doctor_id']),
       invoiceId: intOrNull(j['invoice_id']),
@@ -467,7 +498,14 @@ class PetVisit {
       visitTime: j['visit_time']?.toString(),
       chiefComplaint: j['chief_complaint']?.toString(),
       temperature: numOrNull(j['temperature']),
+      systolicBp: intOrNull(j['systolic_bp']),
+      diastolicBp: intOrNull(j['diastolic_bp']),
+      oxygenSaturation: numOrNull(j['oxygen_saturation']),
       weight: numOrNull(j['weight']),
+      heightCm: numOrNull(j['height_cm']),
+      bmi: numOrNull(j['bmi']),
+      bloodGlucose: numOrNull(j['blood_glucose']),
+      painScore: intOrNull(j['pain_score']),
       heartRate: intOrNull(j['heart_rate']),
       respiratoryRate: intOrNull(j['respiratory_rate']),
       clinicalNotes: j['clinical_notes']?.toString(),
@@ -495,13 +533,21 @@ class PetVisit {
 
   Map<String, dynamic> toCreatePayload() => {
         'pet_id': petId,
+        'patient_id': petId,
         if (doctorId != null) 'doctor_id': doctorId,
         'visit_type': visitType,
         'visit_date': visitDate,
         if (visitTime != null) 'visit_time': visitTime,
         if (chiefComplaint != null) 'chief_complaint': chiefComplaint,
         if (temperature != null) 'temperature': temperature,
+        if (systolicBp != null) 'systolic_bp': systolicBp,
+        if (diastolicBp != null) 'diastolic_bp': diastolicBp,
+        if (oxygenSaturation != null) 'oxygen_saturation': oxygenSaturation,
         if (weight != null) 'weight': weight,
+        if (heightCm != null) 'height_cm': heightCm,
+        if (bmi != null) 'bmi': bmi,
+        if (bloodGlucose != null) 'blood_glucose': bloodGlucose,
+        if (painScore != null) 'pain_score': painScore,
         if (heartRate != null) 'heart_rate': heartRate,
         if (respiratoryRate != null) 'respiratory_rate': respiratoryRate,
         if (clinicalNotes != null) 'clinical_notes': clinicalNotes,
@@ -803,17 +849,23 @@ class VisitMedicine {
   }
 
   static List<VisitMedicine> clinicTreatments(List<VisitMedicine>? meds) =>
-      (meds ?? const <VisitMedicine>[]).where((m) => m.isClinicTreatment).toList();
+      (meds ?? const <VisitMedicine>[])
+          .where((m) => m.isClinicTreatment)
+          .toList();
 
   static List<VisitMedicine> prescriptionsOf(List<VisitMedicine>? meds) =>
-      (meds ?? const <VisitMedicine>[]).where((m) => !m.isClinicTreatment).toList();
+      (meds ?? const <VisitMedicine>[])
+          .where((m) => !m.isClinicTreatment)
+          .toList();
 
   Map<String, dynamic> toJson() => {
         if (productId != null) 'product_id': productId,
         'medicine_name': medicineName,
-        if (treatmentUnderCategory != null && treatmentUnderCategory!.isNotEmpty)
+        if (treatmentUnderCategory != null &&
+            treatmentUnderCategory!.isNotEmpty)
           'treatment_under_category': treatmentUnderCategory,
-        if (prescriptionUnderCategory != null && prescriptionUnderCategory!.isNotEmpty)
+        if (prescriptionUnderCategory != null &&
+            prescriptionUnderCategory!.isNotEmpty)
           'prescription_under_category': prescriptionUnderCategory,
         if (dosage != null && dosage!.isNotEmpty) 'dosage': dosage,
         if (frequency != null && frequency!.isNotEmpty) 'frequency': frequency,

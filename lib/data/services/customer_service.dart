@@ -53,7 +53,8 @@ class CustomerService {
     try {
       final res =
           await _client.get('/customers/search', queryParameters: {'q': q});
-      return parseEnvelopeData(res, (data) => listFromData(data, Customer.fromJson));
+      return parseEnvelopeData(
+          res, (data) => listFromData(data, Customer.fromJson));
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -86,6 +87,18 @@ class CustomerService {
   Future<Pet> createPet(Map<String, dynamic> body) async {
     try {
       final res = await _client.post('/pets', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Pet.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Pet> createPatient(Map<String, dynamic> body) async {
+    try {
+      final res = await _client.post('/patients', data: body);
       return parseEnvelopeData(
         res,
         (data) => Pet.fromJson(Map<String, dynamic>.from(data as Map)),
@@ -143,7 +156,8 @@ class CustomerService {
 
   Future<List<PetSpecies>> adminListPetSpecies({String? search}) async {
     try {
-      final res = await _client.get('/pets/master-data/species', queryParameters: {
+      final res =
+          await _client.get('/pets/master-data/species', queryParameters: {
         if (search != null && search.isNotEmpty) 'search': search,
       });
       return parseEnvelopeData(
@@ -169,7 +183,8 @@ class CustomerService {
 
   Future<PetSpecies> updatePetSpecies(int id, Map<String, dynamic> body) async {
     try {
-      final res = await _client.put('/pets/master-data/species/$id', data: body);
+      final res =
+          await _client.put('/pets/master-data/species/$id', data: body);
       return parseEnvelopeData(
         res,
         (data) => PetSpecies.fromJson(Map<String, dynamic>.from(data as Map)),
@@ -192,7 +207,8 @@ class CustomerService {
     String? search,
   }) async {
     try {
-      final res = await _client.get('/pets/master-data/breeds', queryParameters: {
+      final res =
+          await _client.get('/pets/master-data/breeds', queryParameters: {
         if (speciesId != null) 'species_id': speciesId,
         if (search != null && search.isNotEmpty) 'search': search,
       });
@@ -286,8 +302,8 @@ class CustomerService {
     Map<String, dynamic> body,
   ) async {
     try {
-      final res = await _client
-          .post('/customers/$customerId/advances/refund', data: body);
+      final res = await _client.post('/customers/$customerId/advances/refund',
+          data: body);
       final map = responseAsMap(res);
       final meta = map['meta'] is Map
           ? Map<String, dynamic>.from(map['meta'] as Map)

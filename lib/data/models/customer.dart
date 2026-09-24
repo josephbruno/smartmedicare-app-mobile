@@ -5,6 +5,11 @@ class Pet {
     required this.id,
     required this.customerId,
     required this.name,
+    this.patientType = 'animal',
+    this.patientNumber,
+    this.phone,
+    this.email,
+    this.bloodGroup,
     this.species,
     this.breed,
     required this.gender,
@@ -17,6 +22,11 @@ class Pet {
   final int id;
   final int customerId;
   final String name;
+  final String patientType;
+  final String? patientNumber;
+  final String? phone;
+  final String? email;
+  final String? bloodGroup;
   final String? species;
   final String? breed;
   final String gender;
@@ -29,6 +39,11 @@ class Pet {
         id: intOrNull(j['id']) ?? 0,
         customerId: intOrNull(j['customer_id']) ?? 0,
         name: j['name']?.toString() ?? '',
+        patientType: j['patient_type']?.toString() ?? 'animal',
+        patientNumber: j['patient_number']?.toString(),
+        phone: j['phone']?.toString(),
+        email: j['email']?.toString(),
+        bloodGroup: j['blood_group']?.toString(),
         species: j['species']?.toString(),
         breed: j['breed']?.toString(),
         gender: j['gender']?.toString() ?? '',
@@ -87,7 +102,8 @@ class PetBreed {
 
   factory PetBreed.fromJson(Map<String, dynamic> j) {
     final species = j['species'];
-    final speciesMap = species is Map ? Map<String, dynamic>.from(species) : null;
+    final speciesMap =
+        species is Map ? Map<String, dynamic>.from(species) : null;
     return PetBreed(
       id: intOrNull(j['id']) ?? 0,
       speciesId: intOrNull(j['species_id']) ?? 0,

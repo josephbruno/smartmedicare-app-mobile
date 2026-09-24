@@ -1,3 +1,5 @@
+import 'subscription_info.dart';
+
 class ShopLite {
   ShopLite({
     required this.id,
@@ -13,6 +15,10 @@ class ShopLite {
     this.currency,
     this.timezone,
     this.gstin,
+    this.clinicType = 'veterinary',
+    this.facilityType = 'clinic',
+    this.capabilities = const [],
+    this.subscription,
   });
 
   final int id;
@@ -28,6 +34,12 @@ class ShopLite {
   final String? currency;
   final String? timezone;
   final String? gstin;
+  final String clinicType;
+  final String facilityType;
+  final List<String> capabilities;
+  final SubscriptionInfo? subscription;
+
+  bool hasCapability(String capability) => capabilities.contains(capability);
 
   String get formattedAddress {
     final parts = [address, city, state, pincode]
@@ -55,6 +67,16 @@ class ShopLite {
       currency: j['currency']?.toString(),
       timezone: j['timezone']?.toString(),
       gstin: j['gstin']?.toString(),
+      clinicType: j['clinic_type']?.toString() ?? 'veterinary',
+      facilityType: j['facility_type']?.toString() ?? 'clinic',
+      capabilities: (j['capabilities'] as List?)
+              ?.map((item) => item.toString())
+              .toList() ??
+          const [],
+      subscription: j['subscription'] is Map
+          ? SubscriptionInfo.fromJson(
+              Map<String, dynamic>.from(j['subscription'] as Map))
+          : null,
     );
   }
 
@@ -72,6 +94,10 @@ class ShopLite {
         if (currency != null) 'currency': currency,
         if (timezone != null) 'timezone': timezone,
         if (gstin != null) 'gstin': gstin,
+        'clinic_type': clinicType,
+        'facility_type': facilityType,
+        'capabilities': capabilities,
+        if (subscription != null) 'subscription': subscription!.toJson(),
       };
 }
 

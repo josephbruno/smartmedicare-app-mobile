@@ -28,7 +28,8 @@ import '../../data/services/emr_visit_catalog_cache.dart';
 enum _MedicineContext { treatmentUnder, prescription, freeForm }
 
 class VisitFormScreen extends StatefulWidget {
-  const VisitFormScreen({super.key, this.visitId, this.appointmentId, this.petId});
+  const VisitFormScreen(
+      {super.key, this.visitId, this.appointmentId, this.petId});
 
   final int? visitId;
   final int? appointmentId;
@@ -45,6 +46,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   final _followUpNotes = TextEditingController();
   final _investigationFocus = FocusNode();
   final _serviceCharge = TextEditingController();
+  final _systolicBp = TextEditingController();
+  final _diastolicBp = TextEditingController();
+  final _oxygenSaturation = TextEditingController();
+  final _heightCm = TextEditingController();
+  final _bmi = TextEditingController();
+  final _bloodGlucose = TextEditingController();
+  final _painScore = TextEditingController();
 
   /// Selected vitals (dropdown values; null = not set).
   double? _temperatureF;
@@ -65,6 +73,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   List<EmrTemplateItem> _reviewIntervals = List.of(_fallbackReviewIntervals);
   List<String> _investigationSuggestions = [];
   List<String> _defaultInvestigationSuggestions = [];
+
   /// Which chip-field suggestion panel is open (`investigation`).
   String? _openSuggestField;
   List<TreatmentSuggestion> _defaultTreatmentSuggestions = [];
@@ -195,7 +204,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _investigationFocus.addListener(() => _onChipFieldFocus(
           field: 'investigation',
           focus: _investigationFocus,
-          loadSuggestions: () => _searchInvestigations(_investigationInput.text),
+          loadSuggestions: () =>
+              _searchInvestigations(_investigationInput.text),
         ));
     _bootstrap();
   }
@@ -242,7 +252,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   bool _isKnownInvestigation(String value) {
     final key = value.toLowerCase();
-    return _defaultInvestigationSuggestions.any((s) => s.toLowerCase() == key) ||
+    return _defaultInvestigationSuggestions
+            .any((s) => s.toLowerCase() == key) ||
         _investigationSuggestions.any((s) => s.toLowerCase() == key);
   }
 
@@ -265,8 +276,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (!mounted) return;
     try {
       await context.read<AppServices>().emr.rememberTemplates(
-            complaints: [name],
-          );
+        complaints: [name],
+      );
       _rememberComplaint(name);
     } catch (_) {}
   }
@@ -275,8 +286,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (!mounted) return;
     try {
       await context.read<AppServices>().emr.rememberTemplates(
-            investigations: [name],
-          );
+        investigations: [name],
+      );
       _rememberInvestigation(name);
     } catch (_) {}
   }
@@ -317,7 +328,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (!mounted) return;
       final current = _investigationInput.text.trim();
       if (current != term) return;
-      if (_isKnownInvestigation(term) || term.length <= _emrLearnMinChars) return;
+      if (_isKnownInvestigation(term) || term.length <= _emrLearnMinChars)
+        return;
       unawaited(_persistNewInvestigation(term));
     });
   }
@@ -368,7 +380,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     final auth = context.read<AuthSession>();
     final checkInOnly = _isCheckInOnly;
 
-    _hydrateCatalogCache(checkInOnly: checkInOnly, shopId: auth.currentShop?.id);
+    _hydrateCatalogCache(
+        checkInOnly: checkInOnly, shopId: auth.currentShop?.id);
     _applySessionDoctorRules(auth);
 
     final doctorsFuture = emr.listDoctors();
@@ -484,9 +497,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       final list = await context.read<AppServices>().emr.getReviewIntervals();
       if (!mounted) return;
       setState(() {
-        _reviewIntervals = list.isNotEmpty
-            ? list
-            : List.of(_fallbackReviewIntervals);
+        _reviewIntervals =
+            list.isNotEmpty ? list : List.of(_fallbackReviewIntervals);
         if (_followUpDate != null) {
           _followUpPresetDays = _followUpPresetMatching(_followUpDate!);
         }
@@ -591,6 +603,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         _temperatureOptions,
       );
     }
+    _systolicBp.text = visit.systolicBp?.toString() ?? '';
+    _diastolicBp.text = visit.diastolicBp?.toString() ?? '';
+    _oxygenSaturation.text = visit.oxygenSaturation?.toString() ?? '';
+    _heightCm.text = visit.heightCm?.toString() ?? '';
+    _bmi.text = visit.bmi?.toString() ?? '';
+    _bloodGlucose.text = visit.bloodGlucose?.toString() ?? '';
+    _painScore.text = visit.painScore?.toString() ?? '';
     if (visit.weight != null) {
       _weightKg = _nearestDouble(visit.weight!, _weightOptions);
     }
@@ -692,9 +711,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (doctor == null || _serviceCharge.text.trim().isNotEmpty) return;
     final fee = doctor.consultationFee;
     if (fee != null && fee > 0) {
-      _serviceCharge.text = fee == fee.roundToDouble()
-          ? fee.toInt().toString()
-          : fee.toString();
+      _serviceCharge.text =
+          fee == fee.roundToDouble() ? fee.toInt().toString() : fee.toString();
       _ensureServiceChargeProductLinked();
     }
   }
@@ -729,7 +747,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   Future<void> _prefillFromPetId(int petId) async {
     try {
-      final summary = await context.read<AppServices>().emr.getPetSummary(petId);
+      final summary =
+          await context.read<AppServices>().emr.getPetSummary(petId);
       _selectedPet = PetSearchResult(
         id: summary.id,
         customerId: 0,
@@ -769,7 +788,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (appt.chiefComplaint != null) _complaint.text = appt.chiefComplaint!;
     if (_selectedPet != null) {
       try {
-        final summary = await context.read<AppServices>().emr.getPetSummary(_selectedPet!.id);
+        final summary = await context
+            .read<AppServices>()
+            .emr
+            .getPetSummary(_selectedPet!.id);
         if (mounted) setState(() => _petSummary = summary);
         if (summary.weight != null && _weightKg == null) {
           _weightKg = _nearestDouble(summary.weight!, _weightOptions);
@@ -800,7 +822,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       _petSummary = null;
     });
     try {
-      final summary = await context.read<AppServices>().emr.getPetSummary(pet.id);
+      final summary =
+          await context.read<AppServices>().emr.getPetSummary(pet.id);
       if (mounted) {
         setState(() => _petSummary = summary);
         if (summary.weight != null && _weightKg == null) {
@@ -835,7 +858,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       return;
     }
     try {
-      final results = await context.read<AppServices>().emr.getTreatmentSuggestions(q: q);
+      final results =
+          await context.read<AppServices>().emr.getTreatmentSuggestions(q: q);
       if (!mounted) return;
       if (index != null && _treatmentSuggestForIndex != index) return;
       setState(() {
@@ -917,7 +941,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (!mounted) return;
     AppMessenger.show(
       context,
-      SnackBar(content: Text('Added ${products.length} line${products.length == 1 ? '' : 's'}')),
+      SnackBar(
+          content: Text(
+              'Added ${products.length} line${products.length == 1 ? '' : 's'}')),
     );
   }
 
@@ -945,7 +971,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       return;
     }
     try {
-      final results = await context.read<AppServices>().emr.getMedicineSuggestions(q: q);
+      final results =
+          await context.read<AppServices>().emr.getMedicineSuggestions(q: q);
       if (!mounted) return;
       if (index != null && _medicineSuggestForIndex != index) return;
       setState(() {
@@ -989,11 +1016,12 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           _attachVaccinationTemplates();
         });
       }
-      final results = await context.read<AppServices>().emr.getVaccinationSuggestions(
-            species: species,
-            petId: _selectedPet?.id,
-            q: query,
-          );
+      final results =
+          await context.read<AppServices>().emr.getVaccinationSuggestions(
+                species: species,
+                petId: _selectedPet?.id,
+                q: query,
+              );
       if (!mounted) return;
       setState(() {
         if (query == null || query.isEmpty) {
@@ -1057,7 +1085,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     return _defaultVaccinationSuggestions
         .where(
           (t) =>
-              VaccinationCategory.forVisit(snapshot: t.category, name: t.name) ==
+              VaccinationCategory.forVisit(
+                  snapshot: t.category, name: t.name) ==
               tab,
         )
         .toList();
@@ -1083,14 +1112,16 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (q.length >= 2) {
       final lower = q.toLowerCase();
       setState(() {
-        _vaccinationSuggestions =
-            tabVaccines.where((t) => t.name.toLowerCase().contains(lower)).toList();
+        _vaccinationSuggestions = tabVaccines
+            .where((t) => t.name.toLowerCase().contains(lower))
+            .toList();
       });
     }
   }
 
   void _clearVaccinationSuggestions({int? onlyIfIndex}) {
-    if (onlyIfIndex != null && _vaccinationSuggestForIndex != onlyIfIndex) return;
+    if (onlyIfIndex != null && _vaccinationSuggestForIndex != onlyIfIndex)
+      return;
     setState(() {
       _vaccinationSuggestForIndex = null;
       _vaccinationSuggestions = [];
@@ -1186,7 +1217,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (_petVaccinationSpecies == null) {
       AppMessenger.show(
         context,
-        const SnackBar(content: Text('Select a pet first to load dog or cat vaccines')),
+        const SnackBar(
+            content: Text('Select a pet first to load dog or cat vaccines')),
       );
       return;
     }
@@ -1274,8 +1306,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   Future<void> _searchComplaints(String text) async {
     final q = _complaintSearchTerm(text);
     try {
-      final results =
-          await context.read<AppServices>().emr.getComplaints(q: q.isEmpty ? null : q);
+      final results = await context
+          .read<AppServices>()
+          .emr
+          .getComplaints(q: q.isEmpty ? null : q);
       if (mounted) {
         setState(() {
           _complaintSuggestions = results;
@@ -1339,7 +1373,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void _addInvestigation(String phrase, {bool keepFocus = true}) {
     final trimmed = phrase.trim();
     if (trimmed.isEmpty) return;
-    if (_investigations.any((x) => x.name.toLowerCase() == trimmed.toLowerCase())) {
+    if (_investigations
+        .any((x) => x.name.toLowerCase() == trimmed.toLowerCase())) {
       _investigationInput.clear();
       setState(() => _investigationSuggestions =
           List.of(_defaultInvestigationSuggestions));
@@ -1381,7 +1416,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   int _categoryMedicineCount(String category, _MedicineContext context) {
     return _medicines
-        .where((m) => m.context == context && _medicineMatchesCategory(m, category, context))
+        .where((m) =>
+            m.context == context &&
+            _medicineMatchesCategory(m, category, context))
         .length;
   }
 
@@ -1483,8 +1520,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         _investigationUnderCategories = list;
         _investigationUnderTab ??= list.isNotEmpty ? list.first.slug : null;
       });
-      final first = _investigationUnderTab ??
-          (list.isNotEmpty ? list.first.slug : null);
+      final first =
+          _investigationUnderTab ?? (list.isNotEmpty ? list.first.slug : null);
       if (first != null) {
         await _loadMappedInvestigationServicesFor(first);
       }
@@ -1802,7 +1839,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   List<String> _categoryKeys(_MedicineContext context) {
     if (context == _MedicineContext.prescription) {
-      final keys = PrescriptionUnderCategory.keysOf(_prescriptionUnderCategories);
+      final keys =
+          PrescriptionUnderCategory.keysOf(_prescriptionUnderCategories);
       return keys.isNotEmpty ? keys : PrescriptionUnderCategory.keys;
     }
     final keys = TreatmentUnderCategory.keysOf(_treatmentUnderCategories);
@@ -1811,7 +1849,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
   String _categoryLabel(String key, _MedicineContext context) {
     if (context == _MedicineContext.prescription) {
-      return PrescriptionUnderCategory.labelOf(key, _prescriptionUnderCategories);
+      return PrescriptionUnderCategory.labelOf(
+          key, _prescriptionUnderCategories);
     }
     return TreatmentUnderCategory.labelOf(key, _treatmentUnderCategories);
   }
@@ -1841,7 +1880,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ? _loadingPrescriptionUnderMapped
           : _loadingTreatmentUnderMapped;
 
-  List<String> get _treatmentUnderKeys => _categoryKeys(_MedicineContext.treatmentUnder);
+  List<String> get _treatmentUnderKeys =>
+      _categoryKeys(_MedicineContext.treatmentUnder);
 
   String _treatmentUnderLabel(String key) =>
       _categoryLabel(key, _MedicineContext.treatmentUnder);
@@ -1903,13 +1943,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ? 'prescription_under_category'
             : 'treatment_under_category';
         list = await services.products.list(
-              query: {
-                'type': 'medicine',
-                'per_page': 200,
-                'is_active': 1,
-                filterKey: category,
-              },
-            );
+          query: {
+            'type': 'medicine',
+            'per_page': 200,
+            'is_active': 1,
+            filterKey: category,
+          },
+        );
       }
       list = list
           .where((p) => _productMappedToCategory(p, category, section))
@@ -2048,8 +2088,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     required ValueChanged<String> onSelectTab,
   }) {
     final tab = activeTab;
-    final mapped = tab == null ? const <Product>[] : _mappedForTab(tab, context);
-    final selectedUnder = _medicines.asMap().entries
+    final mapped =
+        tab == null ? const <Product>[] : _mappedForTab(tab, context);
+    final selectedUnder = _medicines
+        .asMap()
+        .entries
         .where((e) => e.value.context == context)
         .toList();
 
@@ -2276,8 +2319,17 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     }
     await _persistAllNewEmrTerms();
 
+    final systolicBp = int.tryParse(_systolicBp.text.trim());
+    final diastolicBp = int.tryParse(_diastolicBp.text.trim());
+    final oxygenSaturation = double.tryParse(_oxygenSaturation.text.trim());
+    final heightCm = double.tryParse(_heightCm.text.trim());
+    final bmi = double.tryParse(_bmi.text.trim());
+    final bloodGlucose = double.tryParse(_bloodGlucose.text.trim());
+    final painScore = int.tryParse(_painScore.text.trim());
+
     return <String, dynamic>{
       'pet_id': _selectedPet!.id,
+      'patient_id': _selectedPet!.id,
       if (_selectedDoctor != null) 'doctor_id': _selectedDoctor!.id,
       'visit_type': _visitType,
       'visit_date': _formatYmd(_visitDate),
@@ -2289,19 +2341,25 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       if (_isEdit || _clinicalNotes.text.trim().isNotEmpty)
         'clinical_notes': _clinicalNotes.text.trim(),
       if (_isEdit || _investigations.isNotEmpty)
-        'investigation':
-            VisitInvestigationItem.encode(_investigations.map((e) => e.toItem())) ??
-                '',
+        'investigation': VisitInvestigationItem.encode(
+                _investigations.map((e) => e.toItem())) ??
+            '',
       if (_followUpNotes.text.trim().isNotEmpty)
         'follow_up_notes': _followUpNotes.text.trim(),
       if (_temperatureF != null)
         'temperature': _fahrenheitToCelsius(_temperatureF!),
+      if (systolicBp != null) 'systolic_bp': systolicBp,
+      if (diastolicBp != null) 'diastolic_bp': diastolicBp,
+      if (oxygenSaturation != null) 'oxygen_saturation': oxygenSaturation,
       if (_weightKg != null) 'weight': _weightKg,
+      if (heightCm != null) 'height_cm': heightCm,
+      if (bmi != null) 'bmi': bmi,
+      if (bloodGlucose != null) 'blood_glucose': bloodGlucose,
+      if (painScore != null) 'pain_score': painScore,
       if (_heartRateBpm != null) 'heart_rate': _heartRateBpm,
       if (_respiratoryRatePerMin != null)
         'respiratory_rate': _respiratoryRatePerMin,
-      if (_followUpDate != null)
-        'follow_up_date': _formatYmd(_followUpDate!),
+      if (_followUpDate != null) 'follow_up_date': _formatYmd(_followUpDate!),
       // Always send child collections on edit so removals sync; on create only
       // when non-empty.
       if (_isEdit || _treatments.isNotEmpty)
@@ -2351,13 +2409,16 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       AppMessenger.show(
         context,
         const SnackBar(
-          content: Text('Visit held — resume anytime from Visit Records (open).'),
+          content:
+              Text('Visit held — resume anytime from Visit Records (open).'),
         ),
       );
-      context.go('/emr/visits/${visit.id}?r=${DateTime.now().millisecondsSinceEpoch}');
+      context.go(
+          '/emr/visits/${visit.id}?r=${DateTime.now().millisecondsSinceEpoch}');
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context, SnackBar(content: Text(_apiErrorMessage(e))));
+        AppMessenger.show(
+            context, SnackBar(content: Text(_apiErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -2380,11 +2441,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ),
           );
         }
-        context.go('/emr/visits/${visit.id}?r=${DateTime.now().millisecondsSinceEpoch}');
+        context.go(
+            '/emr/visits/${visit.id}?r=${DateTime.now().millisecondsSinceEpoch}');
       }
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context, SnackBar(content: Text(_apiErrorMessage(e))));
+        AppMessenger.show(
+            context, SnackBar(content: Text(_apiErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -2401,6 +2464,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _followUpNotes.dispose();
     _investigationFocus.dispose();
     _serviceCharge.dispose();
+    _systolicBp.dispose();
+    _diastolicBp.dispose();
+    _oxygenSaturation.dispose();
+    _heightCm.dispose();
+    _bmi.dispose();
+    _bloodGlucose.dispose();
+    _painScore.dispose();
     for (final row in _investigations) {
       row.dispose();
     }
@@ -2567,301 +2637,306 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final narrow = compact || constraints.maxWidth < 640;
-              final patientField = _selectedPet == null
-                  ? TextField(
-                      decoration: InputDecoration(
-                        labelText: 'Search patient (pet or owner)',
-                        suffixIcon: _searchingPets
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                              )
-                            : const Icon(Icons.search),
-                      ),
-                      onChanged: _searchPets,
-                    )
-                  : InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Patient',
-                        suffixIcon: _isEdit
-                            ? null
-                            : IconButton(
-                                icon: const Icon(Icons.close, size: 18),
-                                tooltip: 'Clear patient',
-                                onPressed: () {
-                                  setState(() {
-                                    _selectedPet = null;
-                                    _petSummary = null;
-                                    _defaultVaccinationSuggestions = [];
-                                    _vaccinationSuggestions = [];
-                                    _vaccinationSuggestForIndex = null;
-                                  });
-                                },
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final narrow = compact || constraints.maxWidth < 640;
+            final patientField = _selectedPet == null
+                ? TextField(
+                    decoration: InputDecoration(
+                      labelText: 'Search patient (pet or owner)',
+                      suffixIcon: _searchingPets
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.pets, size: 16, color: AppTheme.primary),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _selectedPet!.displayLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16,
-                              ),
+                            )
+                          : const Icon(Icons.search),
+                    ),
+                    onChanged: _searchPets,
+                  )
+                : InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Patient',
+                      suffixIcon: _isEdit
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              tooltip: 'Clear patient',
+                              onPressed: () {
+                                setState(() {
+                                  _selectedPet = null;
+                                  _petSummary = null;
+                                  _defaultVaccinationSuggestions = [];
+                                  _vaccinationSuggestions = [];
+                                  _vaccinationSuggestForIndex = null;
+                                });
+                              },
+                            ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.pets,
+                            size: 16, color: AppTheme.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _selectedPet!.displayLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
                             ),
                           ),
-                        ],
-                      ),
-                    );
-
-              final serviceChargeField = TextField(
-                controller: _serviceCharge,
-                decoration: InputDecoration(
-                  labelText: 'Service charge (₹)',
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      Icons.inventory_2_outlined,
-                      size: 22,
-                      color: _serviceChargeProductId != null
-                          ? AppTheme.accent
-                          : null,
-                    ),
-                    tooltip: _serviceChargeProductId != null
-                        ? 'Change service product'
-                        : 'Link service product (for GST)',
-                    onPressed: () async {
-                      final p = await _pickProduct(
-                        type: 'service',
-                        allowCreateService: true,
-                      );
-                      if (p != null) {
-                        setState(() {
-                          _serviceChargeProductId = p.id;
-                          _serviceChargeProductName = p.name;
-                          _serviceCharge.text = p.sellingPrice ==
-                                  p.sellingPrice.roundToDouble()
-                              ? p.sellingPrice.toInt().toString()
-                              : p.sellingPrice.toString();
-                        });
-                      }
-                    },
-                  ),
-                ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              );
-
-              final doctorField = _buildOptionalDoctorField();
-
-              final petResultTiles = _selectedPet == null
-                  ? _petResults
-                      .map(
-                        (p) => ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(p.displayLabel),
-                          onTap: () => _selectPet(p),
                         ),
-                      )
-                      .toList()
-                  : const <Widget>[];
+                      ],
+                    ),
+                  );
 
-              if (narrow) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    patientField,
-                    ...petResultTiles,
-                    if (_isCheckInOnly) ...[
-                      const SizedBox(height: 12),
-                      doctorField,
-                    ] else ...[
-                      const SizedBox(height: 12),
-                      serviceChargeField,
-                    ],
-                  ],
-                );
-              }
+            final serviceChargeField = TextField(
+              controller: _serviceCharge,
+              decoration: InputDecoration(
+                labelText: 'Service charge (₹)',
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    Icons.inventory_2_outlined,
+                    size: 22,
+                    color: _serviceChargeProductId != null
+                        ? AppTheme.accent
+                        : null,
+                  ),
+                  tooltip: _serviceChargeProductId != null
+                      ? 'Change service product'
+                      : 'Link service product (for GST)',
+                  onPressed: () async {
+                    final p = await _pickProduct(
+                      type: 'service',
+                      allowCreateService: true,
+                    );
+                    if (p != null) {
+                      setState(() {
+                        _serviceChargeProductId = p.id;
+                        _serviceChargeProductName = p.name;
+                        _serviceCharge.text =
+                            p.sellingPrice == p.sellingPrice.roundToDouble()
+                                ? p.sellingPrice.toInt().toString()
+                                : p.sellingPrice.toString();
+                      });
+                    }
+                  },
+                ),
+              ),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+            );
 
+            final doctorField = _buildOptionalDoctorField();
+
+            final petResultTiles = _selectedPet == null
+                ? _petResults
+                    .map(
+                      (p) => ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(p.displayLabel),
+                        onTap: () => _selectPet(p),
+                      ),
+                    )
+                    .toList()
+                : const <Widget>[];
+
+            if (narrow) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 3, child: patientField),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: _isCheckInOnly ? doctorField : serviceChargeField,
-                      ),
-                    ],
-                  ),
-                  if (petResultTiles.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: petResultTiles,
-                      ),
-                    ),
+                  patientField,
+                  ...petResultTiles,
+                  if (_isCheckInOnly) ...[
+                    const SizedBox(height: 12),
+                    doctorField,
+                  ] else ...[
+                    const SizedBox(height: 12),
+                    serviceChargeField,
+                  ],
                 ],
               );
-            },
-          ),
-          if (!_isCheckInOnly && _serviceChargeProductName != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Service product: $_serviceChargeProductName',
-                style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-              ),
-            ),
-          if (_petSummary != null) ...[
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Patient context',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    if (_petSummary!.allergies.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          'Allergies: ${_petSummary!.allergies.join(', ')}',
-                          style: const TextStyle(color: AppTheme.danger),
-                        ),
-                      ),
-                    if (_petSummary!.medicalNotes != null &&
-                        _petSummary!.medicalNotes!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(_petSummary!.medicalNotes!),
-                      ),
-                    if (_petSummary!.lastVisits.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      const Text('Recent visits',
-                          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                      ..._petSummary!.lastVisits.take(2).map(
-                            (v) => Text(
-                              '${v.visitDate} · ${v.chiefComplaint ?? v.visitType}',
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                          ),
-                    ],
+                    Expanded(flex: 3, child: patientField),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: _isCheckInOnly ? doctorField : serviceChargeField,
+                    ),
                   ],
                 ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          _formSectionHeader(
-            'Chief complaint',
-            Icons.chat_bubble_outline_rounded,
-          ),
-          const SizedBox(height: 6),
-          Focus(
-            onKeyEvent: (node, event) {
-              if (event is! KeyDownEvent) return KeyEventResult.ignored;
-              if (event.logicalKey != LogicalKeyboardKey.enter &&
-                  event.logicalKey != LogicalKeyboardKey.numpadEnter) {
-                return KeyEventResult.ignored;
-              }
-              _commitComplaintTerm();
-              return KeyEventResult.handled;
-            },
-            child: TextField(
-              controller: _complaint,
-              maxLines: 2,
-              textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(
-                hintText: 'Type to search or add complaints...',
-              ),
-              onChanged: _onComplaintChanged,
-              onSubmitted: _commitComplaintTerm,
-            ),
-          ),
-          if (_complaintSuggestions.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            const Text(
-              'Quick add',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: _complaintSuggestions.take(12).map((c) {
-                return ActionChip(
-                  avatar: const Icon(
-                    Icons.add,
-                    size: 14,
-                    color: AppTheme.primaryDark,
-                  ),
-                  label: Text(
-                    c,
-                    style: const TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
+                if (petResultTiles.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: petResultTiles,
                     ),
                   ),
-                  labelStyle: const TextStyle(
+              ],
+            );
+          },
+        ),
+        if (!_isCheckInOnly && _serviceChargeProductName != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Service product: $_serviceChargeProductName',
+              style:
+                  const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            ),
+          ),
+        if (_petSummary != null) ...[
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Patient context',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  if (_petSummary!.allergies.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Allergies: ${_petSummary!.allergies.join(', ')}',
+                        style: const TextStyle(color: AppTheme.danger),
+                      ),
+                    ),
+                  if (_petSummary!.medicalNotes != null &&
+                      _petSummary!.medicalNotes!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(_petSummary!.medicalNotes!),
+                    ),
+                  if (_petSummary!.lastVisits.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    const Text('Recent visits',
+                        style: TextStyle(
+                            fontSize: 12, color: AppTheme.textSecondary)),
+                    ..._petSummary!.lastVisits.take(2).map(
+                          (v) => Text(
+                            '${v.visitDate} · ${v.chiefComplaint ?? v.visitType}',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        _formSectionHeader(
+          'Chief complaint',
+          Icons.chat_bubble_outline_rounded,
+        ),
+        const SizedBox(height: 6),
+        Focus(
+          onKeyEvent: (node, event) {
+            if (event is! KeyDownEvent) return KeyEventResult.ignored;
+            if (event.logicalKey != LogicalKeyboardKey.enter &&
+                event.logicalKey != LogicalKeyboardKey.numpadEnter) {
+              return KeyEventResult.ignored;
+            }
+            _commitComplaintTerm();
+            return KeyEventResult.handled;
+          },
+          child: TextField(
+            controller: _complaint,
+            maxLines: 2,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              hintText: 'Type to search or add complaints...',
+            ),
+            onChanged: _onComplaintChanged,
+            onSubmitted: _commitComplaintTerm,
+          ),
+        ),
+        if (_complaintSuggestions.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          const Text(
+            'Quick add',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _complaintSuggestions.take(12).map((c) {
+              return ActionChip(
+                avatar: const Icon(
+                  Icons.add,
+                  size: 14,
+                  color: AppTheme.primaryDark,
+                ),
+                label: Text(
+                  c,
+                  style: const TextStyle(
                     fontSize: 14.5,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.textPrimary,
                   ),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  backgroundColor: const Color(0xFFEFF6FF),
-                  surfaceTintColor: Colors.transparent,
-                  side: const BorderSide(color: Color(0xFFBFDBFE)),
-                  onPressed: () => _applyComplaintSuggestion(c),
-                );
-              }).toList(),
+                ),
+                labelStyle: const TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                backgroundColor: const Color(0xFFEFF6FF),
+                surfaceTintColor: Colors.transparent,
+                side: const BorderSide(color: Color(0xFFBFDBFE)),
+                onPressed: () => _applyComplaintSuggestion(c),
+              );
+            }).toList(),
+          ),
+        ],
+        if (_isCheckInOnly) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Leave doctor empty so any remaining doctor can continue this visit.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.textSecondary,
+                  height: 1.35,
+                ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Check in visit'),
             ),
-          ],
-          if (_isCheckInOnly) ...[
-            const SizedBox(height: 16),
-            Text(
-              'Leave doctor empty so any remaining doctor can continue this visit.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textSecondary,
-                    height: 1.35,
-                  ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _saving ? null : _save,
-                child: _saving
-                    ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Check in visit'),
-              ),
-            ),
-          ] else ...[
+          ),
+        ] else ...[
           const SizedBox(height: 12),
           _formSectionHeader('Vitals', Icons.monitor_heart_outlined),
           const SizedBox(height: 6),
@@ -2957,6 +3032,22 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               );
             },
           ),
+          if (context.read<AuthSession>().isHuman) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _opdNumberField('Systolic BP', _systolicBp, 'mmHg'),
+                _opdNumberField('Diastolic BP', _diastolicBp, 'mmHg'),
+                _opdNumberField('SpO₂', _oxygenSaturation, '%'),
+                _opdNumberField('Height', _heightCm, 'cm'),
+                _opdNumberField('BMI', _bmi, null),
+                _opdNumberField('Blood glucose', _bloodGlucose, 'mg/dL'),
+                _opdNumberField('Pain score', _painScore, '/10'),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           _formSectionHeader('Investigation', Icons.biotech_outlined),
           const SizedBox(height: 6),
@@ -2991,9 +3082,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     horizontal: 2,
                     vertical: 4,
                   ),
-                  hintText: _investigations.isEmpty
-                      ? null
-                      : 'Add another…',
+                  hintText: _investigations.isEmpty ? null : 'Add another…',
                 ),
                 onChanged: (v) {
                   setState(() {});
@@ -3145,8 +3234,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ..._treatments.asMap().entries.map((e) {
             final i = e.key;
             final t = e.value;
-            final showSuggestions =
-                _treatmentSuggestForIndex == i && _treatmentSuggestions.isNotEmpty;
+            final showSuggestions = _treatmentSuggestForIndex == i &&
+                _treatmentSuggestions.isNotEmpty;
             final nameField = Focus(
               onFocusChange: (hasFocus) {
                 if (hasFocus) {
@@ -3173,7 +3262,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 labelText: 'Price (₹)',
                 isDense: true,
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               controller: t.priceCtrl,
             );
             final linkBtn = IconButton(
@@ -3256,7 +3346,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                               return Padding(
                                 padding: const EdgeInsets.only(right: 6),
                                 child: ActionChip(
-                                  label: Text(s.name, style: const TextStyle(fontSize: 12)),
+                                  label: Text(s.name,
+                                      style: const TextStyle(fontSize: 12)),
                                   onPressed: () async {
                                     setState(() {
                                       t.nameCtrl.text = s.name;
@@ -3290,7 +3381,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                                           break;
                                         }
                                       }
-                                      match ??= list.isEmpty ? null : list.first;
+                                      match ??=
+                                          list.isEmpty ? null : list.first;
                                       if (match == null) return;
                                       setState(() {
                                         t.productId = match!.id;
@@ -3348,7 +3440,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 14.5),
               ),
             ),
-          ..._medicines.asMap().entries
+          ..._medicines
+              .asMap()
+              .entries
               .where((e) => e.value.context == _MedicineContext.freeForm)
               .map((e) {
             return _buildMedicineCard(
@@ -3498,7 +3592,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                   color: AppTheme.textSecondary,
                 ),
           ),
-          ],
+        ],
       ],
     );
   }
@@ -3562,6 +3656,25 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         _selectedDoctor =
             id == null ? null : _doctors.where((d) => d.id == id).firstOrNull;
       }),
+    );
+  }
+
+  Widget _opdNumberField(
+    String label,
+    TextEditingController controller,
+    String? suffix,
+  ) {
+    return SizedBox(
+      width: 155,
+      child: TextField(
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          labelText: label,
+          suffixText: suffix,
+          isDense: true,
+        ),
+      ),
     );
   }
 
@@ -3728,7 +3841,9 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         _medicineSuggestions.isNotEmpty;
     final nameField = nameReadOnly
         ? Text(
-            m.nameCtrl.text.trim().isEmpty ? 'Medicine' : m.nameCtrl.text.trim(),
+            m.nameCtrl.text.trim().isEmpty
+                ? 'Medicine'
+                : m.nameCtrl.text.trim(),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -3819,9 +3934,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       },
     );
     final categoryHint = prescriptionUnderCategory != null
-        ? _categoryLabel(prescriptionUnderCategory, _MedicineContext.prescription)
+        ? _categoryLabel(
+            prescriptionUnderCategory, _MedicineContext.prescription)
         : (treatmentUnderCategory != null
-            ? _categoryLabel(treatmentUnderCategory, _MedicineContext.treatmentUnder)
+            ? _categoryLabel(
+                treatmentUnderCategory, _MedicineContext.treatmentUnder)
             : null);
     final isPrescription = _isPrescriptionMedicine(m);
 
@@ -3892,9 +4009,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               showPrice: !isPrescription,
               linkBtn: linkBtn,
               removeBtn: removeBtn,
-              extraControls: isPrescription
-                  ? _prescriptionQtyAndFrequencyRow(m)
-                  : null,
+              extraControls:
+                  isPrescription ? _prescriptionQtyAndFrequencyRow(m) : null,
             ),
             if (showMedicineSuggestions)
               Padding(
@@ -4150,7 +4266,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     String label = 'Set next due (reminder)';
     if (date != null) {
       final days = DateTime(date.year, date.month, date.day)
-          .difference(DateTime(_visitDate.year, _visitDate.month, _visitDate.day))
+          .difference(
+              DateTime(_visitDate.year, _visitDate.month, _visitDate.day))
           .inDays;
       label = days > 0
           ? 'Next due ${_formatYmd(date)} ($days days)'
@@ -4166,7 +4283,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         maxLines: 1,
       ),
       style: OutlinedButton.styleFrom(
-        foregroundColor: filled ? const Color(0xFF047857) : const Color(0xFF2563EB),
+        foregroundColor:
+            filled ? const Color(0xFF047857) : const Color(0xFF2563EB),
         side: BorderSide(
           color: filled ? const Color(0xFF6EE7B7) : const Color(0xFFBFDBFE),
         ),
@@ -4322,9 +4440,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                             } else {
                               final match = _templateForName(row.nameCtrl.text);
                               if (match != null) {
-                                setState(() => _applyVaccineTemplate(row, match));
+                                setState(
+                                    () => _applyVaccineTemplate(row, match));
                               }
-                              Future.delayed(const Duration(milliseconds: 180), () {
+                              Future.delayed(const Duration(milliseconds: 180),
+                                  () {
                                 if (!mounted) return;
                                 _clearVaccinationSuggestions(onlyIfIndex: i);
                               });
@@ -4387,7 +4507,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                         FocusManager.instance.primaryFocus?.unfocus();
                       },
                       child: Chip(
-                        label: Text(s.name, style: const TextStyle(fontSize: 12)),
+                        label:
+                            Text(s.name, style: const TextStyle(fontSize: 12)),
                         visualDensity: VisualDensity.compact,
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
@@ -4642,7 +4763,8 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
     final iu = widget.investigationUnderCategory;
     if (iu != null) {
       try {
-        final mapped = await services.emrMasterData.listInvestigationUnderProducts(
+        final mapped =
+            await services.emrMasterData.listInvestigationUnderProducts(
           category: iu,
           search: search,
           isActive: true,
@@ -4911,10 +5033,9 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                             enabled: !out,
                             leading: CircleAvatar(
                               radius: 18,
-                              backgroundColor: (out
-                                      ? AppTheme.danger
-                                      : AppTheme.primary)
-                                  .withValues(alpha: 0.12),
+                              backgroundColor:
+                                  (out ? AppTheme.danger : AppTheme.primary)
+                                      .withValues(alpha: 0.12),
                               child: Icon(
                                 out
                                     ? Icons.block
@@ -4922,9 +5043,7 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                                         ? Icons.medication_outlined
                                         : Icons.inventory_2_outlined),
                                 size: 18,
-                                color: out
-                                    ? AppTheme.danger
-                                    : AppTheme.primary,
+                                color: out ? AppTheme.danger : AppTheme.primary,
                               ),
                             ),
                             title: Text(
@@ -4946,9 +5065,7 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                                     : AppTheme.textSecondary,
                               ),
                             ),
-                            onTap: out
-                                ? null
-                                : () => Navigator.pop(context, p),
+                            onTap: out ? null : () => Navigator.pop(context, p),
                           );
                         },
                       ),
@@ -5068,7 +5185,8 @@ class _CreateServiceDialogState extends State<_CreateServiceDialog> {
       if (!mounted) return;
       setState(() => _creating = false);
       final text = e.toString();
-      final friendly = (text.contains('Duplicate entry') || text.contains('1062'))
+      final friendly = (text.contains('Duplicate entry') ||
+              text.contains('1062'))
           ? 'A product with this name or code already exists. Search and select it instead.'
           : text;
       AppMessenger.show(context, SnackBar(content: Text(friendly)));
@@ -5180,7 +5298,8 @@ class _VaccinationRow {
 
   factory _VaccinationRow.fromModel(PetVaccination v) => _VaccinationRow(
         name: v.vaccineName,
-        nextDueDate: v.nextDueDate != null ? DateTime.tryParse(v.nextDueDate!) : null,
+        nextDueDate:
+            v.nextDueDate != null ? DateTime.tryParse(v.nextDueDate!) : null,
         templateId: v.vaccinationTemplateId,
         doseNumber: v.doseNumber ?? 1,
         status: v.status,
@@ -5318,7 +5437,8 @@ class _MedicineRow {
 
   factory _MedicineRow.fromModel(VisitMedicine m) {
     final tuRaw = m.treatmentUnderCategory ?? m.product?.treatmentUnderCategory;
-    final puRaw = m.prescriptionUnderCategory ?? m.product?.prescriptionUnderCategory;
+    final puRaw =
+        m.prescriptionUnderCategory ?? m.product?.prescriptionUnderCategory;
     final hasTu = tuRaw != null && tuRaw.isNotEmpty;
     final hasPu = puRaw != null && puRaw.isNotEmpty;
     return _MedicineRow(
@@ -5361,9 +5481,8 @@ class _MedicineRow {
         if (dosageCtrl.text.isNotEmpty) 'dosage': dosageCtrl.text.trim(),
         if (freqCtrl.text.isNotEmpty) 'frequency': freqCtrl.text.trim(),
         if (durationDays != null) 'duration_days': durationDays,
-        'quantity': (int.tryParse(qtyCtrl.text) ?? quantity)
-            .clamp(1, 20)
-            .toDouble(),
+        'quantity':
+            (int.tryParse(qtyCtrl.text) ?? quantity).clamp(1, 20).toDouble(),
         'unit_price': double.tryParse(priceCtrl.text) ?? 0,
       };
 
@@ -5388,7 +5507,8 @@ class _MultiProductPickerSheet extends StatefulWidget {
   final bool allowAllTypes;
 
   @override
-  State<_MultiProductPickerSheet> createState() => _MultiProductPickerSheetState();
+  State<_MultiProductPickerSheet> createState() =>
+      _MultiProductPickerSheetState();
 }
 
 class _MultiProductPickerSheetState extends State<_MultiProductPickerSheet> {
@@ -5420,7 +5540,8 @@ class _MultiProductPickerSheetState extends State<_MultiProductPickerSheet> {
         if (q.trim().isNotEmpty) 'search': q.trim(),
         if (!widget.allowAllTypes) 'type': widget.type,
       };
-      final list = await context.read<AppServices>().products.list(query: query);
+      final list =
+          await context.read<AppServices>().products.list(query: query);
       if (!mounted || seq != _seq) return;
       setState(() {
         _results = list;
@@ -5454,7 +5575,8 @@ class _MultiProductPickerSheetState extends State<_MultiProductPickerSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
+              child: Text(widget.title,
+                  style: Theme.of(context).textTheme.titleMedium),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -5493,7 +5615,8 @@ class _MultiProductPickerSheetState extends State<_MultiProductPickerSheet> {
                               value: checked,
                               onChanged: (_) => _toggle(p),
                               title: Text(p.name),
-                              subtitle: Text('₹${p.sellingPrice.toStringAsFixed(2)}'),
+                              subtitle:
+                                  Text('₹${p.sellingPrice.toStringAsFixed(2)}'),
                               secondary: IconButton(
                                 tooltip: 'Add this only',
                                 icon: const Icon(Icons.add_circle_outline),

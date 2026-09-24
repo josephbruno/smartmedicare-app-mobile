@@ -59,23 +59,48 @@ class _PatientListScreenState extends State<PatientListScreen> {
       );
 
   Future<void> _addPatient() async {
+    final auth = context.read<AuthSession>();
     final customer = await showDialog<Customer>(
       context: context,
       builder: (ctx) => const _PickCustomerDialog(),
     );
-    if (!mounted || customer == null) return;
+    if (!context.mounted || customer == null) return;
 
-    final saved = await showPetFormSheet(context, customerId: customer.id);
+    bool saved;
+    if (auth.isHuman) {
+      saved = await _showHumanPatientForm(customer);
+    } else {
+      if (!mounted) return;
+      saved = await showPetFormSheet(context, customerId: customer.id);
+    }
     if (!mounted || !saved) return;
     AppMessenger.success(context, 'Patient added');
     setState(() => _reloadToken++);
   }
 
+  Future<bool> _showHumanPatientForm(Customer customer) async {
+    final data = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _HumanPatientDialog(customer: customer),
+    );
+    if (!mounted || data == null) return false;
+
+    try {
+      await context.read<AppServices>().customers.createPatient(data);
+      return true;
+    } catch (error) {
+      if (mounted) {
+        AppMessenger.error(context, 'Unable to create patient: $error');
+      }
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final services = context.read<AppServices>();
-    final canCreate =
-        context.watch<AuthSession>().hasPermission(AppPermissions.customersCreate);
+    final auth = context.watch<AuthSession>();
+    final canCreate = auth.hasPermission(AppPermissions.customersCreate);
     final search = _search.text.trim();
 
     return Scaffold(
@@ -101,24 +126,29 @@ class _PatientListScreenState extends State<PatientListScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                SizedBox(
-                  width: 140,
-                  child: AppDropdownButtonFormField<String?>(
-                    value: _speciesFilter,
-                    isDense: true,
-                    decoration: _filterDec.copyWith(labelText: 'Species'),
-                    items: const [
-                      DropdownMenuItem(value: null, child: Text('All species')),
-                      DropdownMenuItem(value: 'dog', child: Text('Dog')),
-                      DropdownMenuItem(value: 'cat', child: Text('Cat')),
-                      DropdownMenuItem(value: 'bird', child: Text('Bird')),
-                      DropdownMenuItem(value: 'fish', child: Text('Fish')),
-                      DropdownMenuItem(value: 'rabbit', child: Text('Rabbit')),
-                      DropdownMenuItem(value: 'other', child: Text('Other')),
-                    ],
-                    onChanged: (v) => setState(() => _speciesFilter = v),
+                if (auth.isVeterinary) ...[
+                  SizedBox(
+                    width: 140,
+                    child: AppDropdownButtonFormField<String?>(
+                      value: _speciesFilter,
+                      isDense: true,
+                      decoration: _filterDec.copyWith(labelText: 'Species'),
+                      items: const [
+                        DropdownMenuItem(
+                            value: null, child: Text('All species')),
+                        DropdownMenuItem(value: 'dog', child: Text('Dog')),
+                        DropdownMenuItem(value: 'cat', child: Text('Cat')),
+                        DropdownMenuItem(value: 'bird', child: Text('Bird')),
+                        DropdownMenuItem(value: 'fish', child: Text('Fish')),
+                        DropdownMenuItem(
+                            value: 'rabbit', child: Text('Rabbit')),
+                        DropdownMenuItem(value: 'other', child: Text('Other')),
+                      ],
+                      onChanged: (v) => setState(() => _speciesFilter = v),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                ],
                 const SizedBox(width: 10),
                 SizedBox(
                   width: 130,
@@ -130,7 +160,8 @@ class _PatientListScreenState extends State<PatientListScreen> {
                       DropdownMenuItem(value: null, child: Text('All genders')),
                       DropdownMenuItem(value: 'male', child: Text('Male')),
                       DropdownMenuItem(value: 'female', child: Text('Female')),
-                      DropdownMenuItem(value: 'unknown', child: Text('Unknown')),
+                      DropdownMenuItem(
+                          value: 'unknown', child: Text('Unknown')),
                     ],
                     onChanged: (v) => setState(() => _genderFilter = v),
                   ),
@@ -145,7 +176,8 @@ class _PatientListScreenState extends State<PatientListScreen> {
                     items: const [
                       DropdownMenuItem(value: 'all', child: Text('All')),
                       DropdownMenuItem(value: 'active', child: Text('Active')),
-                      DropdownMenuItem(value: 'inactive', child: Text('Inactive')),
+                      DropdownMenuItem(
+                          value: 'inactive', child: Text('Inactive')),
                     ],
                     onChanged: (v) {
                       if (v == null) return;
@@ -178,22 +210,49 @@ class _PatientListScreenState extends State<PatientListScreen> {
               headerFontSize: 9,
               cellFontSize: 12,
               loadPage: ({required page, required perPage}) =>
-                  services.emr.listPetsPaginated(
-                    page: page,
-                    perPage: perPage,
-                    search: search.length >= 2 ? search : null,
-                    species: _speciesFilter,
-                    gender: _genderFilter,
-                    isActive: _isActiveFilter,
-                  ),
-              onRowTap: (pet) => context.push('/emr/pets/${pet.id}/timeline'),
-              columns: const [
-                TableColumnDef(label: 'Pet', flex: 1.2, cellBuilder: _petCell),
-                TableColumnDef(label: 'Species', flex: 1, cellBuilder: _speciesCell),
-                TableColumnDef(label: 'Breed', flex: 1.2, cellBuilder: _breedCell),
-                TableColumnDef(label: 'Owner', flex: 1.5, cellBuilder: _ownerCell),
-                TableColumnDef(label: 'Phone', flex: 1.2, cellBuilder: _phoneCell),
-              ],
+                  services.emr.listPatientsPaginated(
+                page: page,
+                perPage: perPage,
+                search: search.length >= 2 ? search : null,
+                species: _speciesFilter,
+                gender: _genderFilter,
+                isActive: _isActiveFilter,
+              ),
+              onRowTap: auth.isVeterinary
+                  ? (patient) =>
+                      context.push('/emr/pets/${patient.id}/timeline')
+                  : null,
+              columns: auth.isVeterinary
+                  ? const [
+                      TableColumnDef(
+                          label: 'Pet', flex: 1.2, cellBuilder: _petCell),
+                      TableColumnDef(
+                          label: 'Species', flex: 1, cellBuilder: _speciesCell),
+                      TableColumnDef(
+                          label: 'Breed', flex: 1.2, cellBuilder: _breedCell),
+                      TableColumnDef(
+                          label: 'Owner', flex: 1.5, cellBuilder: _ownerCell),
+                      TableColumnDef(
+                          label: 'Phone', flex: 1.2, cellBuilder: _phoneCell),
+                    ]
+                  : const [
+                      TableColumnDef(
+                          label: 'Patient',
+                          flex: 1.4,
+                          cellBuilder: _humanPatientCell),
+                      TableColumnDef(
+                          label: 'Gender', flex: 0.8, cellBuilder: _genderCell),
+                      TableColumnDef(
+                          label: 'Blood Group',
+                          flex: 0.8,
+                          cellBuilder: _bloodGroupCell),
+                      TableColumnDef(
+                          label: 'Responsible Party',
+                          flex: 1.5,
+                          cellBuilder: _ownerCell),
+                      TableColumnDef(
+                          label: 'Phone', flex: 1.2, cellBuilder: _phoneCell),
+                    ],
             ),
           ),
         ],
@@ -206,6 +265,25 @@ class _PatientListScreenState extends State<PatientListScreen> {
         style: const TextStyle(fontWeight: FontWeight.w600),
       );
 
+  static Widget _humanPatientCell(BuildContext context, PetSearchResult p) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+          if (p.patientNumber != null)
+            Text(p.patientNumber!,
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 11)),
+        ],
+      );
+
+  static Widget _genderCell(BuildContext context, PetSearchResult p) =>
+      Text(p.gender ?? '—');
+
+  static Widget _bloodGroupCell(BuildContext context, PetSearchResult p) =>
+      Text(p.bloodGroup ?? '—');
+
   static Widget _speciesCell(BuildContext context, PetSearchResult p) =>
       Text(p.species ?? '—');
 
@@ -216,7 +294,131 @@ class _PatientListScreenState extends State<PatientListScreen> {
       Text(p.customerName ?? '—');
 
   static Widget _phoneCell(BuildContext context, PetSearchResult p) =>
-      Text(p.customerPhone ?? '—', style: const TextStyle(color: AppTheme.textSecondary));
+      Text(p.phone ?? p.customerPhone ?? '—',
+          style: const TextStyle(color: AppTheme.textSecondary));
+}
+
+class _HumanPatientDialog extends StatefulWidget {
+  const _HumanPatientDialog({required this.customer});
+
+  final Customer customer;
+
+  @override
+  State<_HumanPatientDialog> createState() => _HumanPatientDialogState();
+}
+
+class _HumanPatientDialogState extends State<_HumanPatientDialog> {
+  final _name = TextEditingController();
+  final _phone = TextEditingController();
+  final _dob = TextEditingController();
+  String _gender = 'unknown';
+  String? _bloodGroup;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _dob.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_name.text.trim().isEmpty) {
+      AppMessenger.error(context, 'Patient name is required');
+      return;
+    }
+    Navigator.of(context).pop(<String, dynamic>{
+      'customer_id': widget.customer.id,
+      'name': _name.text.trim(),
+      'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
+      'dob': _dob.text.trim().isEmpty ? null : _dob.text.trim(),
+      'gender': _gender,
+      'blood_group': _bloodGroup,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Human Patient'),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _name,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Patient Name *'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _phone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Phone'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _dob,
+                keyboardType: TextInputType.datetime,
+                decoration: const InputDecoration(
+                  labelText: 'Date of Birth',
+                  hintText: 'YYYY-MM-DD',
+                ),
+              ),
+              const SizedBox(height: 12),
+              AppDropdownButtonFormField<String>(
+                value: _gender,
+                decoration: const InputDecoration(labelText: 'Gender'),
+                items: const [
+                  DropdownMenuItem(value: 'male', child: Text('Male')),
+                  DropdownMenuItem(value: 'female', child: Text('Female')),
+                  DropdownMenuItem(value: 'other', child: Text('Other')),
+                  DropdownMenuItem(value: 'unknown', child: Text('Unknown')),
+                ],
+                onChanged: (value) {
+                  if (value != null) setState(() => _gender = value);
+                },
+              ),
+              const SizedBox(height: 12),
+              AppDropdownButtonFormField<String?>(
+                value: _bloodGroup,
+                decoration: const InputDecoration(labelText: 'Blood Group'),
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('Not specified')),
+                  DropdownMenuItem(value: 'A+', child: Text('A+')),
+                  DropdownMenuItem(value: 'A-', child: Text('A-')),
+                  DropdownMenuItem(value: 'B+', child: Text('B+')),
+                  DropdownMenuItem(value: 'B-', child: Text('B-')),
+                  DropdownMenuItem(value: 'AB+', child: Text('AB+')),
+                  DropdownMenuItem(value: 'AB-', child: Text('AB-')),
+                  DropdownMenuItem(value: 'O+', child: Text('O+')),
+                  DropdownMenuItem(value: 'O-', child: Text('O-')),
+                ],
+                onChanged: (value) => setState(() => _bloodGroup = value),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Responsible party: ${widget.customer.name}',
+                  style: const TextStyle(color: AppTheme.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('Create Patient')),
+      ],
+    );
+  }
 }
 
 class _PickCustomerDialog extends StatefulWidget {
@@ -253,7 +455,8 @@ class _PickCustomerDialogState extends State<_PickCustomerDialog> {
       final services = context.read<AppServices>();
       final list = q.trim().length >= 2
           ? await services.customers.search(q.trim())
-          : (await services.customers.listPaginated(page: 1, perPage: 20)).items;
+          : (await services.customers.listPaginated(page: 1, perPage: 20))
+              .items;
       if (!mounted) return;
       setState(() {
         _results = list;
@@ -295,17 +498,21 @@ class _PickCustomerDialogState extends State<_PickCustomerDialog> {
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                      ? Center(child: Text(_error!, style: const TextStyle(color: AppTheme.danger)))
+                      ? Center(
+                          child: Text(_error!,
+                              style: const TextStyle(color: AppTheme.danger)))
                       : _results.isEmpty
                           ? const Center(child: Text('No customers found.'))
                           : ListView.separated(
                               itemCount: _results.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
                               itemBuilder: (context, i) {
                                 final c = _results[i];
                                 return ListTile(
                                   title: Text(c.name),
-                                  subtitle: Text(c.phone.isEmpty ? '—' : c.phone),
+                                  subtitle:
+                                      Text(c.phone.isEmpty ? '—' : c.phone),
                                   onTap: () => Navigator.of(context).pop(c),
                                 );
                               },

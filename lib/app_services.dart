@@ -8,12 +8,14 @@ import 'data/services/doctor_service.dart';
 import 'data/services/emr_service.dart';
 import 'data/services/expense_service.dart';
 import 'data/services/inventory_service.dart';
+import 'data/services/ipd_service.dart';
 import 'data/services/product_service.dart';
 import 'data/services/product_datasheet_service.dart';
 import 'data/services/purchase_service.dart';
 import 'data/services/reports_service.dart';
 import 'data/services/emr_master_data_service.dart';
 import 'data/services/settings_service.dart';
+import 'data/services/subscription_service.dart';
 
 /// Centralized API services (constructed once per app).
 class AppServices {
@@ -25,6 +27,7 @@ class AppServices {
         productDatasheets = ProductDatasheetService(api),
         customers = CustomerService(api),
         inventory = InventoryService(api),
+        ipd = IpdService(api),
         purchases = PurchaseService(api),
         purchaseReturns = PurchaseReturnService(api),
         suppliers = SupplierService(api),
@@ -36,6 +39,7 @@ class AppServices {
         shop = ShopService(api),
         branches = BranchService(api),
         users = UsersService(api),
+        subscription = SubscriptionService(api),
         deviceTokens = DeviceTokenService(api);
 
   final ApiClient api;
@@ -46,6 +50,7 @@ class AppServices {
   final ProductDatasheetService productDatasheets;
   final CustomerService customers;
   final InventoryService inventory;
+  final IpdService ipd;
   final PurchaseService purchases;
   final PurchaseReturnService purchaseReturns;
   final SupplierService suppliers;
@@ -57,5 +62,6 @@ class AppServices {
   final ShopService shop;
   final BranchService branches;
   final UsersService users;
+  final SubscriptionService subscription;
   final DeviceTokenService deviceTokens;
 }

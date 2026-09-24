@@ -63,7 +63,8 @@ class SettingsScreen extends StatelessWidget {
             Card(
               margin: const EdgeInsets.only(top: 8),
               child: ListTile(
-                leading: const Icon(Icons.shield_outlined, color: AppTheme.primary),
+                leading:
+                    const Icon(Icons.shield_outlined, color: AppTheme.primary),
                 title: const Text('Account Security',
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: const Text('Change your password and PIN'),
@@ -71,6 +72,20 @@ class SettingsScreen extends StatelessWidget {
                 onTap: () => context.go('/settings/security'),
               ),
             ),
+            if (context.watch<AuthSession>().isSuperAdmin)
+              Card(
+                margin: const EdgeInsets.only(top: 8),
+                child: ListTile(
+                  leading: const Icon(Icons.workspace_premium_outlined,
+                      color: AppTheme.primary),
+                  title: const Text('Subscription & Plans',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle:
+                      const Text('Current plan, features and upgrade options'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => context.go('/settings/subscription'),
+                ),
+              ),
             if (canManage) LoyaltySettingsSection(initial: loyalty),
             if (AppConfig.isCashierPlatform || AppConfig.usesLargeUiScale) ...[
               const PosDesktopSettingsSection(),
