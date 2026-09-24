@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../data/local/app_database.dart';
 import '../../data/models/user.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../app_config.dart';
@@ -166,6 +167,7 @@ class AuthSession extends ChangeNotifier {
     }
     _biometricEnabled = prefs.getBool(_kBiometricEnabledKey) ?? false;
     _isUnlocked = false;
+    await AppDatabase.useShop(_user?.shopId);
     notifyListeners();
   }
 
@@ -332,6 +334,7 @@ class AuthSession extends ChangeNotifier {
     _token = token;
     _currentBranchId = user.branchId;
     _isUnlocked = false;
+    await AppDatabase.useShop(user.shopId);
     await _secure.write(key: _kTokenKey, value: token);
     final prefs = await SharedPreferences.getInstance();
     if (user.branchId != null) {
@@ -367,6 +370,7 @@ class AuthSession extends ChangeNotifier {
     await prefs.remove(_kBranchIdKey);
     await ReceiptBranchStore.clear();
     EmrVisitCatalogCache.clear();
+    await AppDatabase.useShop(null);
     notifyListeners();
   }
 }

@@ -108,8 +108,9 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
         onTap: (data) => _pushService.handleRouterNavigation(_router, data),
       );
       _onAuthSessionChanged();
+      // Warm up after restore so the signed-in organization's database opens.
+      unawaited(AppDatabase.instance());
     });
-    unawaited(AppDatabase.instance());
   }
 
   /// Hot reload keeps the old [GoRouter] instance (routes registered at start).
