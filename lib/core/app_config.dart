@@ -9,7 +9,14 @@ class AppConfig {
 
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://api-maran.biapps.cloud/api/v1',
+    defaultValue: 'https://api-app26.smartmedicare.in/api/v1',
+  );
+
+  /// SmartMediCare web app (public pages such as shared invoices).
+  /// Override at build time: `--dart-define=WEB_APP_URL=https://host`
+  static const String webAppUrl = String.fromEnvironment(
+    'WEB_APP_URL',
+    defaultValue: 'https://app.smartmedicare.in',
   );
 
   /// Windows desktop auto-update check endpoint (no auth).

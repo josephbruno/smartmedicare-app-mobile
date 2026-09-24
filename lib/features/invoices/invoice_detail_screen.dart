@@ -6,6 +6,7 @@ import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/app_config.dart';
 import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/services/receipt_branch_store.dart';
@@ -239,7 +240,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       );
       return;
     }
-    final shareUrl = 'http://localhost:8001/share/invoice/$token';
+    final shareUrl = '${AppConfig.webAppUrl}/share/invoice/$token';
     await Clipboard.setData(ClipboardData(text: shareUrl));
     if (!mounted) return;
     AppMessenger.show(
