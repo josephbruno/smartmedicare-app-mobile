@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 
 import '../../../core/network/api_client.dart';
-import '../../../data/json_helpers.dart';
 import '../models/medical_record_model.dart';
 
 /// Service for medical records and EMR operations.

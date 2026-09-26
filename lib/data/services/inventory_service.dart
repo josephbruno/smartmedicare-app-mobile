@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 
 import '../../core/network/api_client.dart';
-import '../../core/network/api_exception.dart';
 import '../json_helpers.dart';
 import '../models/inventory.dart';
 import '../models/api_response.dart';

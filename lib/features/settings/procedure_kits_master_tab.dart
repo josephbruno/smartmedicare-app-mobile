@@ -379,7 +379,7 @@ class ProcedureKitsMasterTabState extends State<ProcedureKitsMasterTab> {
     try {
       final svc = context.read<AppServices>().emrMasterData;
       if (isEdit) {
-        await svc.updateProcedureKit(kit!.id, body);
+        await svc.updateProcedureKit(kit.id, body);
       } else {
         await svc.createProcedureKit(body);
       }

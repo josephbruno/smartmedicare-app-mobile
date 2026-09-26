@@ -10,6 +10,7 @@ import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
 import '../../data/models/product.dart';
+import '../subscription/plan_guard.dart';
 
 class ProductListScreen extends StatefulWidget {
   const ProductListScreen({super.key});
@@ -159,7 +160,13 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   ),
                   const SizedBox(width: 10),
                   FilledButton.icon(
-                    onPressed: () => context.go('/products/new'),
+                    // Plan: product limit (the Products screen itself needs Pharmacy & Inventory).
+                    onPressed: () async {
+                      if (await ensurePlanAllows(context, limitResource: 'products') &&
+                          context.mounted) {
+                        context.go('/products/new');
+                      }
+                    },
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text('New Product'),
                   ),

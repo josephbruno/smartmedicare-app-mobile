@@ -18,6 +18,7 @@ class ShopLite {
     this.clinicType = 'veterinary',
     this.facilityType = 'clinic',
     this.capabilities = const [],
+    this.lockedCapabilities = const [],
     this.subscription,
   });
 
@@ -36,10 +37,16 @@ class ShopLite {
   final String? gstin;
   final String clinicType;
   final String facilityType;
+  /// Effective capabilities: clinic type ∩ subscription plan modules.
   final List<String> capabilities;
+
+  /// Allowed for this clinic type but not in the plan → show "Upgrade".
+  final List<String> lockedCapabilities;
   final SubscriptionInfo? subscription;
 
   bool hasCapability(String capability) => capabilities.contains(capability);
+
+  bool isPlanLocked(String capability) => lockedCapabilities.contains(capability);
 
   String get formattedAddress {
     final parts = [address, city, state, pincode]
@@ -73,6 +80,10 @@ class ShopLite {
               ?.map((item) => item.toString())
               .toList() ??
           const [],
+      lockedCapabilities: (j['locked_capabilities'] as List?)
+              ?.map((item) => item.toString())
+              .toList() ??
+          const [],
       subscription: j['subscription'] is Map
           ? SubscriptionInfo.fromJson(
               Map<String, dynamic>.from(j['subscription'] as Map))
@@ -97,6 +108,7 @@ class ShopLite {
         'clinic_type': clinicType,
         'facility_type': facilityType,
         'capabilities': capabilities,
+        'locked_capabilities': lockedCapabilities,
         if (subscription != null) 'subscription': subscription!.toJson(),
       };
 }

@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app_services.dart';
+import '../../core/router/plan_access.dart';
 import '../../core/app_config.dart';
 import '../../core/navigation/shell_back.dart';
 import '../../core/responsive/breakpoints.dart';
@@ -1143,9 +1144,13 @@ List<_MenuItem> _menuItems(AuthSession auth) {
   final result = <_MenuItem>[];
 
   void addSection(String title, List<_MenuItem> items) {
-    if (items.isEmpty) return;
+    // Hide modules outside the subscription plan (same path table as the router).
+    final visible = items
+        .where((i) => planCapabilitiesForPath(i.path ?? '').every(auth.hasCapability))
+        .toList();
+    if (visible.isEmpty) return;
     result.add(_MenuItem.header(title));
-    result.addAll(items);
+    result.addAll(visible);
   }
 
   if (auth.hasRole('doctor')) {

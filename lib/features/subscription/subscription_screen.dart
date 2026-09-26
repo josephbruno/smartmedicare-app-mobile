@@ -57,8 +57,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         _ => AppTheme.danger,
       };
 
-  String _limit(int? v) => v == null ? '—' : (v < 0 ? 'Unlimited' : '$v');
-
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -213,16 +211,28 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                             style: TextStyle(color: AppTheme.textSecondary))
                       else
                         ...current.features.map((f) => _FeatureRow(f)),
+                      if (s.modules.isNotEmpty) ...[
+                        const Divider(height: 24),
+                        const Text('Modules',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 6),
+                        ...([...s.modules]
+                              ..sort((a, b) => (b.included ? 1 : 0) - (a.included ? 1 : 0)))
+                            .map((m) => _ModuleRow(m)),
+                      ],
                       const Divider(height: 24),
-                      _Fact(
+                      _UsageRow(
                           label: 'Branches',
-                          value: _limit(current?.maxBranches ?? s.maxBranches)),
-                      _Fact(
+                          used: s.usage['branches'],
+                          max: current?.maxBranches ?? s.maxBranches),
+                      _UsageRow(
                           label: 'Users',
-                          value: _limit(current?.maxUsers ?? s.maxUsers)),
-                      _Fact(
+                          used: s.usage['users'],
+                          max: current?.maxUsers ?? s.maxUsers),
+                      _UsageRow(
                           label: 'Products',
-                          value: _limit(current?.maxProducts ?? s.maxProducts)),
+                          used: s.usage['products'],
+                          max: current?.maxProducts ?? s.maxProducts),
                     ],
                   ),
                 ),
@@ -386,6 +396,98 @@ class _Fact extends StatelessWidget {
               style: TextStyle(
                   fontWeight: FontWeight.w700,
                   color: danger ? AppTheme.danger : AppTheme.textPrimary)),
+        ],
+      ),
+    );
+  }
+}
+
+/// A plan module: ✓ included or 🔒 needs an upgrade.
+class _ModuleRow extends StatelessWidget {
+  const _ModuleRow(this.module);
+
+  final PlanModuleInfo module;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = module.included;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Icon(on ? Icons.check_circle : Icons.lock_outline,
+              size: 18, color: on ? AppTheme.accent : AppTheme.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(module.label,
+                style: TextStyle(color: on ? null : AppTheme.textSecondary)),
+          ),
+          if (!on)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Text('Upgrade',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "2 of 3" with a bar; unlimited plans show just the count.
+class _UsageRow extends StatelessWidget {
+  const _UsageRow({required this.label, this.used, this.max});
+
+  final String label;
+  final int? used;
+  final int? max;
+
+  @override
+  Widget build(BuildContext context) {
+    final unlimited = max == null || max! < 0;
+    final pct = (!unlimited && used != null)
+        ? (max == 0 ? 1.0 : (used! / max!).clamp(0.0, 1.0))
+        : null;
+    final color = pct == null
+        ? AppTheme.accent
+        : pct >= 1
+            ? AppTheme.danger
+            : pct >= 0.8
+                ? AppTheme.warning
+                : AppTheme.accent;
+    final value = unlimited
+        ? (used != null ? '$used · Unlimited' : 'Unlimited')
+        : (used != null ? '$used of $max' : '$max');
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            Expanded(
+                child: Text(label,
+                    style: const TextStyle(color: AppTheme.textSecondary))),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ]),
+          if (pct != null) ...[
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: pct,
+                minHeight: 6,
+                backgroundColor: const Color(0xFFEEF2F7),
+                color: color,
+              ),
+            ),
+          ],
         ],
       ),
     );

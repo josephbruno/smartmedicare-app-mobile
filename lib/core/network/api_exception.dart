@@ -1,8 +1,14 @@
 class ApiException implements Exception {
-  ApiException(this.message, {this.statusCode, this.errors});
+  ApiException(this.message, {this.statusCode, this.errors, this.code});
 
   final String message;
   final int? statusCode;
+
+  /// Machine-readable reason from the API, e.g. PLAN_UPGRADE_REQUIRED, PLAN_LIMIT_REACHED.
+  final String? code;
+
+  bool get isPlanError =>
+      code == 'PLAN_UPGRADE_REQUIRED' || code == 'PLAN_LIMIT_REACHED';
   final Map<String, List<String>>? errors;
 
   /// Prefers the first field-level validation error when present.

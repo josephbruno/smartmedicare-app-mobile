@@ -1,3 +1,31 @@
+/// A plan module (config/plan_modules.php) and whether this organization's plan has it.
+class PlanModuleInfo {
+  const PlanModuleInfo({
+    required this.key,
+    required this.label,
+    this.core = false,
+    this.included = false,
+    this.capabilities = const [],
+  });
+
+  final String key;
+  final String label;
+  final bool core;
+  final bool included;
+  final List<String> capabilities;
+
+  factory PlanModuleInfo.fromJson(Map<String, dynamic> j) => PlanModuleInfo(
+        key: j['key']?.toString() ?? '',
+        label: j['label']?.toString() ?? '',
+        core: j['core'] == true,
+        included: j['included'] == true,
+        capabilities: (j['capabilities'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      );
+
+  Map<String, dynamic> toJson() =>
+      {'key': key, 'label': label, 'core': core, 'included': included, 'capabilities': capabilities};
+}
+
 /// The organization's SmartMediCare plan and validity (GET /subscription, or
 /// `shop.subscription` on /auth/me).
 class SubscriptionInfo {
@@ -17,6 +45,9 @@ class SubscriptionInfo {
     this.maxUsers,
     this.maxProducts,
     this.canManage,
+    this.modules = const [],
+    this.usage = const {},
+    this.limits = const {},
   });
 
   /// Raw status: trial | active | expired | cancelled | suspended.
@@ -39,6 +70,22 @@ class SubscriptionInfo {
 
   /// Only present on GET /subscription.
   final bool? canManage;
+
+  /// Every plan module, flagged by whether the plan includes it (GET /subscription).
+  final List<PlanModuleInfo> modules;
+
+  /// Current counts: users / branches / products (GET /subscription).
+  final Map<String, int> usage;
+
+  /// Plan limits; a missing or null value means unlimited.
+  final Map<String, int?> limits;
+
+  /// True when `resource` (users / branches / products) is at its plan limit.
+  bool atLimit(String resource) {
+    final max = limits[resource];
+    final used = usage[resource];
+    return max != null && used != null && used >= max;
+  }
 
   /// State recomputed from the dates, since a cached session can be days old.
   String get liveState {
@@ -103,6 +150,17 @@ class SubscriptionInfo {
       maxUsers: _int(plan?['max_users']),
       maxProducts: _int(plan?['max_products']),
       canManage: j['can_manage'] as bool?,
+      modules: (j['modules'] as List?)
+              ?.whereType<Map>()
+              .map((m) => PlanModuleInfo.fromJson(Map<String, dynamic>.from(m)))
+              .toList() ??
+          const [],
+      usage: j['usage'] is Map
+          ? (j['usage'] as Map).map((k, v) => MapEntry(k.toString(), (v as num?)?.toInt() ?? 0))
+          : const {},
+      limits: j['limits'] is Map
+          ? (j['limits'] as Map).map((k, v) => MapEntry(k.toString(), (v as num?)?.toInt()))
+          : const {},
     );
   }
 
@@ -125,5 +183,8 @@ class SubscriptionInfo {
             'max_products': maxProducts,
           },
         if (canManage != null) 'can_manage': canManage,
+        if (modules.isNotEmpty) 'modules': modules.map((m) => m.toJson()).toList(),
+        if (usage.isNotEmpty) 'usage': usage,
+        if (limits.isNotEmpty) 'limits': limits,
       };
 }

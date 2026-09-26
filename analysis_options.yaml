@@ -9,6 +9,13 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    # Firebase is intentionally not a dependency (Windows SDK is ABI-incompatible with
+    # VS 2022 17.12 — see core/notifications/push_notification_service.dart). This
+    # generated config is kept for when FCM is re-enabled, but nothing imports it.
+    - lib/firebase_options.dart
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

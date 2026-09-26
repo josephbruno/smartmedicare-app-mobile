@@ -47,6 +47,7 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
   late final ApiClient _api;
   late final AppServices _services;
   late GoRouter _router;
+  String? _planVersion;
   late final AuthRepository _authRepository;
   late final OfflineInvoiceQueue _offlineQueue;
   late final ProductLocalDao _productDao;
@@ -75,6 +76,29 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
       },
       onSubscriptionExpired: () {
         _router.go('/subscription-expired');
+      },
+      // Module not in the plan / plan limit reached: explain, with a way to the plans.
+      onPlanError: (code, message) {
+        final messenger = AppMessenger.rootKey.currentState;
+        if (messenger == null) return;
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 6),
+          action: _session.isSuperAdmin
+              ? SnackBarAction(
+                  label: 'View plans',
+                  onPressed: () => _router.go('/settings/subscription'),
+                )
+              : null,
+        ));
+      },
+      // Plan changed (upgrade, or modules edited in the CMS) → refresh menus and access.
+      onPlanVersion: (version) {
+        final previous = _planVersion;
+        _planVersion = version;
+        if (previous != null && previous != version) _session.refreshMe();
       },
     );
     _services = AppServices(_api);

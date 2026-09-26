@@ -103,7 +103,7 @@ Future<bool> showPosCheckoutDialog({
             }
 
             bool hasRegisteredCustomer() =>
-                billingCustomer != null && billingCustomer!.id > 0;
+                billingCustomer != null && billingCustomer.id > 0;
 
             int loyaltyPtsRequested() {
               if (!hasRegisteredCustomer()) return 0;
@@ -215,7 +215,7 @@ Future<bool> showPosCheckoutDialog({
               if (!hasRegisteredCustomer()) return null;
               final limit = billingCustomer!.creditLimit ?? 0;
               if (limit <= 0) return null;
-              final outstanding = billingCustomer!.outstandingBalance ?? 0;
+              final outstanding = billingCustomer.outstandingBalance ?? 0;
               final unpaid = paymentMode == 'credit'
                   ? billDue()
                   : (paymentMode == 'cash'

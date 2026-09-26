@@ -63,7 +63,7 @@ class PinFullscreenLayout extends StatelessWidget {
               pinEntry,
               if (footer != null) ...[
                 SizedBox(height: isWideDesktop ? 24.0 : 20.0),
-                footer!,
+                footer,
               ],
             ],
           ),
@@ -99,7 +99,7 @@ class PinFullscreenLayout extends StatelessWidget {
         pinEntry,
         if (footer != null) ...[
           SizedBox(height: spaceBetweenElements > 24 ? 20.0 : 16.0),
-          footer!,
+          footer,
         ],
       ],
     );

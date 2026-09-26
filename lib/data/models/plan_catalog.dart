@@ -12,6 +12,7 @@ class PlanCatalogItem {
     this.maxBranches,
     this.maxUsers,
     this.maxProducts,
+    this.modules = const [],
   });
 
   final String slug;
@@ -25,6 +26,9 @@ class PlanCatalogItem {
   final int? maxBranches;
   final int? maxUsers;
   final int? maxProducts;
+
+  /// Module keys the plan includes (lets the upgrade screen name the plans that unlock one).
+  final List<String> modules;
 
   int priceFor(String cycle) => cycle == 'yearly' ? priceYearly : priceMonthly;
 
@@ -41,6 +45,8 @@ class PlanCatalogItem {
         maxBranches: (j['max_branches'] as num?)?.toInt(),
         maxUsers: (j['max_users'] as num?)?.toInt(),
         maxProducts: (j['max_products'] as num?)?.toInt(),
+        modules: (j['modules'] as List?)?.map((e) => e.toString()).toList() ??
+            const [],
       );
 }
 

@@ -80,6 +80,10 @@ class AuthSession extends ChangeNotifier {
   bool hasCapability(String capability) =>
       currentShop?.hasCapability(capability) ?? false;
 
+  /// The clinic type allows it but the subscription plan doesn't include it.
+  bool isPlanLocked(String capability) =>
+      currentShop?.isPlanLocked(capability) ?? false;
+
   String get patientLabel => isVeterinary ? 'Pet / Patient' : 'Patient';
 
   String get patientsLabel => isVeterinary ? 'Pets / Patients' : 'Patients';

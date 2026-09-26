@@ -15,6 +15,7 @@ import '../../core/widgets/table_column_def.dart';
 import '../../data/models/shop.dart';
 import '../../data/models/user.dart';
 import '../../core/widgets/app_dropdown.dart';
+import '../subscription/plan_guard.dart';
 
 String? _validateOptionalPinPair(
   String pin,
@@ -333,7 +334,15 @@ class _UsersScreenState extends State<UsersScreen> {
                 ),
                 if (canCreate)
                   FilledButton.icon(
-                    onPressed: () => _openForm(),
+                    // Plan: Staff & User Management module + user limit.
+                    onPressed: () async {
+                      if (await ensurePlanAllows(context,
+                          capability: 'staff_management',
+                          capabilityLabel: 'Adding users (Staff & User Management)',
+                          limitResource: 'users')) {
+                        _openForm();
+                      }
+                    },
                     icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
                     label: const Text('Add User'),
                     style: FilledButton.styleFrom(

@@ -76,6 +76,8 @@ import '../../features/settings/usb_printer_settings_screen.dart';
 import '../../features/settings/users_screen.dart';
 import '../../features/shell/app_shell.dart';
 import '../../features/subscription/subscription_screen.dart';
+import '../../features/subscription/upgrade_required_screen.dart';
+import 'plan_access.dart';
 
 GoRouter createAppRouter({
   required AuthSession auth,
@@ -84,6 +86,15 @@ GoRouter createAppRouter({
   String? permissionRedirect(String path) {
     final denied = auth.homeRoute;
     bool need(String perm) => !auth.hasPermission(perm);
+
+    // Subscription-plan modules (capabilities = clinic type ∩ plan). A module the plan
+    // doesn't include opens the Upgrade screen; its data is kept.
+    final required = planCapabilitiesForPath(path);
+    for (final cap in required) {
+      if (!auth.hasCapability(cap)) {
+        return auth.isPlanLocked(cap) ? '/upgrade?capability=$cap' : denied;
+      }
+    }
 
     if (path.startsWith('/patients') && !auth.hasCapability('patients')) {
       return denied;
@@ -365,6 +376,13 @@ GoRouter createAppRouter({
         observers: [appShellRouteObserver],
         builder: (context, state, child) => AppShell(child: child),
         routes: [
+          GoRoute(
+            path: '/upgrade',
+            name: 'UpgradeRequired',
+            builder: (c, s) => UpgradeRequiredScreen(
+              capability: s.uri.queryParameters['capability'] ?? '',
+            ),
+          ),
           GoRoute(
             path: '/dashboard',
             name: 'Dashboard',

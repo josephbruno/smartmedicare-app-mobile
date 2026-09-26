@@ -13,7 +13,6 @@ import '../../core/services/receipt_branch_store.dart';
 import '../../core/services/thermal_printer_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/models/customer.dart';
 import '../../data/models/invoice.dart';
 import '../reports/report_formatters.dart';
 

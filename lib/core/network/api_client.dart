@@ -10,6 +10,12 @@ typedef BranchIdGetter = int? Function();
 typedef SuperAdminGetter = bool Function();
 typedef VoidCallback = void Function();
 
+/// Called for 403 PLAN_UPGRADE_REQUIRED / 422 PLAN_LIMIT_REACHED with the API's message.
+typedef PlanErrorCallback = void Function(String code, String message);
+
+/// Called with the X-Plan-Version response header (changes on upgrade / CMS module edits).
+typedef PlanVersionCallback = void Function(String version);
+
 /// HTTP client aligned with [frontend/src/api/client.ts].
 class ApiClient {
   ApiClient({
@@ -18,8 +24,12 @@ class ApiClient {
     required SuperAdminGetter isSuperAdmin,
     required VoidCallback onUnauthorized,
     required VoidCallback onSubscriptionExpired,
+    PlanErrorCallback? onPlanError,
+    PlanVersionCallback? onPlanVersion,
     String? baseUrl,
-  })  : _getToken = getToken,
+  })  : _onPlanError = onPlanError,
+        _onPlanVersion = onPlanVersion,
+        _getToken = getToken,
         _getBranchId = getBranchId,
         _isSuperAdmin = isSuperAdmin,
         _onUnauthorized = onUnauthorized,
@@ -51,12 +61,25 @@ class ApiClient {
           }
           return handler.next(options);
         },
+        onResponse: (response, handler) {
+          final version = response.headers.value('x-plan-version');
+          if (version != null && version.isNotEmpty) _onPlanVersion?.call(version);
+          return handler.next(response);
+        },
         onError: (e, handler) {
           final status = e.response?.statusCode;
           if (status == 401) {
             _onUnauthorized();
           } else if (status == 402) {
             _onSubscriptionExpired();
+          } else if (status == 403 || status == 422) {
+            final data = e.response?.data;
+            if (data is Map) {
+              final code = data['code']?.toString();
+              if (code == 'PLAN_UPGRADE_REQUIRED' || code == 'PLAN_LIMIT_REACHED') {
+                _onPlanError?.call(code!, data['message']?.toString() ?? 'Not included in your current plan.');
+              }
+            }
           }
           return handler.next(e);
         },
@@ -71,6 +94,8 @@ class ApiClient {
   final SuperAdminGetter _isSuperAdmin;
   final VoidCallback _onUnauthorized;
   final VoidCallback _onSubscriptionExpired;
+  final PlanErrorCallback? _onPlanError;
+  final PlanVersionCallback? _onPlanVersion;
 
   Future<Response<T>> get<T>(
     String path, {
@@ -143,8 +168,18 @@ class ApiClient {
       }
     }
 
+    // Rate limited (login / PIN brute-force protection).
+    if (status == 429) {
+      final retry = int.tryParse(e.response?.headers.value('retry-after') ?? '') ?? 60;
+      final wait = retry >= 60
+          ? '${(retry / 60).ceil()} minute${retry >= 120 ? 's' : ''}'
+          : '$retry seconds';
+      msg = 'Too many attempts. Please wait $wait and try again.';
+    }
+
     throw ApiException(
       msg,
+      code: data is Map ? data['code']?.toString() : null,
       statusCode: e.response?.statusCode,
       errors: errors,
     );

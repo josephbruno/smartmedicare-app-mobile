@@ -3457,6 +3457,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             maxLines: 3,
             decoration: const InputDecoration(labelText: 'Clinical notes'),
           ),
+          // Vaccinations given at this visit (veterinary clinics).
+          if (context.read<AuthSession>().hasCapability('animal_vaccinations')) ...[
+            const SizedBox(height: 20),
+            _buildVaccinationSection(),
+          ],
           const SizedBox(height: 20),
           _formSectionHeader('Adv to Review on', Icons.event_outlined),
           const SizedBox(height: 6),

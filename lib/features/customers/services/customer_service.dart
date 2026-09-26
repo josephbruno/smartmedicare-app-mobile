@@ -62,7 +62,7 @@ class CustomerService {
       final data = response.data as Map<String, dynamic>;
       final items = (data['data'] ?? data['customers'] ?? []) as List;
       return items.map((e) => Customer.fromJson(Map<String, dynamic>.from(e))).toList();
-    } on DioException catch (e) {
+    } on DioException {
       // Fallback to client-side search if endpoint not available
       return _clientSideSearch(query, filters: filters);
     }

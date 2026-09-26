@@ -34,17 +34,56 @@ class GstSlabBreakdown {
 class GstUtils {
   static const gstRates = [0, 5, 12, 18, 28];
 
+  /// Round to paise, half away from zero — matches PHP round($x, 2) on the backend.
+  /// `(x * 100).round() / 100` is wrong for 4.975 (stored as 4.97499…); the tiny
+  /// bias absorbs that binary error without affecting real 2-decimal amounts.
+  static double roundMoney(double value) {
+    if (!value.isFinite) return 0;
+    final sign = value < 0 ? -1 : 1;
+    return sign * ((value.abs() * 100) + 1e-7).round() / 100;
+  }
+
+  /// Bill-level discount applied BEFORE tax (same rule as the backend's
+  /// InvoiceService::calculateTotals): split by taxable value, last line takes the
+  /// rounding remainder, GST re-computed on each line's reduced taxable value.
+  static List<({double taxable, double cgst, double sgst})> taxLinesAfterDiscount(
+    List<({double taxable, double cgstRate, double sgstRate, double cgst, double sgst})> lines,
+    double discountAmount,
+  ) {
+    final subtotal = roundMoney(lines.fold(0.0, (s, l) => s + l.taxable));
+    if (discountAmount <= 0 || subtotal <= 0) {
+      return [for (final l in lines) (taxable: l.taxable, cgst: l.cgst, sgst: l.sgst)];
+    }
+    var remaining = roundMoney(discountAmount);
+    final out = <({double taxable, double cgst, double sgst})>[];
+    for (var i = 0; i < lines.length; i++) {
+      final l = lines[i];
+      var share = i == lines.length - 1
+          ? remaining
+          : roundMoney(discountAmount * l.taxable / subtotal);
+      if (share > l.taxable) share = l.taxable;
+      remaining = roundMoney(remaining - share);
+      final taxable = roundMoney(l.taxable - share);
+      out.add((
+        taxable: taxable,
+        cgst: roundMoney(taxable * l.cgstRate / 100),
+        sgst: roundMoney(taxable * l.sgstRate / 100),
+      ));
+    }
+    return out;
+  }
+
   static double calculateGST(double taxableAmount, double gstRate) {
-    return (taxableAmount * gstRate / 100 * 100).round() / 100;
+    return roundMoney(taxableAmount * gstRate / 100);
   }
 
   static ({double cgst, double sgst}) splitGST(double taxableAmount, double gstRate) {
-    final half = (taxableAmount * (gstRate / 2) / 100 * 100).round() / 100;
+    final half = roundMoney(taxableAmount * (gstRate / 2) / 100);
     return (cgst: half, sgst: half);
   }
 
   static double getTaxableFromInclusive(double price, double gstRate) {
-    return ((price / (1 + gstRate / 100)) * 100).round() / 100;
+    return roundMoney(price / (1 + gstRate / 100));
   }
 
   static String formatCurrency(double amount, {String symbol = '₹'}) {

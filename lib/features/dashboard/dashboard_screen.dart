@@ -15,6 +15,7 @@ import 'dashboard_view_model.dart';
 import 'widgets/dashboard_widgets.dart';
 import 'widgets/branch_manager_dashboard.dart';
 import 'widgets/role_dashboard_sections.dart';
+import '../subscription/plan_guard.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -435,7 +436,11 @@ class _ManagerDashboardContent extends StatelessWidget {
         label: 'Add Product',
         subtitle: 'Add to inventory',
         color: AppTheme.accent,
-        onTap: () => context.go('/products/new'),
+        onTap: () async {
+          if (await ensurePlanAllows(context, limitResource: 'products') && context.mounted) {
+            context.go('/products/new');
+          }
+        },
       ));
     }
     if (auth.hasPermission(AppPermissions.inventoryTransfer)) {

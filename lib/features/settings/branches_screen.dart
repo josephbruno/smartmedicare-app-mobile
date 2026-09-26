@@ -11,6 +11,7 @@ import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../data/models/shop.dart';
+import '../subscription/plan_guard.dart';
 
 /// Matches frontend [BranchManagementPage.vue]: card grid + add/edit form.
 class BranchesScreen extends StatefulWidget {
@@ -174,7 +175,15 @@ class _BranchesScreenState extends State<BranchesScreen> {
                           if (canManage) ...[
                             const SizedBox(width: 12),
                             FilledButton(
-                              onPressed: () => _openForm(),
+                              // Plan: Multi-branch module + branch limit.
+                              onPressed: () async {
+                                if (await ensurePlanAllows(context,
+                                    capability: 'multi_branch',
+                                    capabilityLabel: 'Multi-branch',
+                                    limitResource: 'branches')) {
+                                  _openForm();
+                                }
+                              },
                               child: const Text('+ Add Branch'),
                             ),
                           ],

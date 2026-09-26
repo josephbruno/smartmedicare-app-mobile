@@ -33,25 +33,41 @@ class PosCartNotifier extends ChangeNotifier {
 
   double get discountAmount {
     if (discountType == 1) {
-      return (subtotal * discountValue / 100 * 100).round() / 100;
+      return GstUtils.roundMoney(subtotal * discountValue.clamp(0, 100) / 100);
     }
-    if (discountType == 2) return discountValue;
+    if (discountType == 2) return GstUtils.roundMoney(discountValue.clamp(0, subtotal));
     return 0;
   }
 
   double get taxableAfterDiscount => subtotal - discountAmount;
 
+  /// Per-line taxable/GST after the bill discount — discount applies before tax.
+  List<({double taxable, double cgst, double sgst})> get taxLines =>
+      GstUtils.taxLinesAfterDiscount(
+        [
+          for (final i in items)
+            (
+              taxable: i.taxableAmount,
+              cgstRate: i.cgstRate,
+              sgstRate: i.sgstRate,
+              cgst: i.cgstAmount,
+              sgst: i.sgstAmount,
+            ),
+        ],
+        discountAmount,
+      );
+
   double get totalGst =>
-      items.fold(0.0, (s, i) => s + i.cgstAmount + i.sgstAmount);
+      GstUtils.roundMoney(taxLines.fold(0.0, (s, l) => s + l.cgst + l.sgst));
 
   double get grandTotal {
-    final raw = taxableAfterDiscount + totalGst;
+    final raw = GstUtils.roundMoney(taxableAfterDiscount + totalGst);
     return raw.roundToDouble();
   }
 
   double get roundOff {
-    final raw = taxableAfterDiscount + totalGst;
-    return ((grandTotal - raw) * 100).round() / 100;
+    final raw = GstUtils.roundMoney(taxableAfterDiscount + totalGst);
+    return GstUtils.roundMoney(grandTotal - raw);
   }
 
   double get totalPaid =>
@@ -185,7 +201,7 @@ class PosCartNotifier extends ChangeNotifier {
     final unitPriceTaxable = gstType == 'inclusive'
         ? GstUtils.getTaxableFromInclusive(unitPrice, gstRate)
         : unitPrice;
-    final taxable = (unitPriceTaxable * cappedQty * 100).round() / 100;
+    final taxable = GstUtils.roundMoney(unitPriceTaxable * cappedQty);
     final gst = GstUtils.calculateGST(taxable, gstRate);
     final lineTotal = gstType == 'inclusive'
         ? unitPrice * cappedQty
@@ -250,7 +266,7 @@ class PosCartNotifier extends ChangeNotifier {
     final gst = GstUtils.calculateGST(taxable, item.gstRate);
     final grossLine = item.unitPrice * capped;
     final lineTotal = gstType == 'inclusive'
-        ? (grossLine * (1 - item.discountPercent / 100) * 100).round() / 100
+        ? GstUtils.roundMoney(grossLine * (1 - item.discountPercent / 100))
         : taxable + gst;
 
     item.quantity = capped;
