@@ -22,7 +22,8 @@ class PosDesktopSettingsSection extends StatefulWidget {
   final bool printerFocused;
 
   @override
-  State<PosDesktopSettingsSection> createState() => _PosDesktopSettingsSectionState();
+  State<PosDesktopSettingsSection> createState() =>
+      _PosDesktopSettingsSectionState();
 }
 
 class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
@@ -98,9 +99,7 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
     await ReceiptBranchStore.sync(branches: services.branches, auth: auth);
     final header = await ReceiptBranchStore.resolveForPrint(auth);
     final sample = await ThermalPrinterService.printSampleBill(
-      shopName: header.name.isEmpty
-          ? 'Maran Veterinary Hospital'
-          : header.name,
+      shopName: header.name.isEmpty ? 'Maran Veterinary Hospital' : header.name,
       companyName: header.shopName,
       shopPhone: header.phone,
       shopGstin: header.gstin,
@@ -242,7 +241,10 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                               sample.commands.trimRight(),
                               style: const TextStyle(
                                 fontFamily: 'Consolas',
-                                fontFamilyFallback: ['Courier New', 'monospace'],
+                                fontFamilyFallback: [
+                                  'Courier New',
+                                  'monospace'
+                                ],
                                 fontSize: 12,
                                 height: 1.4,
                                 color: Color(0xFFE2E8F0),
@@ -283,7 +285,8 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                                 )
                               : sample.language == PrintLanguage.escpos
                                   ? ThermalPrintResult.failed
-                                  : await ThermalPrinterService.printTsplCommands(
+                                  : await ThermalPrinterService
+                                      .printTsplCommands(
                                       sample.commands,
                                     );
                           if (ctx.mounted) {
@@ -351,24 +354,83 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
+      clipBehavior: Clip.antiAlias,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFDCE9F8)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ListTile(
-            leading: Icon(
-              printerOnly ? Icons.print_outlined : Icons.desktop_windows_outlined,
-              color: AppTheme.primary,
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFF5FAFF), Color(0xFFEAF4FF)],
+              ),
             ),
-            title: Text(
-              printerOnly ? 'USB Thermal Printer' : 'Desktop & POS',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(
-              printerOnly
-                  ? (_isEscPos
-                      ? 'Local Retsol RTP 80 · ESC/POS · 80 mm — configured on this PC'
-                      : 'Local XPrinter · TSPL · 203 dpi — configured on this PC')
-                  : 'Receipt printing and notifications',
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(11),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFDCEEFF),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    printerOnly
+                        ? Icons.print_rounded
+                        : Icons.desktop_windows_rounded,
+                    color: AppTheme.primary,
+                    size: 25,
+                  ),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        printerOnly ? 'USB Thermal Printer' : 'Desktop & POS',
+                        style: const TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        printerOnly
+                            ? (_isEscPos
+                                ? 'Used for POS bills (ESC/POS · RTP 80)'
+                                : 'Used for POS bills (TSPL · XPrinter)')
+                            : 'Receipt printing and notifications',
+                        style: const TextStyle(
+                            fontSize: 13, color: AppTheme.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDDF8E7),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle,
+                          size: 15, color: AppTheme.accent),
+                      SizedBox(width: 5),
+                      Text('Connected',
+                          style: TextStyle(
+                              color: Color(0xFF15803D),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           if (!printerOnly) ...[
@@ -398,8 +460,10 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
             if (!printerOnly) const Divider(height: 1),
             if (!printerOnly)
               ListTile(
-                leading: const Icon(Icons.print_outlined, color: AppTheme.primary),
-                title: const Text('USB thermal printer', style: TextStyle(fontWeight: FontWeight.w700)),
+                leading:
+                    const Icon(Icons.print_outlined, color: AppTheme.primary),
+                title: const Text('USB thermal printer',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: Text(
                   _isEscPos
                       ? 'Retsol RTP 80 ESC/POS (80 mm) installed on this computer'
@@ -436,7 +500,10 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                 child: Text(
                   'Install the Retsol RTP 80 in Windows as Generic / Text Only (RAW). '
                   'GDI drivers accept the job then never print.',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.35),
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                      height: 1.35),
                 ),
               ),
             SwitchListTile(
@@ -455,7 +522,8 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
             if (printerOnly)
               SwitchListTile(
                 title: const Text('Auto-print receipt after checkout'),
-                subtitle: const Text('Prints immediately to the configured USB printer'),
+                subtitle: const Text(
+                    'Prints immediately to the configured USB printer'),
                 value: _autoPrint,
                 onChanged: (v) async {
                   await DesktopPrefs.setAutoPrintReceipt(v);
@@ -485,9 +553,10 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                           color: _printerName.isNotEmpty && _printers.isNotEmpty
                               ? AppTheme.accent
                               : AppTheme.textSecondary,
-                          fontWeight: _printerName.isNotEmpty && _printers.isNotEmpty
-                              ? FontWeight.w600
-                              : FontWeight.w400,
+                          fontWeight:
+                              _printerName.isNotEmpty && _printers.isNotEmpty
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                           height: 1.3,
                         ),
                       ),
@@ -520,7 +589,8 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Paper width', style: TextStyle(fontWeight: FontWeight.w600)),
+                title: const Text('Paper width',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text(
                   _isEscPos
                       ? '80 mm roll · ESC/POS raster · 203 dpi'
@@ -546,7 +616,9 @@ class _PosDesktopSettingsSectionState extends State<PosDesktopSettingsSection> {
                 label: Text(
                   _testing
                       ? 'Printing…'
-                      : (_isEscPos ? 'Test print (ESC/POS)' : 'Test print (TSPL)'),
+                      : (_isEscPos
+                          ? 'Test print (ESC/POS)'
+                          : 'Test print (TSPL)'),
                 ),
               ),
             ),

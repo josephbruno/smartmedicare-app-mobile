@@ -11,12 +11,14 @@ class PinEntryWithKeypad extends StatefulWidget {
     super.key,
     required this.onCompleted,
     this.enabled = true,
+    this.loading = false,
     this.obscure = true,
     this.shakeTrigger = 0,
   });
 
   final ValueChanged<String> onCompleted;
   final bool enabled;
+  final bool loading;
   final bool obscure;
   final int shakeTrigger;
 
@@ -48,7 +50,8 @@ class PinEntryWithKeypadState extends State<PinEntryWithKeypad>
       TweenSequenceItem(tween: Tween(begin: -10.0, end: 10.0), weight: 2),
       TweenSequenceItem(tween: Tween(begin: 10.0, end: -8.0), weight: 2),
       TweenSequenceItem(tween: Tween(begin: -8.0, end: 0.0), weight: 1),
-    ]).animate(CurvedAnimation(parent: _shakeController, curve: Curves.easeOut));
+    ]).animate(
+        CurvedAnimation(parent: _shakeController, curve: Curves.easeOut));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
@@ -82,7 +85,9 @@ class PinEntryWithKeypadState extends State<PinEntryWithKeypad>
     // Try to use the character property first
     if (event.character != null) {
       final char = event.character!;
-      if (char.runes.length == 1 && char.codeUnitAt(0) >= 48 && char.codeUnitAt(0) <= 57) {
+      if (char.runes.length == 1 &&
+          char.codeUnitAt(0) >= 48 &&
+          char.codeUnitAt(0) <= 57) {
         _addDigit(char);
         return;
       }
@@ -132,14 +137,62 @@ class PinEntryWithKeypadState extends State<PinEntryWithKeypad>
     final isDesktop = AppConfig.usesLargeUiScale;
     final isTablet = size.width >= 600 && size.width < 840;
 
-    final maxWidth = isWideDesktop ? 440.0 : isDesktop ? 380.0 : isTablet ? 360.0 : 340.0;
-    final dotSize = isWideDesktop ? 28.0 : isDesktop ? 22.0 : isTablet ? 20.0 : 18.0;
-    final dotGap = isWideDesktop ? 18.0 : isDesktop ? 14.0 : isTablet ? 12.0 : 10.0;
-    final containerPaddingH = isWideDesktop ? 36.0 : isDesktop ? 28.0 : isTablet ? 24.0 : 20.0;
-    final containerPaddingV = isWideDesktop ? 36.0 : isDesktop ? 28.0 : isTablet ? 26.0 : 22.0;
-    final containerPaddingBottom = isWideDesktop ? 40.0 : isDesktop ? 32.0 : isTablet ? 28.0 : 26.0;
-    final spacerHeight = isWideDesktop ? 18.0 : isDesktop ? 14.0 : isTablet ? 12.0 : 10.0;
-    final keypadGap = isWideDesktop ? 32.0 : isDesktop ? 28.0 : isTablet ? 24.0 : 22.0;
+    final maxWidth = isWideDesktop
+        ? 576.0
+        : isDesktop
+            ? 380.0
+            : isTablet
+                ? 360.0
+                : 340.0;
+    final dotSize = isWideDesktop
+        ? 34.0
+        : isDesktop
+            ? 22.0
+            : isTablet
+                ? 20.0
+                : 18.0;
+    final dotGap = isWideDesktop
+        ? 20.0
+        : isDesktop
+            ? 14.0
+            : isTablet
+                ? 12.0
+                : 10.0;
+    final containerPaddingH = isWideDesktop
+        ? 48.0
+        : isDesktop
+            ? 28.0
+            : isTablet
+                ? 24.0
+                : 20.0;
+    final containerPaddingV = isWideDesktop
+        ? 48.0
+        : isDesktop
+            ? 28.0
+            : isTablet
+                ? 26.0
+                : 22.0;
+    final containerPaddingBottom = isWideDesktop
+        ? 52.0
+        : isDesktop
+            ? 32.0
+            : isTablet
+                ? 28.0
+                : 26.0;
+    final spacerHeight = isWideDesktop
+        ? 22.0
+        : isDesktop
+            ? 14.0
+            : isTablet
+                ? 12.0
+                : 10.0;
+    final keypadGap = isWideDesktop
+        ? 36.0
+        : isDesktop
+            ? 28.0
+            : isTablet
+                ? 24.0
+                : 22.0;
 
     return RawKeyboardListener(
       focusNode: _focusNode,
@@ -149,100 +202,123 @@ class PinEntryWithKeypadState extends State<PinEntryWithKeypad>
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
           child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.fromLTRB(
-            containerPaddingH,
-            containerPaddingV,
-            containerPaddingH,
-            containerPaddingBottom,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.82),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primary.withValues(alpha: 0.08),
-                blurRadius: 40,
-                offset: const Offset(0, 16),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedBuilder(
-                animation: _shakeAnimation,
-                builder: (context, child) => Transform.translate(
-                  offset: Offset(_shakeAnimation.value, 0),
-                  child: child,
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(
+              containerPaddingH,
+              containerPaddingV,
+              containerPaddingH,
+              containerPaddingBottom,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withValues(alpha: 0.08),
+                  blurRadius: 40,
+                  offset: const Offset(0, 16),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(pinLength, (i) {
-                    final filled = i < _digits.length;
-                    final active = i == _digits.length;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeOut,
-                      margin:
-                          EdgeInsets.only(right: i < pinLength - 1 ? dotGap : 0),
-                      width: dotSize,
-                      height: dotSize,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: filled
-                            ? AppTheme.primary
-                            : active
-                                ? AppTheme.primary.withValues(alpha: 0.15)
-                                : const Color(0xFFF1F5F9),
-                        border: Border.all(
-                          color: filled
-                              ? AppTheme.primary
-                              : active
-                                  ? AppTheme.primary
-                                  : const Color(0xFFCBD5E1),
-                          width: active ? 2 : 1.5,
-                        ),
-                        boxShadow: filled
-                            ? [
-                                BoxShadow(
-                                  color:
-                                      AppTheme.primary.withValues(alpha: 0.35),
-                                  blurRadius: 8,
-                                  spreadRadius: 1,
-                                ),
-                              ]
-                            : null,
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedBuilder(
+                      animation: _shakeAnimation,
+                      builder: (context, child) => Transform.translate(
+                        offset: Offset(_shakeAnimation.value, 0),
+                        child: child,
                       ),
-                    );
-                  }),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(pinLength, (i) {
+                          final filled = i < _digits.length;
+                          final active = i == _digits.length;
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            curve: Curves.easeOut,
+                            margin: EdgeInsets.only(
+                                right: i < pinLength - 1 ? dotGap : 0),
+                            width: dotSize,
+                            height: dotSize,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: filled
+                                  ? AppTheme.primary
+                                  : active
+                                      ? AppTheme.primary.withValues(alpha: 0.15)
+                                      : const Color(0xFFF1F5F9),
+                              border: Border.all(
+                                color: filled
+                                    ? AppTheme.primary
+                                    : active
+                                        ? AppTheme.primary
+                                        : const Color(0xFFCBD5E1),
+                                width: active ? 2 : 1.5,
+                              ),
+                              boxShadow: filled
+                                  ? [
+                                      BoxShadow(
+                                        color: AppTheme.primary
+                                            .withValues(alpha: 0.35),
+                                        blurRadius: 8,
+                                        spreadRadius: 1,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                    SizedBox(height: spacerHeight),
+                    Text(
+                      '${_digits.length}/$pinLength',
+                      style: TextStyle(
+                        fontSize: isWideDesktop ? 13.0 : 12.0,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textSecondary.withValues(alpha: 0.8),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    SizedBox(height: keypadGap),
+                    PinKeypad(
+                      enabled: widget.enabled,
+                      onDigit: _addDigit,
+                      onBackspace: _backspace,
+                    ),
+                  ],
                 ),
-              ),
-              SizedBox(height: spacerHeight),
-              Text(
-                '${_digits.length}/$pinLength',
-                style: TextStyle(
-                  fontSize: isWideDesktop ? 13.0 : 12.0,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textSecondary.withValues(alpha: 0.8),
-                  letterSpacing: 0.5,
-                ),
-              ),
-              SizedBox(height: keypadGap),
-              PinKeypad(
-                enabled: widget.enabled,
-                onDigit: _addDigit,
-                onBackspace: _backspace,
-              ),
-            ],
+                if (widget.loading)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.62),
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        child: const Center(
+                          child: SizedBox(
+                            width: 42,
+                            height: 42,
+                            child: CircularProgressIndicator(strokeWidth: 3),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );

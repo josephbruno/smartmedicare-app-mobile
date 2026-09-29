@@ -625,15 +625,14 @@ class _DesktopShellState extends State<_DesktopShell> {
     double ic(double base) =>
         desktop ? base * AppConfig.desktopIconScale : base;
     // Wider sidebar on desktop to fit larger fonts/icons.
-    final sidebarWidth =
-        _collapsed ? (desktop ? 80.0 : 68.0) : (desktop ? 296.0 : 256.0);
+    final sidebarWidth = _collapsed ? 72.0 : (desktop ? 280.0 : 260.0);
 
     final width = MediaQuery.of(context).size.width;
     final subtitle = widget.location.startsWith('/dashboard')
         ? "Welcome back! Here's what's happening today."
         : '';
     final showSubtitle = subtitle.isNotEmpty && width >= 900;
-    const showSearch = false;
+    final showSearch = width >= 760;
 
     return KeyboardShortcutHandler(
       shortcuts: {
@@ -647,57 +646,41 @@ class _DesktopShellState extends State<_DesktopShell> {
               duration: const Duration(milliseconds: 200),
               width: sidebarWidth,
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.primaryDark,
                 border: Border(
-                    right: BorderSide(color: Color(0xFFE2E8F0), width: 1.5)),
+                    right: BorderSide(color: AppTheme.primary, width: 1)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: _collapsed ? 8 : 16,
-                      vertical: 12,
-                    ),
+                  Container(
+                    height: desktop ? 68 : 64,
+                    padding:
+                        EdgeInsets.symmetric(horizontal: _collapsed ? 12 : 18),
+                    color: Colors.white,
                     child: _collapsed
-                        ? Column(
-                            children: [
-                              const AppLogo(size: 28),
-                              const SizedBox(height: 4),
-                              IconButton(
-                                tooltip: 'Expand sidebar',
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 36,
-                                  minHeight: 36,
-                                ),
-                                icon: const Icon(Icons.chevron_right_rounded),
-                                onPressed: _toggleSidebar,
-                              ),
-                            ],
+                        ? Center(
+                            child: IconButton(
+                              tooltip: 'Expand sidebar',
+                              icon: const AppLogo(size: 30),
+                              onPressed: _toggleSidebar,
+                            ),
                           )
-                        : Row(
-                            children: [
-                              const AppLogo(size: 36),
-                              const SizedBox(width: 12),
-                              const Expanded(
-                                child: Text(
-                                  'BI Billing',
-                                  style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.textPrimary,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
+                        : Row(children: [
+                            const AppLogo(size: 38),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                                child: Text('SmartMediCare',
+                                    style: TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF073F7A)))),
+                            IconButton(
                                 tooltip: 'Collapse sidebar',
-                                icon: const Icon(Icons.chevron_left_rounded),
-                                onPressed: _toggleSidebar,
-                              ),
-                            ],
-                          ),
+                                icon: const Icon(Icons.chevron_left_rounded,
+                                    color: AppTheme.textSecondary),
+                                onPressed: _toggleSidebar),
+                          ]),
                   ),
                   Expanded(
                     child: ListView.builder(
@@ -711,7 +694,7 @@ class _DesktopShellState extends State<_DesktopShell> {
                               padding: EdgeInsets.symmetric(
                                   vertical: 8, horizontal: 12),
                               child:
-                                  Divider(color: Color(0xFFF1F5F9), height: 1),
+                                  Divider(color: Color(0x33FFFFFF), height: 1),
                             );
                           }
                           return Padding(
@@ -722,7 +705,7 @@ class _DesktopShellState extends State<_DesktopShell> {
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 0.6,
-                                color: Color(0xFF94A3B8),
+                                color: Color(0xFF9DB8DA),
                               ),
                             ),
                           );
@@ -739,20 +722,29 @@ class _DesktopShellState extends State<_DesktopShell> {
                               child: Center(
                                 child: Material(
                                   color: isSelected
-                                      ? AppTheme.primary.withValues(alpha: 0.08)
+                                      ? const Color(0xFF1677D2)
                                       : Colors.transparent,
                                   borderRadius: BorderRadius.circular(12),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? const Color(0xFFFFFFFF)
+                                          : Colors.transparent,
+                                      width: 1.2,
+                                    ),
+                                  ),
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(12),
                                     onTap: () => context.go(m.path!),
                                     child: SizedBox(
-                                      width: 44,
-                                      height: 44,
+                                      width: 48,
+                                      height: 50,
                                       child: Icon(
                                         m.icon,
                                         color: isSelected
-                                            ? AppTheme.primary
-                                            : AppTheme.textSecondary,
+                                            ? Colors.white
+                                            : const Color(0xDFFFFFFF),
                                         size: 22,
                                       ),
                                     ),
@@ -764,33 +756,53 @@ class _DesktopShellState extends State<_DesktopShell> {
                         }
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 4),
-                          child: ListTile(
-                            dense: !desktop,
-                            leading: Icon(
-                              m.icon,
+                          child: Container(
+                            decoration: BoxDecoration(
                               color: isSelected
-                                  ? AppTheme.primary
-                                  : AppTheme.textSecondary,
-                              size: ic(20),
-                            ),
-                            title: Text(
-                              m.label,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
+                                  ? const Color(0xFF1677D2)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
                                 color: isSelected
-                                    ? AppTheme.primary
-                                    : AppTheme.textSecondary,
+                                    ? Colors.white
+                                    : Colors.transparent,
+                                width: 1.5,
                               ),
+                              boxShadow: isSelected
+                                  ? const [
+                                      BoxShadow(
+                                        color: Color(0x24000000),
+                                        blurRadius: 7,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ]
+                                  : null,
                             ),
-                            selected: isSelected,
-                            selectedTileColor:
-                                AppTheme.primary.withValues(alpha: 0.08),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                            onTap: () => context.go(m.path!),
+                            child: ListTile(
+                              dense: false,
+                              minTileHeight: desktop ? 52 : 48,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: desktop ? 14 : 12,
+                              ),
+                              leading: Icon(
+                                m.icon,
+                                color: isSelected
+                                    ? Colors.white
+                                    : const Color(0xDFFFFFFF),
+                                size: ic(20),
+                              ),
+                              title: Text(
+                                m.label,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              onTap: () => context.go(m.path!),
+                            ),
                           ),
                         );
                       },
@@ -802,9 +814,9 @@ class _DesktopShellState extends State<_DesktopShell> {
                       child: Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppTheme.background,
+                          color: const Color(0x14FFFFFF),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          border: Border.all(color: const Color(0x33FFFFFF)),
                         ),
                         child: Row(
                           children: [
@@ -826,7 +838,8 @@ class _DesktopShellState extends State<_DesktopShell> {
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           fontSize: 13,
-                                          fontWeight: FontWeight.w600)),
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white)),
                                   Text(
                                       widget.auth.currentBranch?.name ??
                                           'Branch',
@@ -834,13 +847,13 @@ class _DesktopShellState extends State<_DesktopShell> {
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           fontSize: 11,
-                                          color: AppTheme.textSecondary)),
+                                          color: Color(0xFF9DB8DA))),
                                 ],
                               ),
                             ),
                             IconButton(
                               icon: Icon(Icons.shield_outlined,
-                                  color: AppTheme.textSecondary, size: ic(18)),
+                                  color: const Color(0xDFFFFFFF), size: ic(18)),
                               onPressed: () => context.go('/settings/security'),
                               tooltip: 'Account Security',
                             ),
@@ -864,7 +877,7 @@ class _DesktopShellState extends State<_DesktopShell> {
               child: Column(
                 children: [
                   Container(
-                    height: desktop ? 52 : 48,
+                    height: desktop ? 64 : 56,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     decoration: const BoxDecoration(
                       color: Colors.white,
@@ -1146,7 +1159,8 @@ List<_MenuItem> _menuItems(AuthSession auth) {
   void addSection(String title, List<_MenuItem> items) {
     // Hide modules outside the subscription plan (same path table as the router).
     final visible = items
-        .where((i) => planCapabilitiesForPath(i.path ?? '').every(auth.hasCapability))
+        .where((i) =>
+            planCapabilitiesForPath(i.path ?? '').every(auth.hasCapability))
         .toList();
     if (visible.isEmpty) return;
     result.add(_MenuItem.header(title));

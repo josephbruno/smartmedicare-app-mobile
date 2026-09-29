@@ -66,7 +66,8 @@ Future<bool> showPosCheckoutDialog({
     try {
       final shop = await services.shop.get();
       final s = shop.settings ?? ShopSettings();
-      redeemPerPoint = s.loyaltyRedeemPerPoint > 0 ? s.loyaltyRedeemPerPoint : 0.25;
+      redeemPerPoint =
+          s.loyaltyRedeemPerPoint > 0 ? s.loyaltyRedeemPerPoint : 0.25;
       minRedeemPoints = s.loyaltyRedemptionMinPoints;
       maxRedeemPercent = s.loyaltyMaxRedeemPercent;
     } catch (_) {}
@@ -84,16 +85,16 @@ Future<bool> showPosCheckoutDialog({
         return StatefulBuilder(
           builder: (context, setState) {
             // Compact payment dialog (receipt/share UI removed — print on settle).
-            final dialogWidth = !largeUi
-                ? 360.0
-                : (screenWidth * 0.42).clamp(420.0, 520.0);
-            final horizontalInset = math.max(16.0, (screenWidth - dialogWidth) / 2);
-            final hPad = largeUi ? 14.0 : 12.0;
-            final vPad = largeUi ? 10.0 : 8.0;
-            final sectionGap = largeUi ? 8.0 : 6.0;
+            final dialogWidth =
+                !largeUi ? 360.0 : (screenWidth * 0.50).clamp(600.0, 700.0);
+            final horizontalInset =
+                math.max(16.0, (screenWidth - dialogWidth) / 2);
+            final hPad = largeUi ? 32.0 : 12.0;
+            final vPad = largeUi ? 22.0 : 8.0;
+            final sectionGap = largeUi ? 20.0 : 6.0;
 
-            double alertFs(double base) => largeUi ? base - 1 : base;
-            double alertIc(double base) => largeUi ? base * 1.1 : base;
+            double alertFs(double base) => base;
+            double alertIc(double base) => largeUi ? base * 1.15 : base;
 
             double billGross() {
               if (activeInvoice != null) {
@@ -116,9 +117,8 @@ Future<bool> showPosCheckoutDialog({
               final available = billingCustomer!.loyaltyPoints;
               if (available <= 0 || redeemPerPoint <= 0) return 0;
               final maxValue = billGross() * (maxRedeemPercent / 100);
-              final byPercent = maxValue > 0
-                  ? (maxValue / redeemPerPoint).floor()
-                  : 0;
+              final byPercent =
+                  maxValue > 0 ? (maxValue / redeemPerPoint).floor() : 0;
               return math.min(available, byPercent);
             }
 
@@ -139,7 +139,8 @@ Future<bool> showPosCheckoutDialog({
               if (!applyAdvance || paymentMode == 'advance') return 0;
               final avail = billingCustomer?.advanceBalance ?? 0;
               if (avail <= 0) return 0;
-              final remaining = math.max(0.0, billGross() - loyaltyRedeemValue());
+              final remaining =
+                  math.max(0.0, billGross() - loyaltyRedeemValue());
               return math.min(avail, remaining);
             }
 
@@ -273,11 +274,11 @@ Future<bool> showPosCheckoutDialog({
             }
 
             /// Fully paid / credit done → print & close. Split balance → stay open.
-            Future<void> finishOrContinueSplit({required String successMessage}) async {
+            Future<void> finishOrContinueSplit(
+                {required String successMessage}) async {
               if (!context.mounted) return;
               final dueLeft = activeInvoice?.dueAmount ?? 0;
-              final isSplitPending =
-                  dueLeft > 0.009 && paymentMode != 'credit';
+              final isSplitPending = dueLeft > 0.009 && paymentMode != 'credit';
 
               if (isSplitPending) {
                 setState(() => recordingPayment = false);
@@ -312,7 +313,8 @@ Future<bool> showPosCheckoutDialog({
               // Walk-in may leave a cash balance due and collect the rest via UPI/card.
               if (!hasRegisteredCustomer()) {
                 if (paymentMode == 'credit' || paymentMode == 'advance') {
-                  AppMessenger.show(context,
+                  AppMessenger.show(
+                    context,
                     const SnackBar(
                       content: Text(
                         'Select a registered customer for credit or advance payment',
@@ -324,7 +326,8 @@ Future<bool> showPosCheckoutDialog({
                 final loyaltyAttempt =
                     int.tryParse(loyaltyController.text.trim()) ?? 0;
                 if (loyaltyAttempt > 0) {
-                  AppMessenger.show(context,
+                  AppMessenger.show(
+                    context,
                     const SnackBar(
                       content: Text(
                         'Select a registered customer to redeem loyalty points',
@@ -337,14 +340,17 @@ Future<bool> showPosCheckoutDialog({
 
               final warn = creditLimitWarning();
               if (warn != null && warn.contains('exceeded')) {
-                AppMessenger.show(context,
-                  SnackBar(content: Text(warn), backgroundColor: AppTheme.danger),
+                AppMessenger.show(
+                  context,
+                  SnackBar(
+                      content: Text(warn), backgroundColor: AppTheme.danger),
                 );
                 return;
               }
               if (paymentMode == 'advance' &&
                   (billingCustomer?.advanceBalance ?? 0) <= 0) {
-                AppMessenger.show(context,
+                AppMessenger.show(
+                  context,
                   const SnackBar(content: Text('No advance balance available')),
                 );
                 return;
@@ -353,7 +359,8 @@ Future<bool> showPosCheckoutDialog({
                   ? (int.tryParse(loyaltyController.text.trim()) ?? 0)
                   : 0;
               if (loyaltyPtsRaw > 0 && loyaltyPtsRaw < minRedeemPoints) {
-                AppMessenger.show(context,
+                AppMessenger.show(
+                  context,
                   SnackBar(
                     content: Text(
                       'Minimum $minRedeemPoints loyalty points required to redeem',
@@ -377,8 +384,10 @@ Future<bool> showPosCheckoutDialog({
               if (paymentMode == 'cash' &&
                   dueBeforePay > 0.009 &&
                   (cashTendered == null || cashTendered <= 0)) {
-                AppMessenger.show(context,
-                  const SnackBar(content: Text('Enter the cash amount received')),
+                AppMessenger.show(
+                  context,
+                  const SnackBar(
+                      content: Text('Enter the cash amount received')),
                 );
                 focusCashAmount();
                 return;
@@ -389,7 +398,8 @@ Future<bool> showPosCheckoutDialog({
                   amount <= 0 &&
                   loyaltyPts <= 0 &&
                   advanceCredit <= 0) {
-                AppMessenger.show(context,
+                AppMessenger.show(
+                  context,
                   const SnackBar(content: Text('Enter a valid payment amount')),
                 );
                 return;
@@ -410,7 +420,8 @@ Future<bool> showPosCheckoutDialog({
                 // Never create a second invoice from the same checkout session.
                 if (activeInvoice != null && activeInvoice!.id > 0) {
                   if (paymentMode == 'credit' || paymentMode == 'advance') {
-                    AppMessenger.show(context,
+                    AppMessenger.show(
+                      context,
                       SnackBar(
                         content: Text(
                           paymentMode == 'credit'
@@ -422,8 +433,10 @@ Future<bool> showPosCheckoutDialog({
                     return;
                   }
                   if (amount <= 0.009) {
-                    AppMessenger.show(context,
-                      const SnackBar(content: Text('Enter a valid payment amount')),
+                    AppMessenger.show(
+                      context,
+                      const SnackBar(
+                          content: Text('Enter a valid payment amount')),
                     );
                     return;
                   }
@@ -432,10 +445,11 @@ Future<bool> showPosCheckoutDialog({
                     mode: paymentMode,
                     amount: amount,
                     tenderedAmount: tenderedToSave,
-                    reference: (paymentMode == 'upi' || paymentMode == 'card') &&
-                            upiRefController.text.trim().isNotEmpty
-                        ? upiRefController.text.trim()
-                        : null,
+                    reference:
+                        (paymentMode == 'upi' || paymentMode == 'card') &&
+                                upiRefController.text.trim().isNotEmpty
+                            ? upiRefController.text.trim()
+                            : null,
                   );
                   if (!context.mounted) return;
                   activeInvoice = updated;
@@ -477,7 +491,8 @@ Future<bool> showPosCheckoutDialog({
                     if ((paymentMode == 'upi' || paymentMode == 'card') &&
                         upiRefController.text.trim().isNotEmpty)
                       'reference': upiRefController.text.trim(),
-                    if (tenderedToSave != null) 'tendered_amount': tenderedToSave,
+                    if (tenderedToSave != null)
+                      'tendered_amount': tenderedToSave,
                   });
                 }
                 payload['payments'] = payments;
@@ -582,12 +597,16 @@ Future<bool> showPosCheckoutDialog({
                             }),
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
+                      constraints: BoxConstraints(
+                        minHeight: largeUi ? 74 : 56,
+                      ),
+                      alignment: Alignment.center,
                       padding: EdgeInsets.symmetric(
-                        vertical: largeUi ? 7 : 6,
+                        vertical: largeUi ? 14 : 10,
                         horizontal: 4,
                       ),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(largeUi ? 14 : 10),
                         border: Border.all(
                           color: selected
                               ? AppTheme.primary
@@ -611,7 +630,7 @@ Future<bool> showPosCheckoutDialog({
                               label,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: alertFs(11),
+                                fontSize: alertFs(largeUi ? 18 : 11),
                                 fontWeight: FontWeight.w500,
                                 color: selected
                                     ? AppTheme.primary
@@ -641,7 +660,7 @@ Future<bool> showPosCheckoutDialog({
               final belowMin = requested > 0 && requested < minRedeemPoints;
               return Container(
                 width: double.infinity,
-                padding: EdgeInsets.all(largeUi ? 8 : 6),
+                padding: EdgeInsets.all(largeUi ? 16 : 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF8E7),
                   borderRadius: BorderRadius.circular(8),
@@ -676,7 +695,8 @@ Future<bool> showPosCheckoutDialog({
                                   },
                             style: TextButton.styleFrom(
                               visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
                               foregroundColor: AppTheme.warning,
                             ),
                             child: Text('Use all',
@@ -863,10 +883,8 @@ Future<bool> showPosCheckoutDialog({
               final invoice = activeInvoice;
               final total = invoice?.totalAmount ?? billDue();
               final invoiceNo = invoice?.invoiceNumber ?? 'Pending payment';
-              final loyaltyValue =
-                  invoice == null ? loyaltyRedeemValue() : 0.0;
-              final advanceValue =
-                  invoice == null ? advanceApplyValue() : 0.0;
+              final loyaltyValue = invoice == null ? loyaltyRedeemValue() : 0.0;
+              final advanceValue = invoice == null ? advanceApplyValue() : 0.0;
               return Container(
                 padding: EdgeInsets.all(largeUi ? 10 : 8),
                 decoration: BoxDecoration(
@@ -907,7 +925,8 @@ Future<bool> showPosCheckoutDialog({
                                     color: AppTheme.textPrimary,
                                   ),
                                 ),
-                                if (invoice != null && invoice.paidAmount > 0) ...[
+                                if (invoice != null &&
+                                    invoice.paidAmount > 0) ...[
                                   const SizedBox(height: 4),
                                   Text(
                                     'Paid: ₹${invoice.paidAmount.toStringAsFixed(2)} · Due: ₹${invoice.dueAmount.toStringAsFixed(2)}',
@@ -1042,7 +1061,8 @@ Future<bool> showPosCheckoutDialog({
                       payModeTile('upi', 'UPI', Icons.qr_code_2_rounded),
                       if (registered) ...[
                         const SizedBox(width: 6),
-                        payModeTile('credit', 'Credit', Icons.schedule_outlined),
+                        payModeTile(
+                            'credit', 'Credit', Icons.schedule_outlined),
                       ],
                     ],
                   ),
@@ -1104,51 +1124,62 @@ Future<bool> showPosCheckoutDialog({
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
                         'F2 Cash · F3 UPI · Ctrl+Enter confirm',
-                        style: TextStyle(fontSize: alertFs(10), color: AppTheme.textSecondary),
+                        style: TextStyle(
+                            fontSize: alertFs(10),
+                            color: AppTheme.textSecondary),
                       ),
                     ),
                   SizedBox(height: largeUi ? 8 : 6),
                   if (paymentMode == 'cash') ...[
-                    TextField(
-                      controller: paidController,
-                      focusNode: paidFocus,
-                      autofocus: true,
-                      enabled: !lockPaymentInputs(),
-                      onChanged: (_) => setState(() {}),
-                      onSubmitted: (_) {
-                        if ((!paymentSaved || hasOpenBalance()) && !recordingPayment) {
-                          confirmCheckout();
-                        }
-                      },
-                      style: TextStyle(
-                        fontSize: alertFs(14),
-                        fontWeight: FontWeight.w500,
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: largeUi ? 24 : 12,
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d*\.?\d{0,2}'),
+                      child: TextField(
+                        controller: paidController,
+                        focusNode: paidFocus,
+                        autofocus: true,
+                        enabled: !lockPaymentInputs(),
+                        onChanged: (_) => setState(() {}),
+                        onSubmitted: (_) {
+                          if ((!paymentSaved || hasOpenBalance()) &&
+                              !recordingPayment) {
+                            confirmCheckout();
+                          }
+                        },
+                        style: TextStyle(
+                          fontSize: alertFs(14),
+                          fontWeight: FontWeight.w500,
                         ),
-                      ],
-                      decoration: InputDecoration(
-                        isDense: true,
-                        labelText: 'Cash received (₹)',
-                        hintText: 'Enter amount received',
-                        labelStyle: TextStyle(fontSize: alertFs(12)),
-                        filled: true,
-                        fillColor: Colors.white,
-                        prefixIcon: Icon(
-                          Icons.currency_rupee_rounded,
-                          size: alertIc(18),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
                         ),
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: largeUi ? 12 : 10,
-                          vertical: largeUi ? 10 : 8,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d{0,2}'),
+                          ),
+                        ],
+                        decoration: InputDecoration(
+                          isDense: true,
+                          constraints: BoxConstraints(
+                            minHeight: largeUi ? 88 : 64,
+                          ),
+                          labelText: 'Cash received (₹)',
+                          hintText: 'Enter amount received',
+                          labelStyle: TextStyle(fontSize: alertFs(12)),
+                          filled: true,
+                          fillColor: Colors.white,
+                          prefixIcon: Icon(
+                            Icons.currency_rupee_rounded,
+                            size: alertIc(18),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: largeUi ? 12 : 10,
+                            vertical: largeUi ? 18 : 14,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
@@ -1197,7 +1228,7 @@ Future<bool> showPosCheckoutDialog({
                       child: Text(
                         '${paymentMode.toUpperCase()} Amount: ₹${billDue().toStringAsFixed(2)}',
                         style: TextStyle(
-                          fontSize: alertFs(16),
+                          fontSize: alertFs(largeUi ? 32 : 16),
                           fontWeight: FontWeight.w800,
                           color: AppTheme.primary,
                         ),
@@ -1247,8 +1278,10 @@ Future<bool> showPosCheckoutDialog({
                 bindings: {
                   const SingleActivator(LogicalKeyboardKey.keyD, control: true):
                       closeAndNewBill,
-                  const SingleActivator(LogicalKeyboardKey.enter, control: true): () {
-                    if ((!paymentSaved || hasOpenBalance()) && !recordingPayment) {
+                  const SingleActivator(LogicalKeyboardKey.enter,
+                      control: true): () {
+                    if ((!paymentSaved || hasOpenBalance()) &&
+                        !recordingPayment) {
                       confirmCheckout();
                     }
                   },
@@ -1268,168 +1301,181 @@ Future<bool> showPosCheckoutDialog({
                 },
                 child: Focus(
                   child: Theme(
-              data: Theme.of(context).copyWith(
-                dialogTheme: DialogThemeData(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                ),
-              ),
-              child: Dialog(
-                backgroundColor: Colors.white,
-                surfaceTintColor: Colors.white,
-                clipBehavior: Clip.antiAlias,
-                insetPadding: EdgeInsets.symmetric(
-                  horizontal: horizontalInset,
-                  vertical: largeUi ? 36 : 24,
-                ),
-                child: SizedBox(
-                  width: dialogWidth,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.fromLTRB(hPad, vPad, hPad * 0.5, 8),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: Color(0xFFE2E8F0)),
+                    data: Theme.of(context).copyWith(
+                      dialogTheme: DialogThemeData(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
                         ),
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(largeUi ? 8 : 6),
-                            decoration: BoxDecoration(
-                              color: AppTheme.accent.withValues(alpha: 0.12),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              paymentSaved
-                                  ? Icons.check_circle_rounded
-                                  : Icons.point_of_sale_rounded,
-                              color: paymentSaved
-                                  ? AppTheme.accent
-                                  : AppTheme.primary,
-                              size: alertIc(20),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  hasOpenBalance()
-                                      ? 'Collect remaining balance'
-                                      : 'Checkout',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: alertFs(16),
-                                    color: AppTheme.textPrimary,
-                                  ),
+                    ),
+                    child: Dialog(
+                      backgroundColor: Colors.white,
+                      surfaceTintColor: Colors.white,
+                      clipBehavior: Clip.antiAlias,
+                      insetPadding: EdgeInsets.symmetric(
+                        horizontal: horizontalInset,
+                        vertical: largeUi ? 36 : 24,
+                      ),
+                      child: SizedBox(
+                        width: dialogWidth,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              padding: EdgeInsets.fromLTRB(
+                                  hPad, vPad, hPad * 0.5, 8),
+                              decoration: const BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(color: Color(0xFFE2E8F0)),
                                 ),
-                                if (largeUi)
-                                  Text(
-                                    hasOpenBalance()
-                                        ? 'Switch to UPI/Cash and pay the balance'
-                                        : 'Confirm payment to print invoice',
-                                    style: TextStyle(
-                                      fontSize: alertFs(11),
-                                      color: AppTheme.textSecondary,
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: EdgeInsets.all(largeUi ? 8 : 6),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.accent
+                                          .withValues(alpha: 0.12),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      paymentSaved
+                                          ? Icons.check_circle_rounded
+                                          : Icons.point_of_sale_rounded,
+                                      color: paymentSaved
+                                          ? AppTheme.accent
+                                          : AppTheme.primary,
+                                      size: alertIc(20),
                                     ),
                                   ),
-                              ],
-                            ),
-                          ),
-                          if (hasOpenBalance())
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.warning.withValues(alpha: 0.14),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Text(
-                                'Due ₹${activeInvoice!.dueAmount.toStringAsFixed(0)}',
-                                style: TextStyle(
-                                  color: AppTheme.warning,
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: alertFs(11),
-                                ),
-                              ),
-                            )
-                          else
-                            IconButton(
-                              tooltip: 'Cancel — back to cart',
-                              onPressed: recordingPayment ? null : handleEscape,
-                              icon: Icon(
-                                Icons.close_rounded,
-                                size: alertIc(20),
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    Flexible(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.all(hPad),
-                        child: buildBody(),
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(hPad, 0, hPad, vPad),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: largeUi ? 42 : 40,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed:
-                                    recordingPayment ? null : handleEscape,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppTheme.textPrimary,
-                                  side: const BorderSide(
-                                      color: Color(0xFFE2E8F0)),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          hasOpenBalance()
+                                              ? 'Collect remaining balance'
+                                              : 'Checkout',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: alertFs(16),
+                                            color: AppTheme.textPrimary,
+                                          ),
+                                        ),
+                                        if (largeUi)
+                                          Text(
+                                            hasOpenBalance()
+                                                ? 'Switch to UPI/Cash and pay the balance'
+                                                : 'Confirm payment to print invoice',
+                                            style: TextStyle(
+                                              fontSize: alertFs(11),
+                                              color: AppTheme.textSecondary,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                child: Text(
-                                  hasOpenBalance() ? 'Close' : 'Cancel',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: alertFs(13),
-                                  ),
-                                ),
+                                  if (hasOpenBalance())
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.warning
+                                            .withValues(alpha: 0.14),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Text(
+                                        'Due ₹${activeInvoice!.dueAmount.toStringAsFixed(0)}',
+                                        style: TextStyle(
+                                          color: AppTheme.warning,
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: alertFs(11),
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    IconButton(
+                                      tooltip: 'Cancel — back to cart',
+                                      onPressed: recordingPayment
+                                          ? null
+                                          : handleEscape,
+                                      icon: Icon(
+                                        Icons.close_rounded,
+                                        size: alertIc(20),
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              flex: 2,
-                              child: ElevatedButton(
-                                onPressed: recordingPayment
-                                    ? null
-                                    : confirmCheckout,
-                                style: ElevatedButton.styleFrom(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                child: Text(
-                                  recordingPayment
-                                      ? 'Saving…'
-                                      : hasOpenBalance()
-                                          ? 'Pay Remaining Balance'
-                                          : 'Confirm Payment',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: alertFs(13),
-                                  ),
+                            Flexible(
+                              child: SingleChildScrollView(
+                                padding: EdgeInsets.all(hPad),
+                                child: buildBody(),
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.fromLTRB(hPad, 0, hPad, vPad),
+                              child: SizedBox(
+                                width: double.infinity,
+                                height: largeUi ? 62 : 40,
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: recordingPayment
+                                            ? null
+                                            : handleEscape,
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: AppTheme.textPrimary,
+                                          side: const BorderSide(
+                                              color: Color(0xFFE2E8F0)),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          hasOpenBalance() ? 'Close' : 'Cancel',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: alertFs(13),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      flex: 2,
+                                      child: ElevatedButton(
+                                        onPressed: recordingPayment
+                                            ? null
+                                            : confirmCheckout,
+                                        style: ElevatedButton.styleFrom(
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          recordingPayment
+                                              ? 'Saving…'
+                                              : hasOpenBalance()
+                                                  ? 'Pay Remaining Balance'
+                                                  : 'Confirm Payment',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: alertFs(13),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -1437,14 +1483,10 @@ Future<bool> showPosCheckoutDialog({
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-        ),
-      ),
-    );
+            );
           },
         );
       },

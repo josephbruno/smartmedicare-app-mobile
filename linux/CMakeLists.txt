@@ -127,6 +127,11 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
     COMPONENT Runtime)
 endif()
 
+# NOTE: sqflite_common_ffi on Linux needs libsqlite3.so (unversioned).
+# Ubuntu ships only the versioned libsqlite3.so.0. To fix, run once:
+#   sudo apt-get install libsqlite3-dev
+# This creates the /usr/lib/.../libsqlite3.so symlink that sqflite needs.
+
 # Desktop launcher icon and .desktop entry for Linux desktop environments.
 set(LINUX_APP_ID "com.maranbilling.mobile")
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/${LINUX_APP_ID}.desktop"

@@ -3,12 +3,12 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Brand colors
-  static const Color primary = Color(0xFF3B82F6); // Vibrant Blue
-  static const Color primaryDark = Color(0xFF1D4ED8);
-  static const Color accent = Color(0xFF10B981); // Emerald Green
+  static const Color primary = Color(0xFF0B5ED7); // Matches the web app
+  static const Color primaryDark = Color(0xFF084298);
+  static const Color accent = Color(0xFF16A34A); // Web success color
   static const Color warning = Color(0xFFF59E0B); // Amber
   static const Color danger = Color(0xFFEF4444); // Red
-  static const Color background = Color(0xFFF8FAFC); // Slate background
+  static const Color background = Color(0xFFF5F8FC); // Web background
   static const Color surface = Colors.white;
   static const Color textPrimary = Color(0xFF0F172A); // Slate 900
   static const Color textSecondary = Color(0xFF64748B); // Slate 500
@@ -77,7 +77,8 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: surface,
+        surfaceTintColor: surface,
         scrolledUnderElevation: 0,
         iconTheme: IconThemeData(color: textPrimary, size: appBarIconSize),
         // Headings: SemiBold (600–700)
@@ -92,8 +93,9 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFFE2E8F0), width: 1), // Slate 200
+          borderRadius: BorderRadius.circular(12),
+          side:
+              const BorderSide(color: Color(0xFFE2E8F0), width: 1), // Slate 200
         ),
         clipBehavior: Clip.antiAlias,
       ),
@@ -102,11 +104,14 @@ class AppTheme {
         fillColor: const Color(0xFFF8FAFC),
         floatingLabelBehavior: FloatingLabelBehavior.always,
         alignLabelWithHint: true,
-        contentPadding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+        contentPadding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
         // Body: Regular (400) / Medium (500)
-        hintStyle: _inter(color: textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
-        labelStyle: _inter(color: textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
-        floatingLabelStyle: _inter(color: textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+        hintStyle: _inter(
+            color: textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
+        labelStyle: _inter(
+            color: textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+        floatingLabelStyle: _inter(
+            color: textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1),
@@ -131,10 +136,12 @@ class AppTheme {
       // Shared across Elevated / Filled / Outlined so buttons stay tappable and
       // never look undersized. Padding is at least 8dp on every side.
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style: _primaryButtonStyle(background: primary, foreground: Colors.white),
+        style:
+            _primaryButtonStyle(background: primary, foreground: Colors.white),
       ),
       filledButtonTheme: FilledButtonThemeData(
-        style: _primaryButtonStyle(background: primary, foreground: Colors.white),
+        style:
+            _primaryButtonStyle(background: primary, foreground: Colors.white),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: _primaryButtonStyle(
@@ -170,12 +177,18 @@ class AppTheme {
       // Headings → SemiBold/Bold (600–700)
       // Body → Regular/Medium (400–500)
       textTheme: GoogleFonts.interTextTheme(base.textTheme).copyWith(
-        displayLarge: _inter(color: textPrimary, fontSize: 57, fontWeight: FontWeight.w700),
-        displayMedium: _inter(color: textPrimary, fontSize: 45, fontWeight: FontWeight.w700),
-        displaySmall: _inter(color: textPrimary, fontSize: 36, fontWeight: FontWeight.w700),
-        headlineLarge: _inter(color: textPrimary, fontSize: 32, fontWeight: FontWeight.w700),
-        headlineMedium: _inter(color: textPrimary, fontSize: 28, fontWeight: FontWeight.w600),
-        headlineSmall: _inter(color: textPrimary, fontSize: 24, fontWeight: FontWeight.w600),
+        displayLarge: _inter(
+            color: textPrimary, fontSize: 57, fontWeight: FontWeight.w700),
+        displayMedium: _inter(
+            color: textPrimary, fontSize: 45, fontWeight: FontWeight.w700),
+        displaySmall: _inter(
+            color: textPrimary, fontSize: 36, fontWeight: FontWeight.w700),
+        headlineLarge: _inter(
+            color: textPrimary, fontSize: 32, fontWeight: FontWeight.w700),
+        headlineMedium: _inter(
+            color: textPrimary, fontSize: 28, fontWeight: FontWeight.w600),
+        headlineSmall: _inter(
+            color: textPrimary, fontSize: 24, fontWeight: FontWeight.w600),
         titleLarge: _inter(
           color: textPrimary,
           fontSize: 22,
@@ -237,9 +250,8 @@ class AppTheme {
   }) {
     return ButtonStyle(
       elevation: const WidgetStatePropertyAll(0),
-      backgroundColor: background != null
-          ? WidgetStatePropertyAll(background)
-          : null,
+      backgroundColor:
+          background != null ? WidgetStatePropertyAll(background) : null,
       foregroundColor: WidgetStatePropertyAll(foreground),
       // Avoid Size.fromHeight — infinite width breaks buttons in a Row.
       minimumSize: const WidgetStatePropertyAll(Size(64, 52)),

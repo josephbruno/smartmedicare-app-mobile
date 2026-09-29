@@ -51,4 +51,6 @@ flutter:
     - assets/branding/logo.png
     - assets/branding/receipt-logo.png
     - assets/branding/pet-hero.png
+    - assets/branding/pet-hero-transparent.png
+    - assets/branding/clinic-hero-transparent.png
     - assets/branding/splash.mp4

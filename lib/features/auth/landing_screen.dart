@@ -67,28 +67,25 @@ class _LandingScreenState extends State<LandingScreen>
     return ChangeNotifierProvider(
       create: (c) => LoginViewModel(c.read<AuthSession>()),
       child: AuthPageShell(
+        showFooter: !isWide,
         child: FadeTransition(
           opacity: _fadeAnimation,
           child: SlideTransition(
             position: _slideAnimation,
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                isWide ? 48 : 20,
-                8,
-                isWide ? 48 : 20,
-                40,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: isWide ? 1120 : 520,
+            child: isWide
+                ? LayoutBuilder(
+                    builder: (context, constraints) =>
+                        _DesktopAuthLayout(height: constraints.maxHeight),
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: 520),
+                        child: _MobileAuthLayout(),
+                      ),
+                    ),
                   ),
-                  child: isWide
-                      ? const _DesktopAuthLayout()
-                      : const _MobileAuthLayout(),
-                ),
-              ),
-            ),
           ),
         ),
       ),
@@ -97,20 +94,55 @@ class _LandingScreenState extends State<LandingScreen>
 }
 
 class _DesktopAuthLayout extends StatelessWidget {
-  const _DesktopAuthLayout();
+  const _DesktopAuthLayout({required this.height});
+
+  final double height;
+  static const _cardRadius = BorderRadius.all(Radius.circular(14));
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Expanded(child: AuthMarketingPanel()),
-        const SizedBox(width: 48),
-        SizedBox(
-          width: AppConfig.desktopFormCardMaxWidth,
-          child: const AuthLoginCard(),
-        ),
-      ],
+    final cardHeight = height >= 728 ? 680.0 : height - 48;
+
+    return SizedBox(
+      height: height,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            flex: 3,
+            child: AuthMarketingPanel(panelHeight: height),
+          ),
+          Expanded(
+            flex: 2,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 540),
+                child: SizedBox(
+                  height: cardHeight,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: _cardRadius,
+                      border: Border.all(color: const Color(0x4794A3B8)),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x1A0F172A),
+                          blurRadius: 18,
+                          offset: Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: _cardRadius,
+                      child: const AuthLoginCard(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

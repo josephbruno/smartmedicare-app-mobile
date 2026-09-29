@@ -43,6 +43,7 @@ class BillingService {
     String? dateTo,
     String? paymentMode,
     int? customerId,
+    int? branchId,
   }) async {
     final query = <String, dynamic>{
       'page': page,
@@ -50,12 +51,11 @@ class BillingService {
       // Needed for per-invoice cash received / change columns on the list.
       'with_payments': true,
       if (customerId != null) 'customer_id': customerId,
+      if (branchId != null) 'branch_id': branchId,
       if (search != null && search.isNotEmpty) 'search': search,
       if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
       if (dateTo != null && dateTo.isNotEmpty) 'date_to': dateTo,
-      if (paymentMode != null &&
-          paymentMode.isNotEmpty &&
-          paymentMode != 'all')
+      if (paymentMode != null && paymentMode.isNotEmpty && paymentMode != 'all')
         'payment_mode': paymentMode,
     };
     if (status != null && status.isNotEmpty && status != 'all') {
@@ -87,7 +87,8 @@ class BillingService {
       final start = (page - 1) * perPage;
       final pageItems = start >= total
           ? <Invoice>[]
-          : filtered.sublist(start, start + perPage > total ? total : start + perPage);
+          : filtered.sublist(
+              start, start + perPage > total ? total : start + perPage);
       return (
         items: pageItems,
         meta: PaginationMeta(
@@ -203,12 +204,14 @@ class BillingService {
     }
   }
 
-  Future<SaleReturnResult> createReturn(int id, Map<String, dynamic> body) async {
+  Future<SaleReturnResult> createReturn(
+      int id, Map<String, dynamic> body) async {
     try {
       final res = await _client.post('/invoices/$id/returns', data: body);
       return parseEnvelopeData(
         res,
-        (data) => SaleReturnResult.fromJson(Map<String, dynamic>.from(data as Map)),
+        (data) =>
+            SaleReturnResult.fromJson(Map<String, dynamic>.from(data as Map)),
       );
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
@@ -218,7 +221,8 @@ class BillingService {
   Future<bool> sendWhatsApp(int id, {String? phone}) async {
     try {
       final payload = phone != null ? {'phone': phone} : <String, dynamic>{};
-      final res = await _client.post('/invoices/$id/send-whatsapp', data: payload);
+      final res =
+          await _client.post('/invoices/$id/send-whatsapp', data: payload);
       final map = res.data;
       if (map is Map) {
         return map['success'] == true;
@@ -231,8 +235,8 @@ class BillingService {
 
   Future<List<dynamic>> syncOffline(List<Map<String, dynamic>> invoices) async {
     try {
-      final res =
-          await _client.post('/invoices/sync-offline', data: {'invoices': invoices});
+      final res = await _client
+          .post('/invoices/sync-offline', data: {'invoices': invoices});
       return parseEnvelopeData(res, (data) {
         if (data is List) return data;
         return <dynamic>[];

@@ -24,9 +24,27 @@ class PinKeypad extends StatelessWidget {
     final isDesktop = AppConfig.usesLargeUiScale;
     final isTablet = size.width >= 600 && size.width < 840;
 
-    final keySize = isWideDesktop ? 88.0 : isDesktop ? 76.0 : isTablet ? 70.0 : 64.0;
-    final gap = isWideDesktop ? 16.0 : isDesktop ? 14.0 : isTablet ? 12.0 : 10.0;
-    final fontSize = isWideDesktop ? 32.0 : isDesktop ? 28.0 : isTablet ? 26.0 : 24.0;
+    final keySize = isWideDesktop
+        ? 102.0
+        : isDesktop
+            ? 76.0
+            : isTablet
+                ? 70.0
+                : 64.0;
+    final gap = isWideDesktop
+        ? 18.0
+        : isDesktop
+            ? 14.0
+            : isTablet
+                ? 12.0
+                : 10.0;
+    final fontSize = isWideDesktop
+        ? 38.0
+        : isDesktop
+            ? 28.0
+            : isTablet
+                ? 26.0
+                : 24.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -173,7 +191,8 @@ class _KeyButtonState extends State<_KeyButton> {
               _handleTap();
             }
           : null,
-      onTapCancel: widget.enabled ? () => setState(() => _pressed = false) : null,
+      onTapCancel:
+          widget.enabled ? () => setState(() => _pressed = false) : null,
       child: AnimatedScale(
         scale: _pressed ? 0.94 : 1.0,
         duration: const Duration(milliseconds: 80),

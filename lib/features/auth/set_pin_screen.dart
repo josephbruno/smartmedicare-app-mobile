@@ -129,12 +129,14 @@ class _SetPinScreenState extends State<SetPinScreen> {
           ? PinEntryWithKeypad(
               key: _confirmKey,
               enabled: !_loading,
+              loading: _loading,
               shakeTrigger: _shakeTrigger,
               onCompleted: _onConfirmEntered,
             )
           : PinEntryWithKeypad(
               key: _pinKey,
               enabled: !_loading,
+              loading: _loading,
               onCompleted: _onPinEntered,
             ),
       footer: _confirming

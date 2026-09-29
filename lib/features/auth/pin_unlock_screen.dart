@@ -206,6 +206,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen> {
           PinEntryWithKeypad(
             key: _pinKey,
             enabled: !_loading,
+            loading: _loading,
             shakeTrigger: _shakeTrigger,
             onCompleted: _submit,
           ),

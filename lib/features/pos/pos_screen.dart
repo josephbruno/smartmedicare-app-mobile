@@ -110,7 +110,8 @@ class _PosScreenState extends State<PosScreen> {
       _syncCoordinator = sync;
       _syncCoordinator!.addListener(_onSyncChanged);
     }
-    final visitIdStr = GoRouterState.of(context).uri.queryParameters['visit_id'];
+    final visitIdStr =
+        GoRouterState.of(context).uri.queryParameters['visit_id'];
     final visitId = int.tryParse(visitIdStr ?? '');
     if (visitId != null && visitId != _lastLoadedVisitId && !_loadingVisit) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -184,7 +185,8 @@ class _PosScreenState extends State<PosScreen> {
   }
 
   Future<void> _loadVisitFromQuery() async {
-    final visitIdStr = GoRouterState.of(context).uri.queryParameters['visit_id'];
+    final visitIdStr =
+        GoRouterState.of(context).uri.queryParameters['visit_id'];
     final visitId = int.tryParse(visitIdStr ?? '');
     if (visitId == null) return;
     if (_loadingVisit || visitId == _lastLoadedVisitId) return;
@@ -237,7 +239,8 @@ class _PosScreenState extends State<PosScreen> {
         // Resolve a consultation catalog item only — do not return the visit's
         // linked service product here (it may be a mismatched treatment like Microchipping).
         try {
-          final byBarcode = await services.products.findByBarcode('SVC-CONSULT');
+          final byBarcode =
+              await services.products.findByBarcode('SVC-CONSULT');
           if (byBarcode != null) return byBarcode;
         } catch (_) {}
         try {
@@ -246,7 +249,12 @@ class _PosScreenState extends State<PosScreen> {
         } catch (_) {}
         try {
           final list = await services.products.list(
-            query: {'type': 'service', 'per_page': 20, 'search': 'consult', 'is_active': true},
+            query: {
+              'type': 'service',
+              'per_page': 20,
+              'search': 'consult',
+              'is_active': true
+            },
           );
           for (final p in list) {
             final name = p.name.toLowerCase();
@@ -315,13 +323,15 @@ class _PosScreenState extends State<PosScreen> {
         AppMessenger.show(
           context,
           SnackBar(
-            content: Text('Loaded ${result.linesAdded} item(s) from visit ${visit.visitNumber}.'),
+            content: Text(
+                'Loaded ${result.linesAdded} item(s) from visit ${visit.visitNumber}.'),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context, SnackBar(content: Text('Failed to load visit: $e')));
+        AppMessenger.show(
+            context, SnackBar(content: Text('Failed to load visit: $e')));
       }
     } finally {
       if (mounted) setState(() => _loadingVisit = false);
@@ -347,7 +357,9 @@ class _PosScreenState extends State<PosScreen> {
             context,
             SnackBar(
               content: Text(
-                msg == 'out_of_stock' ? 'Out of stock!' : 'Maximum stock capacity reached.',
+                msg == 'out_of_stock'
+                    ? 'Out of stock!'
+                    : 'Maximum stock capacity reached.',
               ),
               backgroundColor: AppTheme.danger,
             ),
@@ -362,17 +374,20 @@ class _PosScreenState extends State<PosScreen> {
   }
 
   Future<void> _refreshLocalCatalogCount(int branchId) async {
-    final count = await context.read<PosProductRepository>().localCount(branchId);
+    final count =
+        await context.read<PosProductRepository>().localCount(branchId);
     if (mounted) setState(() => _localCatalogCount = count);
   }
 
   Future<void> _editCartLinePrice(PosCartNotifier cart, int index) async {
     final item = cart.items[index];
-    final controller = TextEditingController(text: item.unitPrice.toStringAsFixed(2));
+    final controller =
+        TextEditingController(text: item.unitPrice.toStringAsFixed(2));
     final updated = await showDialog<double>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(item.isServiceCharge ? 'Edit service charge' : 'Edit price'),
+        title:
+            Text(item.isServiceCharge ? 'Edit service charge' : 'Edit price'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -383,7 +398,8 @@ class _PosScreenState extends State<PosScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
             onPressed: () {
               final v = double.tryParse(controller.text.trim());
@@ -511,7 +527,8 @@ class _PosScreenState extends State<PosScreen> {
   Widget _buildCartCustomerSection(PosCartNotifier cart) {
     final customer = cart.customer;
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: _desktop ? 10 : 8, vertical: _desktop ? 8 : 6),
+      padding: EdgeInsets.symmetric(
+          horizontal: _desktop ? 10 : 8, vertical: _desktop ? 8 : 6),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -523,7 +540,9 @@ class _PosScreenState extends State<PosScreen> {
             radius: _desktop ? 16 : 14,
             backgroundColor: AppTheme.primary.withValues(alpha: 0.12),
             child: Icon(
-              customer == null ? Icons.person_outline_rounded : Icons.person_pin_rounded,
+              customer == null
+                  ? Icons.person_outline_rounded
+                  : Icons.person_pin_rounded,
               color: AppTheme.primary,
               size: _ic(16),
             ),
@@ -556,7 +575,8 @@ class _PosScreenState extends State<PosScreen> {
                 if (customer?.phone.isNotEmpty == true)
                   Text(
                     customer!.phone,
-                    style: TextStyle(fontSize: _cartFs(10), color: AppTheme.textSecondary),
+                    style: TextStyle(
+                        fontSize: _cartFs(10), color: AppTheme.textSecondary),
                   ),
                 if (customer != null) ...[
                   const SizedBox(height: 4),
@@ -566,7 +586,8 @@ class _PosScreenState extends State<PosScreen> {
                     children: [
                       if (customer.advanceBalance > 0)
                         _PosBalanceChip(
-                          label: 'Adv ₹${customer.advanceBalance.toStringAsFixed(0)}',
+                          label:
+                              'Adv ₹${customer.advanceBalance.toStringAsFixed(0)}',
                           color: AppTheme.accent,
                           large: false,
                         ),
@@ -578,13 +599,15 @@ class _PosScreenState extends State<PosScreen> {
                         ),
                       if ((customer.creditLimit ?? 0) > 0)
                         _PosBalanceChip(
-                          label: 'Limit ₹${customer.creditLimit!.toStringAsFixed(0)}',
+                          label:
+                              'Limit ₹${customer.creditLimit!.toStringAsFixed(0)}',
                           color: AppTheme.textSecondary,
                           large: false,
                         ),
                       if ((customer.outstandingBalance ?? 0) > 0)
                         _PosBalanceChip(
-                          label: 'Due ₹${customer.outstandingBalance!.toStringAsFixed(0)}',
+                          label:
+                              'Due ₹${customer.outstandingBalance!.toStringAsFixed(0)}',
                           color: AppTheme.danger,
                           large: false,
                         ),
@@ -597,7 +620,8 @@ class _PosScreenState extends State<PosScreen> {
           if (customer != null)
             IconButton(
               tooltip: 'Clear customer',
-              icon: Icon(Icons.close_rounded, color: AppTheme.textSecondary, size: _ic(16)),
+              icon: Icon(Icons.close_rounded,
+                  color: AppTheme.textSecondary, size: _ic(16)),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
               onPressed: () => cart.setCustomer(null),
@@ -614,7 +638,8 @@ class _PosScreenState extends State<PosScreen> {
             },
             style: TextButton.styleFrom(
               foregroundColor: AppTheme.primary,
-              padding: EdgeInsets.symmetric(horizontal: _desktop ? 6 : 2, vertical: 2),
+              padding: EdgeInsets.symmetric(
+                  horizontal: _desktop ? 6 : 2, vertical: 2),
               visualDensity: VisualDensity.compact,
             ),
             child: Row(
@@ -624,7 +649,8 @@ class _PosScreenState extends State<PosScreen> {
                 const SizedBox(width: 2),
                 Text(
                   customer == null ? 'Select' : 'Change',
-                  style: TextStyle(fontSize: _cartFs(11), fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                      fontSize: _cartFs(11), fontWeight: FontWeight.w500),
                 ),
                 Icon(Icons.chevron_right_rounded, size: _ic(16)),
               ],
@@ -644,18 +670,26 @@ class _PosScreenState extends State<PosScreen> {
         runSpacing: 6,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Icon(Icons.pause_circle_filled_rounded, color: AppTheme.warning, size: _ic(14)),
+          Icon(Icons.pause_circle_filled_rounded,
+              color: AppTheme.warning, size: _ic(14)),
           Text(
             'Held:',
-            style: TextStyle(fontSize: _cartFs(10), fontWeight: FontWeight.bold, color: AppTheme.textSecondary),
+            style: TextStyle(
+                fontSize: _cartFs(10),
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textSecondary),
           ),
           for (final h in cart.heldBills)
             ActionChip(
-              label: Text(h.id.split('-').last, style: TextStyle(fontSize: _cartFs(10))),
+              label: Text(h.id.split('-').last,
+                  style: TextStyle(fontSize: _cartFs(10))),
               visualDensity: VisualDensity.compact,
               backgroundColor: AppTheme.warning.withOpacity(0.08),
               side: const BorderSide(color: AppTheme.warning),
-              labelStyle: TextStyle(color: AppTheme.warning, fontWeight: FontWeight.bold, fontSize: _cartFs(10)),
+              labelStyle: TextStyle(
+                  color: AppTheme.warning,
+                  fontWeight: FontWeight.bold,
+                  fontSize: _cartFs(10)),
               onPressed: () => cart.restoreHeldBill(h.id),
             ),
         ],
@@ -669,7 +703,8 @@ class _PosScreenState extends State<PosScreen> {
     final auth = context.watch<AuthSession>();
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final desktopShortcuts = useWebLikeShell(context);
-    final showBillingQueue = desktopShortcuts && auth.hasPermission('emr.visits.bill');
+    final showBillingQueue =
+        desktopShortcuts && auth.hasPermission('emr.visits.bill');
 
     final cartTotalsFooter = Column(
       mainAxisSize: MainAxisSize.min,
@@ -687,7 +722,10 @@ class _PosScreenState extends State<PosScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Subtotal', style: TextStyle(color: AppTheme.textSecondary, fontSize: _cartFs(11))),
+                  Text('Subtotal',
+                      style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: _cartFs(11))),
                   Text(
                     '₹${cart.subtotal.toStringAsFixed(2)}',
                     style: TextStyle(
@@ -704,7 +742,8 @@ class _PosScreenState extends State<PosScreen> {
                 children: [
                   Text(
                     'GST (CGST + SGST)',
-                    style: TextStyle(color: AppTheme.textSecondary, fontSize: _cartFs(11)),
+                    style: TextStyle(
+                        color: AppTheme.textSecondary, fontSize: _cartFs(11)),
                   ),
                   Text(
                     '₹${cart.totalGst.toStringAsFixed(2)}',
@@ -764,7 +803,9 @@ class _PosScreenState extends State<PosScreen> {
               child: OutlinedButton.icon(
                 onPressed: cart.items.isEmpty ? null : () => cart.holdBill(),
                 icon: Icon(Icons.pause_circle_outline_rounded, size: _ic(16)),
-                label: Text('Hold Bill', style: TextStyle(fontSize: _cartFs(12), fontWeight: FontWeight.w500)),
+                label: Text('Hold Bill',
+                    style: TextStyle(
+                        fontSize: _cartFs(12), fontWeight: FontWeight.w500)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.primary,
                   side: const BorderSide(color: AppTheme.primary, width: 1.4),
@@ -772,7 +813,8 @@ class _PosScreenState extends State<PosScreen> {
                     horizontal: _desktop ? 14 : 12,
                     vertical: _desktop ? 12 : 10,
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               ),
             ),
@@ -783,14 +825,17 @@ class _PosScreenState extends State<PosScreen> {
                     ? null
                     : () {
                         final auth = context.read<AuthSession>();
-                        final online = context.read<ConnectivityNotifier>().isOnline;
+                        final online =
+                            context.read<ConnectivityNotifier>().isOnline;
                         if (online &&
-                            auth.hasPermission(AppPermissions.cashierShiftStart) &&
+                            auth.hasPermission(
+                                AppPermissions.cashierShiftStart) &&
                             (_cashSession == null || !_cashSession!.isOpen)) {
                           AppMessenger.show(
                             context,
                             const SnackBar(
-                              content: Text('Start your cash shift before checkout.'),
+                              content: Text(
+                                  'Start your cash shift before checkout.'),
                               backgroundColor: AppTheme.warning,
                             ),
                           );
@@ -799,7 +844,9 @@ class _PosScreenState extends State<PosScreen> {
                         _checkout();
                       },
                 icon: Icon(Icons.add_shopping_cart_rounded, size: _ic(16)),
-                label: Text('Checkout', style: TextStyle(fontSize: _cartFs(12), fontWeight: FontWeight.w500)),
+                label: Text('Checkout',
+                    style: TextStyle(
+                        fontSize: _cartFs(12), fontWeight: FontWeight.w500)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
@@ -808,7 +855,8 @@ class _PosScreenState extends State<PosScreen> {
                     horizontal: _desktop ? 14 : 12,
                     vertical: _desktop ? 12 : 10,
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               ),
             ),
@@ -823,7 +871,8 @@ class _PosScreenState extends State<PosScreen> {
         border: Border(left: BorderSide(color: Color(0xFFE2E8F0))),
       ),
       child: Padding(
-        padding: EdgeInsets.fromLTRB(_desktop ? 14 : 12, _desktop ? 12 : 10, _desktop ? 14 : 12, _desktop ? 12 : 10),
+        padding: EdgeInsets.fromLTRB(_desktop ? 14 : 12, _desktop ? 12 : 10,
+            _desktop ? 14 : 12, _desktop ? 12 : 10),
         // Scrollable workspace + sticky totals/actions so resized Windows
         // windows never clip the cart column (RenderFlex bottom overflow).
         child: Column(
@@ -860,7 +909,8 @@ class _PosScreenState extends State<PosScreen> {
                         ),
                         alignment: Alignment.center,
                         child: SingleChildScrollView(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 16),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -874,7 +924,8 @@ class _PosScreenState extends State<PosScreen> {
                                 child: Icon(
                                   Icons.shopping_cart_outlined,
                                   size: _ic(28),
-                                  color: AppTheme.primary.withValues(alpha: 0.35),
+                                  color:
+                                      AppTheme.primary.withValues(alpha: 0.35),
                                 ),
                               ),
                               const SizedBox(height: 10),
@@ -906,28 +957,27 @@ class _PosScreenState extends State<PosScreen> {
                         (c, i) {
                           final it = cart.items[i];
                           final billingVisit = cart.pendingVisitId != null;
-                          final canEditPrice = billingVisit && it.isServiceCharge;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: _CartLineTile(
-                              name: it.productName,
-                              unitPrice: it.unitPrice,
-                              quantity: it.quantity,
-                              lineTotal: it.totalAmount,
-                              canEditPrice: canEditPrice,
-                              showQtyControls: !it.isServiceCharge,
-                              desktop: _desktop,
-                              onEditPrice: () => _editCartLinePrice(cart, i),
-                              onDec: () {
-                                if (it.quantity > 1) {
-                                  cart.updateQuantity(i, it.quantity - 1);
-                                } else {
-                                  cart.removeItem(i);
-                                }
-                              },
-                              onInc: () => cart.updateQuantity(i, it.quantity + 1),
-                              onRemove: () => cart.removeItem(i),
-                            ),
+                          final canEditPrice =
+                              billingVisit && it.isServiceCharge;
+                          return _CartLineTile(
+                            name: it.productName,
+                            unitPrice: it.unitPrice,
+                            quantity: it.quantity,
+                            lineTotal: it.totalAmount,
+                            canEditPrice: canEditPrice,
+                            showQtyControls: !it.isServiceCharge,
+                            desktop: _desktop,
+                            onEditPrice: () => _editCartLinePrice(cart, i),
+                            onDec: () {
+                              if (it.quantity > 1) {
+                                cart.updateQuantity(i, it.quantity - 1);
+                              } else {
+                                cart.removeItem(i);
+                              }
+                            },
+                            onInc: () =>
+                                cart.updateQuantity(i, it.quantity + 1),
+                            onRemove: () => cart.removeItem(i),
                           );
                         },
                         childCount: cart.items.length,
@@ -944,7 +994,8 @@ class _PosScreenState extends State<PosScreen> {
     );
 
     final searchPanel = Padding(
-      padding: EdgeInsets.fromLTRB(_desktop ? 12 : 8, _desktop ? 10 : 8, _desktop ? 12 : 8, _desktop ? 10 : 8),
+      padding: EdgeInsets.fromLTRB(_desktop ? 12 : 8, _desktop ? 10 : 8,
+          _desktop ? 12 : 8, _desktop ? 10 : 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -960,15 +1011,19 @@ class _PosScreenState extends State<PosScreen> {
                 color: AppTheme.accent.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   child: Row(
                     children: [
-                      const Icon(Icons.medical_services_outlined, size: 18, color: AppTheme.accent),
+                      const Icon(Icons.medical_services_outlined,
+                          size: 18, color: AppTheme.accent),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Billing visit $_loadedVisitNumber',
-                          style: const TextStyle(fontWeight: FontWeight.w600, color: AppTheme.accent),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.accent),
                         ),
                       ),
                     ],
@@ -988,7 +1043,8 @@ class _PosScreenState extends State<PosScreen> {
             style: TextStyle(fontSize: _fs(16), height: 1.3),
             decoration: InputDecoration(
               hintText: 'Search items by name, category, or barcode...',
-              hintStyle: TextStyle(fontSize: _fs(15), color: AppTheme.textSecondary),
+              hintStyle:
+                  TextStyle(fontSize: _fs(15), color: AppTheme.textSecondary),
               isDense: false,
               contentPadding: EdgeInsets.symmetric(
                 horizontal: 16,
@@ -996,9 +1052,11 @@ class _PosScreenState extends State<PosScreen> {
               ),
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(left: 8),
-                child: Icon(Icons.search_rounded, color: AppTheme.textSecondary, size: _ic(26)),
+                child: Icon(Icons.search_rounded,
+                    color: AppTheme.textSecondary, size: _ic(26)),
               ),
-              prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              prefixIconConstraints:
+                  const BoxConstraints(minWidth: 48, minHeight: 48),
               suffixIcon: _search.text.isNotEmpty
                   ? IconButton(
                       icon: Icon(Icons.clear, size: _ic(20)),
@@ -1011,11 +1069,15 @@ class _PosScreenState extends State<PosScreen> {
             onTap: () => _runSearch(_search.text, immediate: true),
           ),
           const SizedBox(height: 6),
-          if (_searching) const ClipRRect(borderRadius: BorderRadius.all(Radius.circular(4)), child: LinearProgressIndicator(minHeight: 3)),
+          if (_searching)
+            const ClipRRect(
+                borderRadius: BorderRadius.all(Radius.circular(4)),
+                child: LinearProgressIndicator(minHeight: 3)),
           if (_searchError != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text(_searchError!, style: TextStyle(color: AppTheme.danger, fontSize: _fs(13))),
+              child: Text(_searchError!,
+                  style: TextStyle(color: AppTheme.danger, fontSize: _fs(13))),
             ),
           const SizedBox(height: 6),
           Expanded(
@@ -1024,18 +1086,26 @@ class _PosScreenState extends State<PosScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.inventory_2_outlined, size: _ic(36), color: AppTheme.textSecondary.withOpacity(0.3)),
+                        Icon(Icons.inventory_2_outlined,
+                            size: _ic(36),
+                            color: AppTheme.textSecondary.withOpacity(0.3)),
                         const SizedBox(height: 8),
                         Text(
-                          _searching ? 'Loading catalog…' : 'No matching products',
-                          style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.bold, fontSize: _fs(14)),
+                          _searching
+                              ? 'Loading catalog…'
+                              : 'No matching products',
+                          style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: _fs(14)),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           _localCatalogCount > 0
                               ? '$_localCatalogCount items in local catalog — search or tap the field'
                               : 'Syncing catalog — works offline once loaded',
-                          style: TextStyle(color: AppTheme.textSecondary, fontSize: _fs(12)),
+                          style: TextStyle(
+                              color: AppTheme.textSecondary, fontSize: _fs(12)),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -1123,7 +1193,10 @@ class _PosScreenState extends State<PosScreen> {
                                   ],
                                 ),
                               ),
-                              const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+                              const Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: Color(0xFFE2E8F0)),
                               Expanded(
                                 child: ListView.separated(
                                   itemCount: _hits.length,
@@ -1134,12 +1207,16 @@ class _PosScreenState extends State<PosScreen> {
                                   ),
                                   itemBuilder: (c, i) {
                                     final p = _hits[i];
-                                    final isLowStock = (p.currentStock ?? 0) <= p.reorderLevel;
-                                    final isService = p.isService || !p.trackInventory;
+                                    final isLowStock =
+                                        (p.currentStock ?? 0) <= p.reorderLevel;
+                                    final isService =
+                                        p.isService || !p.trackInventory;
 
                                     void addToCart() {
                                       final msg = cart.addProduct(p);
-                                      if (context.mounted && msg != 'added' && msg != 'incremented') {
+                                      if (context.mounted &&
+                                          msg != 'added' &&
+                                          msg != 'incremented') {
                                         AppMessenger.show(
                                           context,
                                           SnackBar(
@@ -1183,12 +1260,15 @@ class _PosScreenState extends State<PosScreen> {
                                                       child: Text(
                                                         p.name,
                                                         style: TextStyle(
-                                                          fontWeight: FontWeight.w600,
+                                                          fontWeight:
+                                                              FontWeight.w600,
                                                           fontSize: _fs(15),
-                                                          color: AppTheme.textPrimary,
+                                                          color: AppTheme
+                                                              .textPrimary,
                                                         ),
                                                         maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
                                                       ),
                                                     ),
                                                   ],
@@ -1203,16 +1283,19 @@ class _PosScreenState extends State<PosScreen> {
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: _fs(18),
                                                     color: AppTheme.primary,
-                                                    decoration: p.mrp > p.sellingPrice
-                                                        ? TextDecoration.lineThrough
-                                                        : null,
+                                                    decoration:
+                                                        p.mrp > p.sellingPrice
+                                                            ? TextDecoration
+                                                                .lineThrough
+                                                            : null,
                                                   ),
                                                 ),
                                               ),
                                               Expanded(
                                                 flex: 2,
                                                 child: Text(
-                                                  p.sellingPrice.toStringAsFixed(2),
+                                                  p.sellingPrice
+                                                      .toStringAsFixed(2),
                                                   textAlign: TextAlign.center,
                                                   style: TextStyle(
                                                     fontWeight: FontWeight.w400,
@@ -1300,7 +1383,8 @@ class _PosScreenState extends State<PosScreen> {
                 indicatorColor: AppTheme.primary,
                 labelColor: AppTheme.primary,
                 unselectedLabelColor: AppTheme.textSecondary,
-                labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                labelStyle:
+                    TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                 tabs: [
                   Tab(
                     child: Row(
@@ -1339,7 +1423,8 @@ class _PosScreenState extends State<PosScreen> {
 
     return KeyboardShortcutHandler(
       shortcuts: {
-        ShortcutKey.ctrl(LogicalKeyboardKey.keyB): () => _searchFocus.requestFocus(),
+        ShortcutKey.ctrl(LogicalKeyboardKey.keyB): () =>
+            _searchFocus.requestFocus(),
         ShortcutKey.ctrl(LogicalKeyboardKey.enter): () {
           if (cart.items.isNotEmpty) _checkout();
         },
@@ -1426,7 +1511,8 @@ class _SelectCustomerDialogState extends State<_SelectCustomerDialog> {
       final q = value.trim();
       setState(() {
         _query = q;
-        _searchFuture = q.length < 2 ? null : widget.services.customers.search(q);
+        _searchFuture =
+            q.length < 2 ? null : widget.services.customers.search(q);
       });
     });
   }
@@ -1523,12 +1609,15 @@ class _SelectCustomerDialogState extends State<_SelectCustomerDialog> {
                     if (widget.canCreate)
                       TextButton.icon(
                         onPressed: _openQuickCreate,
-                        icon: Icon(Icons.person_add_alt_1_rounded, size: _ic(18)),
+                        icon:
+                            Icon(Icons.person_add_alt_1_rounded, size: _ic(18)),
                         label: Text(
                           'New',
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: _fs(13)),
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: _fs(13)),
                         ),
-                        style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
+                        style: TextButton.styleFrom(
+                            foregroundColor: AppTheme.primary),
                       ),
                     IconButton(
                       tooltip: 'Close',
@@ -1539,7 +1628,8 @@ class _SelectCustomerDialogState extends State<_SelectCustomerDialog> {
                 ),
               ),
               Padding(
-                padding: EdgeInsets.fromLTRB(_desktop ? 20 : 16, 0, _desktop ? 20 : 16, 12),
+                padding: EdgeInsets.fromLTRB(
+                    _desktop ? 20 : 16, 0, _desktop ? 20 : 16, 12),
                 child: ListenableBuilder(
                   listenable: _search,
                   builder: (context, _) {
@@ -1570,15 +1660,18 @@ class _SelectCustomerDialogState extends State<_SelectCustomerDialog> {
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE2E8F0)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFE2E8F0)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+                          borderSide: const BorderSide(
+                              color: AppTheme.primary, width: 1.5),
                         ),
                       ),
                     );
@@ -1879,7 +1972,8 @@ class _MessageState extends StatelessWidget {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: fontSize, color: AppTheme.textSecondary),
+              style:
+                  TextStyle(fontSize: fontSize, color: AppTheme.textSecondary),
             ),
           ],
         ),
@@ -1945,7 +2039,8 @@ class _CreateCustomerBanner extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           child: Row(
             children: [
-              const Icon(Icons.person_add_alt_1_rounded, color: AppTheme.primary),
+              const Icon(Icons.person_add_alt_1_rounded,
+                  color: AppTheme.primary),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -2013,7 +2108,8 @@ class _CustomerResultTile extends StatelessWidget {
                   color: Color(0xFFEFF6FF),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.person_rounded, color: AppTheme.primary, size: iconSize),
+                child: Icon(Icons.person_rounded,
+                    color: AppTheme.primary, size: iconSize),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -2041,7 +2137,8 @@ class _CustomerResultTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary.withValues(alpha: 0.7)),
+              Icon(Icons.chevron_right_rounded,
+                  color: AppTheme.textSecondary.withValues(alpha: 0.7)),
             ],
           ),
         ),
@@ -2066,7 +2163,8 @@ class _QuickCreateCustomerDialog extends StatefulWidget {
       _QuickCreateCustomerDialogState();
 }
 
-class _QuickCreateCustomerDialogState extends State<_QuickCreateCustomerDialog> {
+class _QuickCreateCustomerDialogState
+    extends State<_QuickCreateCustomerDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _phone;
@@ -2200,7 +2298,8 @@ class _QuickCreateCustomerDialogState extends State<_QuickCreateCustomerDialog> 
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
                 )
               : const Icon(Icons.check_rounded, size: 18),
           label: Text(_saving ? 'Saving…' : 'Create & select'),
@@ -2300,10 +2399,9 @@ class _CartLineTile extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+      decoration: const BoxDecoration(
+        // List rows use one separator instead of individual card outlines.
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
       ),
       child: Row(
         children: [
@@ -2473,11 +2571,13 @@ class _DashedLinePainter extends CustomPainter {
     var x = 0.0;
     final y = size.height / 2;
     while (x < size.width) {
-      canvas.drawLine(Offset(x, y), Offset(math.min(x + dashWidth, size.width), y), paint);
+      canvas.drawLine(
+          Offset(x, y), Offset(math.min(x + dashWidth, size.width), y), paint);
       x += dashWidth + dashSpace;
     }
   }
 
   @override
-  bool shouldRepaint(covariant _DashedLinePainter oldDelegate) => oldDelegate.color != color;
+  bool shouldRepaint(covariant _DashedLinePainter oldDelegate) =>
+      oldDelegate.color != color;
 }

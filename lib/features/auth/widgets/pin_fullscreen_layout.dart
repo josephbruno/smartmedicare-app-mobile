@@ -7,17 +7,15 @@ import '../../../core/widgets/powered_by_footer.dart';
 
 /// Full-screen shell for PIN unlock / set-PIN flows.
 class PinFullscreenLayout extends StatelessWidget {
-  const PinFullscreenLayout({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    this.secondaryText,
-    required this.pinEntry,
-    this.error,
-    this.loading = false,
-    this.footer,
-  });
-
+  const PinFullscreenLayout(
+      {super.key,
+      required this.title,
+      required this.subtitle,
+      this.secondaryText,
+      required this.pinEntry,
+      this.error,
+      this.loading = false,
+      this.footer});
   final String title;
   final String subtitle;
   final String? secondaryText;
@@ -26,177 +24,344 @@ class PinFullscreenLayout extends StatelessWidget {
   final bool loading;
   final Widget? footer;
 
-  Widget _buildDesktopTwoColumnLayout({
-    required String title,
-    required String subtitle,
-    required String? secondaryText,
-    required bool loading,
-    required String? error,
-    required double screenWidth,
-    required Widget pinEntry,
-    required Widget? footer,
-    required bool isWideDesktop,
-  }) {
-    final columnGap = isWideDesktop ? 80.0 : 60.0;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Flexible(
-          child: _HeaderCard(
-            title: title,
-            subtitle: subtitle,
-            secondaryText: secondaryText,
-            loading: loading,
-            error: error,
-            screenWidth: screenWidth,
-          ),
-        ),
-        SizedBox(width: columnGap),
-        Flexible(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              pinEntry,
-              if (footer != null) ...[
-                SizedBox(height: isWideDesktop ? 24.0 : 20.0),
-                footer,
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMobileColumnLayout({
-    required String title,
-    required String subtitle,
-    required String? secondaryText,
-    required bool loading,
-    required String? error,
-    required double screenWidth,
-    required Widget pinEntry,
-    required Widget? footer,
-    required double spaceBetweenElements,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        _HeaderCard(
-          title: title,
-          subtitle: subtitle,
-          secondaryText: secondaryText,
-          loading: loading,
-          error: error,
-          screenWidth: screenWidth,
-        ),
-        SizedBox(height: spaceBetweenElements),
-        pinEntry,
-        if (footer != null) ...[
-          SizedBox(height: spaceBetweenElements > 24 ? 20.0 : 16.0),
-          footer,
-        ],
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final isDesktop = AppConfig.usesLargeUiScale;
-
-    // More granular breakpoints for responsive design
-    final isWideDesktop = size.width >= 1280;
-    final isTablet = size.width >= 600 && size.width < 840;
-
-    final horizontalPadding = isWideDesktop ? 60.0 : isDesktop ? 40.0 : isTablet ? 32.0 : 20.0;
-    final verticalPadding = isWideDesktop ? 48.0 : isDesktop ? 32.0 : isTablet ? 28.0 : 20.0;
-    final spaceBetweenElements = isWideDesktop ? 48.0 : isDesktop ? 32.0 : isTablet ? 28.0 : 24.0;
-
+    final desktop = AppConfig.usesLargeUiScale;
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
+      body: DecoratedBox(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFE8F1FF),
-              Color(0xFFF8FAFC),
-              Color(0xFFF0FDF9),
-            ],
-            stops: [0.0, 0.45, 1.0],
-          ),
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: size.height * 0.08,
-              right: -size.width * 0.12,
+            gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+              Color(0xFFF8FBFF),
+              Color(0xFFEAF4FF),
+              Color(0xFFE1F0FF)
+            ])),
+        child: Stack(children: [
+          Positioned(
+              top: -120,
+              right: -130,
               child: _GlowCircle(
-                size: size.width * 0.42,
-                color: AppTheme.primary.withValues(alpha: 0.09),
-              ),
-            ),
-            Positioned(
-              bottom: size.height * 0.05,
-              left: -size.width * 0.1,
+                  size: size.width * .46, color: const Color(0x244BA3FF))),
+          Positioned(
+              bottom: -150,
+              left: -110,
               child: _GlowCircle(
-                size: size.width * 0.35,
-                color: AppTheme.accent.withValues(alpha: 0.07),
-              ),
-            ),
-            SafeArea(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: horizontalPadding,
-                          vertical: verticalPadding,
-                        ),
-                        child: isDesktop
-                            ? _buildDesktopTwoColumnLayout(
-                                title: title,
-                                subtitle: subtitle,
-                                secondaryText: secondaryText,
-                                loading: loading,
-                                error: error,
-                                screenWidth: size.width,
-                                pinEntry: pinEntry,
-                                footer: footer,
-                                isWideDesktop: isWideDesktop,
-                              )
-                            : _buildMobileColumnLayout(
-                                title: title,
-                                subtitle: subtitle,
-                                secondaryText: secondaryText,
-                                loading: loading,
-                                error: error,
-                                screenWidth: size.width,
-                                pinEntry: pinEntry,
-                                footer: footer,
-                                spaceBetweenElements: spaceBetweenElements,
-                              ),
-                      ),
-                    ),
-                  ),
-                  const PoweredByFooter(),
-                ],
-              ),
-            ),
-          ],
-        ),
+                  size: size.width * .44, color: const Color(0x1A22C55E))),
+          if (desktop)
+            Positioned(
+                left: 0,
+                bottom: 0,
+                width: size.width * .57,
+                height: size.height * .66,
+                child: IgnorePointer(
+                    child: Opacity(
+                        opacity: .88,
+                        child: Image.asset(
+                            'assets/branding/clinic-hero-transparent.png',
+                            fit: BoxFit.contain,
+                            alignment: Alignment.bottomCenter)))),
+          SafeArea(
+              child: Column(children: [
+            Expanded(
+                child: desktop
+                    ? _DesktopPinLayout(
+                        title: title,
+                        subtitle: subtitle,
+                        secondaryText: secondaryText,
+                        error: error,
+                        loading: loading,
+                        pinEntry: pinEntry,
+                        footer: footer)
+                    : _MobilePinLayout(
+                        title: title,
+                        subtitle: subtitle,
+                        secondaryText: secondaryText,
+                        error: error,
+                        loading: loading,
+                        pinEntry: pinEntry,
+                        footer: footer)),
+            const PoweredByFooter(),
+          ])),
+        ]),
       ),
     );
   }
+}
+
+class _DesktopPinLayout extends StatelessWidget {
+  const _DesktopPinLayout(
+      {required this.title,
+      required this.subtitle,
+      required this.secondaryText,
+      required this.error,
+      required this.loading,
+      required this.pinEntry,
+      required this.footer});
+  final String title;
+  final String subtitle;
+  final String? secondaryText;
+  final String? error;
+  final bool loading;
+  final Widget pinEntry;
+  final Widget? footer;
+  @override
+  Widget build(BuildContext context) => Row(children: [
+        Expanded(
+            flex: 5,
+            child: _PinMarketingPane(
+                title: title,
+                subtitle: subtitle,
+                secondaryText: secondaryText,
+                error: error,
+                loading: loading)),
+        Expanded(
+            flex: 4,
+            child: Center(
+                child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 576),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      pinEntry,
+                      if (footer != null) ...[
+                        const SizedBox(height: 18),
+                        footer!
+                      ]
+                    ])))),
+      ]);
+}
+
+class _MobilePinLayout extends StatelessWidget {
+  const _MobilePinLayout(
+      {required this.title,
+      required this.subtitle,
+      required this.secondaryText,
+      required this.error,
+      required this.loading,
+      required this.pinEntry,
+      required this.footer});
+  final String title;
+  final String subtitle;
+  final String? secondaryText;
+  final String? error;
+  final bool loading;
+  final Widget pinEntry;
+  final Widget? footer;
+  @override
+  Widget build(BuildContext context) => Center(
+      child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            _HeaderCard(
+                title: title,
+                subtitle: subtitle,
+                secondaryText: secondaryText,
+                loading: loading,
+                error: error,
+                screenWidth: MediaQuery.sizeOf(context).width),
+            const SizedBox(height: 28),
+            pinEntry,
+            if (footer != null) ...[const SizedBox(height: 16), footer!],
+          ])));
+}
+
+class _PinMarketingPane extends StatelessWidget {
+  const _PinMarketingPane(
+      {required this.title,
+      required this.subtitle,
+      required this.secondaryText,
+      required this.error,
+      required this.loading});
+  final String title;
+  final String subtitle;
+  final String? secondaryText;
+  final String? error;
+  final bool loading;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(104, 52, 36, 60),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const _PinBrand(),
+          const SizedBox(height: 58),
+          const _PinEyebrow(),
+          const SizedBox(height: 18),
+          Text(title,
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                  color: const Color(0xFF08154C),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 56,
+                  letterSpacing: -1.8,
+                  height: 1.05)),
+          const SizedBox(height: 14),
+          SizedBox(
+              width: 440,
+              child: Text(subtitle,
+                  style: const TextStyle(
+                      color: Color(0xFF60789E),
+                      fontSize: 21,
+                      height: 1.35,
+                      fontWeight: FontWeight.w500))),
+          if (secondaryText != null) ...[
+            const SizedBox(height: 8),
+            Text(secondaryText!,
+                style: const TextStyle(color: Color(0xFF60789E), fontSize: 14))
+          ],
+          const SizedBox(height: 30),
+          const _PinBenefitRow(),
+          if (error != null) ...[
+            const SizedBox(height: 18),
+            SizedBox(width: 430, child: _ErrorBanner(message: error!))
+          ],
+        ]),
+      );
+}
+
+class _PinBrand extends StatelessWidget {
+  const _PinBrand();
+  @override
+  Widget build(BuildContext context) =>
+      const Row(mainAxisSize: MainAxisSize.min, children: [
+        AppLogo(size: 74, borderRadius: 0),
+        SizedBox(width: 16),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text.rich(TextSpan(
+              style: TextStyle(
+                  color: Color(0xFF0B1A55),
+                  fontSize: 36,
+                  letterSpacing: -1.4,
+                  height: 1),
+              children: [
+                TextSpan(
+                    text: 'Smart',
+                    style: TextStyle(fontWeight: FontWeight.w800)),
+                TextSpan(
+                    text: 'MediCare',
+                    style: TextStyle(color: Color(0xFF1463D8)))
+              ])),
+          SizedBox(height: 7),
+          Text('SMARTER CLINICS  •  HEALTHIER LIVES',
+              style: TextStyle(
+                  color: Color(0xFF60789E),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.6)),
+        ]),
+      ]);
+}
+
+class _PinEyebrow extends StatelessWidget {
+  const _PinEyebrow();
+  @override
+  Widget build(BuildContext context) =>
+      const Row(mainAxisSize: MainAxisSize.min, children: [
+        SizedBox(
+            width: 34, child: Divider(color: Color(0xFF1463D8), thickness: 3)),
+        SizedBox(width: 14),
+        Text('SECURE ACCESS',
+            style: TextStyle(
+                color: Color(0xFF6B7F9F),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 3)),
+      ]);
+}
+
+class _PinBenefitRow extends StatelessWidget {
+  const _PinBenefitRow();
+
+  @override
+  Widget build(BuildContext context) => const Row(
+        children: [
+          Expanded(
+            child: _PinBenefit(
+              icon: Icons.verified_user_rounded,
+              label: 'Secure\nAccess',
+              color: Color(0xFF2384FF),
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: _PinBenefit(
+              icon: Icons.speed_rounded,
+              label: 'Quick\nLogin',
+              color: Color(0xFF10B981),
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: _PinBenefit(
+              icon: Icons.lock_rounded,
+              label: 'Your Data\nProtected',
+              color: Color(0xFF7C3AED),
+            ),
+          ),
+        ],
+      );
+}
+
+class _PinBenefit extends StatelessWidget {
+  const _PinBenefit({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 130;
+          final labelWidget = Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: compact ? TextAlign.center : TextAlign.left,
+            style: const TextStyle(
+              color: Color(0xFF172554),
+              fontSize: 12,
+              height: 1.15,
+              fontWeight: FontWeight.w600,
+            ),
+          );
+
+          return Container(
+            height: 88,
+            padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .72),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withValues(alpha: .85)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0F0F172A),
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: compact
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, color: color, size: 28),
+                      const SizedBox(height: 5),
+                      labelWidget,
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Icon(icon, color: color, size: 30),
+                      const SizedBox(width: 8),
+                      Expanded(child: labelWidget),
+                    ],
+                  ),
+          );
+        },
+      );
 }
 
 class _HeaderCard extends StatelessWidget {
@@ -223,17 +388,58 @@ class _HeaderCard extends StatelessWidget {
     final isTablet = screenWidth >= 600 && screenWidth < 840;
 
     // Narrower max width for desktop two-column layout
-    final maxWidth = isWideDesktop ? 380.0 : isDesktop ? 340.0 : isTablet ? 480.0 : 400.0;
-    final logoSize = isWideDesktop ? 84.0 : isDesktop ? 72.0 : isTablet ? 68.0 : 60.0;
-    final titleFontSize = isWideDesktop ? 36.0 : isDesktop ? 32.0 : isTablet ? 30.0 : 26.0;
-    final spaceBetween = isWideDesktop ? 32.0 : isDesktop ? 28.0 : isTablet ? 24.0 : 22.0;
-    final avatarRadius = isWideDesktop ? 20.0 : isDesktop ? 18.0 : isTablet ? 17.0 : 16.0;
-    final subtitleFontSize = isWideDesktop ? 17.0 : isDesktop ? 16.0 : isTablet ? 15.5 : 15.0;
-    final secondaryFontSize = isWideDesktop ? 16.0 : isDesktop ? 15.0 : isTablet ? 14.5 : 14.0;
+    final maxWidth = isWideDesktop
+        ? 380.0
+        : isDesktop
+            ? 340.0
+            : isTablet
+                ? 480.0
+                : 400.0;
+    final logoSize = isWideDesktop
+        ? 84.0
+        : isDesktop
+            ? 72.0
+            : isTablet
+                ? 68.0
+                : 60.0;
+    final titleFontSize = isWideDesktop
+        ? 36.0
+        : isDesktop
+            ? 32.0
+            : isTablet
+                ? 30.0
+                : 26.0;
+    final spaceBetween = isWideDesktop
+        ? 32.0
+        : isDesktop
+            ? 28.0
+            : isTablet
+                ? 24.0
+                : 22.0;
+    final avatarRadius = isWideDesktop
+        ? 20.0
+        : isDesktop
+            ? 18.0
+            : isTablet
+                ? 17.0
+                : 16.0;
+    final subtitleFontSize = isWideDesktop
+        ? 17.0
+        : isDesktop
+            ? 16.0
+            : isTablet
+                ? 15.5
+                : 15.0;
+    final secondaryFontSize = isWideDesktop
+        ? 16.0
+        : isDesktop
+            ? 15.0
+            : isTablet
+                ? 14.5
+                : 14.0;
 
-    final initial = subtitle.trim().isNotEmpty
-        ? subtitle.trim()[0].toUpperCase()
-        : '?';
+    final initial =
+        subtitle.trim().isNotEmpty ? subtitle.trim()[0].toUpperCase() : '?';
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),
@@ -302,7 +508,12 @@ class _HeaderCard extends StatelessWidget {
             ),
           ),
           if (secondaryText != null) ...[
-            SizedBox(height: isWideDesktop ? 20.0 : isDesktop ? 18.0 : 14.0),
+            SizedBox(
+                height: isWideDesktop
+                    ? 20.0
+                    : isDesktop
+                        ? 18.0
+                        : 14.0),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -321,17 +532,6 @@ class _HeaderCard extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-          ],
-          if (loading) ...[
-            const SizedBox(height: 20),
-            SizedBox(
-              height: isWideDesktop ? 30.0 : 26.0,
-              width: isWideDesktop ? 30.0 : 26.0,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: AppTheme.primary.withValues(alpha: 0.8),
-              ),
             ),
           ],
           if (error != null) ...[
@@ -362,7 +562,8 @@ class _ErrorBanner extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppTheme.danger, size: 18),
+          const Icon(Icons.error_outline_rounded,
+              color: AppTheme.danger, size: 18),
           const SizedBox(width: 8),
           Flexible(
             child: Text(

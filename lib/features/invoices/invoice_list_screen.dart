@@ -11,6 +11,7 @@ import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
 import '../../data/models/invoice.dart';
+import '../../data/models/shop.dart';
 import '../reports/report_date_range.dart';
 import '../reports/report_formatters.dart';
 
@@ -39,6 +40,8 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
   final _search = TextEditingController();
   DateTime? _dateFrom;
   DateTime? _dateTo;
+  List<Branch> _branches = [];
+  int? _selectedBranchId;
 
   @override
   void initState() {
@@ -46,12 +49,28 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     _dateFrom = DateTime.tryParse(widget.initialDateFrom ?? '');
     _dateTo = DateTime.tryParse(widget.initialDateTo ?? '');
     _period = _periodFromDates(_dateFrom, _dateTo);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadBranches());
   }
 
   @override
   void dispose() {
     _search.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadBranches() async {
+    final auth = context.read<AuthSession>();
+    if (!auth.isSuperAdmin) return;
+    try {
+      final branches = await context.read<AppServices>().branches.list();
+      if (!mounted) return;
+      setState(() {
+        _branches = branches.where((branch) => branch.isActive).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+      });
+    } catch (_) {
+      // The invoice list remains usable if branches cannot be loaded.
+    }
   }
 
   String _periodFromDates(DateTime? from, DateTime? to) {
@@ -62,10 +81,13 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     final b = DateTime(to.year, to.month, to.day);
     if (a == today && b == today) return 'today';
     final monthStart = DateTime(now.year, now.month, 1);
-    if (a == monthStart && (b == today || b == DateTime(now.year, now.month + 1, 0))) {
+    if (a == monthStart &&
+        (b == today || b == DateTime(now.year, now.month + 1, 0))) {
       return 'month';
     }
-    if (a.day == 1 && b == DateTime(a.year, a.month + 1, 0) && a != monthStart) {
+    if (a.day == 1 &&
+        b == DateTime(a.year, a.month + 1, 0) &&
+        a != monthStart) {
       return 'month_pick';
     }
     if (a == b) return 'date';
@@ -128,7 +150,8 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
   Future<void> _pickMonth() async {
     final picked = await showDialog<DateTime>(
       context: context,
-      builder: (ctx) => _MonthPickerDialog(initial: _dateFrom ?? DateTime.now()),
+      builder: (ctx) =>
+          _MonthPickerDialog(initial: _dateFrom ?? DateTime.now()),
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -314,6 +337,10 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
     final services = context.read<AppServices>();
     final isSuperAdmin = context.watch<AuthSession>().isSuperAdmin;
     final periodSummary = _periodSummaryButton();
+    final branchValue =
+        _branches.any((branch) => branch.id == _selectedBranchId)
+            ? _selectedBranchId
+            : null;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -332,10 +359,12 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
                         controller: _search,
                         style: const TextStyle(fontSize: 13),
                         decoration: const InputDecoration(
-                          hintText: 'Search invoice #, customer name or mobile…',
+                          hintText:
+                              'Search invoice #, customer name or mobile…',
                           hintStyle: TextStyle(fontSize: 13),
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
                           prefixIcon: Icon(Icons.search, size: 18),
                         ),
                         textInputAction: TextInputAction.search,
@@ -350,12 +379,14 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
                       onPressed: () => setState(() {}),
                       style: FilledButton.styleFrom(
                         visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
-                      child: const Text('Search', style: TextStyle(fontSize: 12.5)),
+                      child: const Text('Search',
+                          style: TextStyle(fontSize: 12.5)),
                     ),
                   ],
                 ),
@@ -365,6 +396,30 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    if (isSuperAdmin && _branches.isNotEmpty)
+                      _filterDropdown<int?>(
+                        width: 190,
+                        label: 'Branch',
+                        value: branchValue,
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('All branches'),
+                          ),
+                          ..._branches.map(
+                            (branch) => DropdownMenuItem<int?>(
+                              value: branch.id,
+                              child: Text(
+                                branch.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _selectedBranchId = value);
+                        },
+                      ),
                     _filterDropdown<String>(
                       width: 130,
                       label: 'Status',
@@ -372,8 +427,10 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
                       items: const [
                         DropdownMenuItem(value: 'all', child: Text('All')),
                         DropdownMenuItem(value: 'paid', child: Text('Paid')),
-                        DropdownMenuItem(value: 'unpaid', child: Text('Unpaid')),
-                        DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
+                        DropdownMenuItem(
+                            value: 'unpaid', child: Text('Unpaid')),
+                        DropdownMenuItem(
+                            value: 'cancelled', child: Text('Cancelled')),
                       ],
                       onChanged: (v) {
                         if (v == null) return;
@@ -399,13 +456,19 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
                       label: 'Period',
                       value: _period,
                       items: const [
-                        DropdownMenuItem(value: 'all', child: Text('All dates')),
+                        DropdownMenuItem(
+                            value: 'all', child: Text('All dates')),
                         DropdownMenuItem(value: 'today', child: Text('Today')),
-                        DropdownMenuItem(value: 'month', child: Text('This month')),
-                        DropdownMenuItem(value: 'last_month', child: Text('Last month')),
-                        DropdownMenuItem(value: 'date', child: Text('Pick date')),
-                        DropdownMenuItem(value: 'month_pick', child: Text('Pick month')),
-                        DropdownMenuItem(value: 'custom', child: Text('Custom range')),
+                        DropdownMenuItem(
+                            value: 'month', child: Text('This month')),
+                        DropdownMenuItem(
+                            value: 'last_month', child: Text('Last month')),
+                        DropdownMenuItem(
+                            value: 'date', child: Text('Pick date')),
+                        DropdownMenuItem(
+                            value: 'month_pick', child: Text('Pick month')),
+                        DropdownMenuItem(
+                            value: 'custom', child: Text('Custom range')),
                       ],
                       onChanged: _onPeriodChanged,
                     ),
@@ -415,7 +478,8 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
                         tooltip: 'Clear dates',
                         visualDensity: VisualDensity.compact,
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        constraints:
+                            const BoxConstraints(minWidth: 32, minHeight: 32),
                         onPressed: _clearDates,
                         icon: const Icon(Icons.clear, size: 18),
                       ),
@@ -427,179 +491,182 @@ class _InvoiceListScreenState extends State<InvoiceListScreen> {
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
           Expanded(
             child: AppPaginatedTable<Invoice>(
-                  key: ValueKey(
-                    '$_selectedFilter-$_paymentFilter-$_period-${_search.text}-$_dateFromStr-$_dateToStr',
+              key: ValueKey(
+                '$_selectedBranchId-$_selectedFilter-$_paymentFilter-$_period-${_search.text}-$_dateFromStr-$_dateToStr',
+              ),
+              emptyMessage: 'No invoices found for this filter.',
+              headerFontSize: 9,
+              cellFontSize: 12,
+              loadPage: ({required page, required perPage}) =>
+                  services.billing.listPaginated(
+                page: page,
+                perPage: perPage,
+                status: _selectedFilter,
+                search:
+                    _search.text.trim().isNotEmpty ? _search.text.trim() : null,
+                dateFrom: _dateFromStr,
+                dateTo: _dateToStr,
+                paymentMode: _paymentFilter,
+                branchId: isSuperAdmin ? branchValue : null,
+              ),
+              onRowTap: (inv) => context.go('/invoices/${inv.id}'),
+              columns: [
+                TableColumnDef(
+                  label: 'Invoice #',
+                  flex: 1.2,
+                  cellBuilder: (c, inv) => Text(
+                    inv.displayInvoiceNumber,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
                   ),
-                  emptyMessage: 'No invoices found for this filter.',
-                  headerFontSize: 9,
-                  cellFontSize: 12,
-                  loadPage: ({required page, required perPage}) =>
-                      services.billing.listPaginated(
-                        page: page,
-                        perPage: perPage,
-                        status: _selectedFilter,
-                        search: _search.text.trim().isNotEmpty ? _search.text.trim() : null,
-                        dateFrom: _dateFromStr,
-                        dateTo: _dateToStr,
-                        paymentMode: _paymentFilter,
+                ),
+                TableColumnDef(
+                  label: 'Customer',
+                  flex: 1.4,
+                  cellBuilder: (c, inv) => Text(
+                    inv.customer?.name ?? 'Walk-in',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                if (isSuperAdmin)
+                  TableColumnDef(
+                    label: 'Branch',
+                    flex: 1.3,
+                    cellBuilder: (c, inv) => Text(
+                      inv.branchName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
                       ),
-                  onRowTap: (inv) => context.go('/invoices/${inv.id}'),
-                  columns: [
-                    TableColumnDef(
-                      label: 'Invoice #',
-                      flex: 1.2,
-                      cellBuilder: (c, inv) => Text(
-                        inv.displayInvoiceNumber,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                TableColumnDef(
+                  label: 'Date',
+                  flex: 1,
+                  cellBuilder: (c, inv) => Text(
+                    inv.displayDate,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                TableColumnDef(
+                  label: 'Status',
+                  flex: 0.9,
+                  align: TextAlign.center,
+                  cellBuilder: (c, inv) {
+                    final color = _getStatusColor(inv.status);
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        inv.status.toUpperCase(),
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                TableColumnDef(
+                  label: 'Amount',
+                  flex: 1,
+                  align: TextAlign.right,
+                  cellBuilder: (c, inv) => Text(
+                    '₹${inv.totalAmount.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                TableColumnDef(
+                  label: 'Payments',
+                  flex: 1.5,
+                  cellBuilder: (c, inv) => _buildPaymentsCell(inv),
+                ),
+                TableColumnDef(
+                  label: 'Cash recv',
+                  flex: 1,
+                  align: TextAlign.right,
+                  cellBuilder: (c, inv) {
+                    final cash = inv.cashReceivedTotal;
+                    if (cash == null || cash <= 0.009) {
+                      return const Text(
+                        '',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
                           fontSize: 12,
                         ),
+                      );
+                    }
+                    return Text(
+                      '₹${cash.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
                       ),
-                    ),
-                    TableColumnDef(
-                      label: 'Customer',
-                      flex: 1.4,
-                      cellBuilder: (c, inv) => Text(
-                        inv.customer?.name ?? 'Walk-in',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    if (isSuperAdmin)
-                      TableColumnDef(
-                        label: 'Branch',
-                        flex: 1.3,
-                        cellBuilder: (c, inv) => Text(
-                          inv.branchName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    TableColumnDef(
-                      label: 'Date',
-                      flex: 1,
-                      cellBuilder: (c, inv) => Text(
-                        inv.displayDate,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    TableColumnDef(
-                      label: 'Status',
-                      flex: 0.9,
-                      align: TextAlign.center,
-                      cellBuilder: (c, inv) {
-                        final color = _getStatusColor(inv.status);
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            inv.status.toUpperCase(),
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    TableColumnDef(
-                      label: 'Amount',
-                      flex: 1,
-                      align: TextAlign.right,
-                      cellBuilder: (c, inv) => Text(
-                        '₹${inv.totalAmount.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
+                    );
+                  },
+                ),
+                TableColumnDef(
+                  label: 'Change',
+                  flex: 0.9,
+                  align: TextAlign.right,
+                  cellBuilder: (c, inv) {
+                    final change = inv.changeReturnTotal;
+                    if (change == null || change <= 0.009) {
+                      return const Text(
+                        '',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
                           fontSize: 12,
                         ),
+                      );
+                    }
+                    return Text(
+                      '₹${change.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.accent,
+                        fontSize: 12,
                       ),
-                    ),
-                    TableColumnDef(
-                      label: 'Payments',
-                      flex: 1.5,
-                      cellBuilder: (c, inv) => _buildPaymentsCell(inv),
-                    ),
-                    TableColumnDef(
-                      label: 'Cash recv',
-                      flex: 1,
-                      align: TextAlign.right,
-                      cellBuilder: (c, inv) {
-                        final cash = inv.cashReceivedTotal;
-                        if (cash == null || cash <= 0.009) {
-                          return const Text(
-                            '',
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 12,
-                            ),
-                          );
-                        }
-                        return Text(
-                          '₹${cash.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        );
-                      },
-                    ),
-                    TableColumnDef(
-                      label: 'Change',
-                      flex: 0.9,
-                      align: TextAlign.right,
-                      cellBuilder: (c, inv) {
-                        final change = inv.changeReturnTotal;
-                        if (change == null || change <= 0.009) {
-                          return const Text(
-                            '',
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 12,
-                            ),
-                          );
-                        }
-                        return Text(
-                          '₹${change.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.accent,
-                            fontSize: 12,
-                          ),
-                        );
-                      },
-                    ),
-                    TableColumnDef(
-                      label: 'Balance due',
-                      flex: 1,
-                      align: TextAlign.right,
-                      cellBuilder: (c, inv) {
-                        if (!inv.hasBalanceDue) {
-                          return const Text(
-                            '',
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 12,
-                            ),
-                          );
-                        }
-                        return Text(
-                          '₹${inv.dueAmount.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.warning,
-                            fontSize: 12,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                    );
+                  },
+                ),
+                TableColumnDef(
+                  label: 'Balance due',
+                  flex: 1,
+                  align: TextAlign.right,
+                  cellBuilder: (c, inv) {
+                    if (!inv.hasBalanceDue) {
+                      return const Text(
+                        '',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      );
+                    }
+                    return Text(
+                      '₹${inv.dueAmount.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.warning,
+                        fontSize: 12,
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ),
         ],
@@ -619,8 +686,18 @@ class _MonthPickerDialog extends StatefulWidget {
 
 class _MonthPickerDialogState extends State<_MonthPickerDialog> {
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   late int _year;
@@ -651,9 +728,8 @@ class _MonthPickerDialogState extends State<_MonthPickerDialog> {
               children: [
                 IconButton(
                   tooltip: 'Previous year',
-                  onPressed: _year <= 2020
-                      ? null
-                      : () => setState(() => _year--),
+                  onPressed:
+                      _year <= 2020 ? null : () => setState(() => _year--),
                   icon: const Icon(Icons.chevron_left),
                 ),
                 Expanded(
@@ -691,16 +767,16 @@ class _MonthPickerDialogState extends State<_MonthPickerDialog> {
                 final selected = month == _month;
                 final disabled = _isFuture(month);
                 return OutlinedButton(
-                  onPressed: disabled
-                      ? null
-                      : () => setState(() => _month = month),
+                  onPressed:
+                      disabled ? null : () => setState(() => _month = month),
                   style: OutlinedButton.styleFrom(
                     backgroundColor: selected
                         ? AppTheme.primary.withValues(alpha: 0.12)
                         : null,
                     foregroundColor: selected ? AppTheme.primary : null,
                     side: BorderSide(
-                      color: selected ? AppTheme.primary : const Color(0xFFCBD5E1),
+                      color:
+                          selected ? AppTheme.primary : const Color(0xFFCBD5E1),
                     ),
                   ),
                   child: Text(_months[i]),

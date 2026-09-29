@@ -89,9 +89,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     ),
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => setState(() {}),
-                    onChanged: (_) {
-                      if (_search.text.trim().isEmpty) setState(() {});
-                    },
+                    onChanged: (_) => setState(() {}),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -103,9 +101,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     decoration: _filterDec.copyWith(labelText: 'Type'),
                     items: const [
                       DropdownMenuItem(value: null, child: Text('All types')),
-                      DropdownMenuItem(value: 'product', child: Text('Product')),
-                      DropdownMenuItem(value: 'medicine', child: Text('Medicine')),
-                      DropdownMenuItem(value: 'service', child: Text('Service')),
+                      DropdownMenuItem(
+                          value: 'product', child: Text('Product')),
+                      DropdownMenuItem(
+                          value: 'medicine', child: Text('Medicine')),
+                      DropdownMenuItem(
+                          value: 'service', child: Text('Service')),
                     ],
                     onChanged: (v) => setState(() => _typeFilter = v),
                   ),
@@ -118,7 +119,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     isDense: true,
                     decoration: _filterDec.copyWith(labelText: 'Category'),
                     items: [
-                      const DropdownMenuItem(value: null, child: Text('All categories')),
+                      const DropdownMenuItem(
+                          value: null, child: Text('All categories')),
                       for (final c in _categories)
                         DropdownMenuItem(
                           value: c.id,
@@ -138,18 +140,14 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     items: const [
                       DropdownMenuItem(value: 'all', child: Text('All')),
                       DropdownMenuItem(value: 'active', child: Text('Active')),
-                      DropdownMenuItem(value: 'inactive', child: Text('Inactive')),
+                      DropdownMenuItem(
+                          value: 'inactive', child: Text('Inactive')),
                     ],
                     onChanged: (v) {
                       if (v == null) return;
                       setState(() => _statusFilter = v);
                     },
                   ),
-                ),
-                const SizedBox(width: 10),
-                FilledButton(
-                  onPressed: () => setState(() {}),
-                  child: const Text('Search'),
                 ),
                 if (canCreate) ...[
                   const SizedBox(width: 10),
@@ -162,7 +160,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   FilledButton.icon(
                     // Plan: product limit (the Products screen itself needs Pharmacy & Inventory).
                     onPressed: () async {
-                      if (await ensurePlanAllows(context, limitResource: 'products') &&
+                      if (await ensurePlanAllows(context,
+                              limitResource: 'products') &&
                           context.mounted) {
                         context.go('/products/new');
                       }
@@ -189,19 +188,22 @@ class _ProductListScreenState extends State<ProductListScreen> {
               cellFontSize: 12,
               loadPage: ({required page, required perPage}) =>
                   services.products.listPaginated(
-                    page: page,
-                    perPage: perPage,
-                    search: search.length >= 2 ? search : null,
-                    type: _typeFilter,
-                    categoryId: _categoryId,
-                    isActive: _isActiveFilter,
-                  ),
-              onRowTap: canEdit ? (p) => context.go('/products/${p.id}/edit') : null,
+                page: page,
+                perPage: perPage,
+                search: search.length >= 2 ? search : null,
+                type: _typeFilter,
+                categoryId: _categoryId,
+                isActive: _isActiveFilter,
+              ),
+              onRowTap:
+                  canEdit ? (p) => context.go('/products/${p.id}/edit') : null,
               columns: const [
-                TableColumnDef(label: 'Product', flex: 2, cellBuilder: _nameCell),
+                TableColumnDef(
+                    label: 'Product', flex: 2, cellBuilder: _nameCell),
                 TableColumnDef(label: 'Type', flex: 1, cellBuilder: _typeCell),
                 TableColumnDef(label: 'SKU', flex: 1, cellBuilder: _skuCell),
-                TableColumnDef(label: 'Category', flex: 1.2, cellBuilder: _categoryCell),
+                TableColumnDef(
+                    label: 'Category', flex: 1.2, cellBuilder: _categoryCell),
                 TableColumnDef(
                   label: 'Stock',
                   flex: 0.8,
@@ -254,11 +256,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
         ),
       );
 
-  static Widget _skuCell(BuildContext context, Product p) =>
-      Text(p.sku ?? '—', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12));
+  static Widget _skuCell(BuildContext context, Product p) => Text(p.sku ?? '—',
+      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12));
 
   static Widget _categoryCell(BuildContext context, Product p) =>
-      Text(p.categoryName ?? '—', style: const TextStyle(color: AppTheme.textSecondary));
+      Text(p.categoryName ?? '—',
+          style: const TextStyle(color: AppTheme.textSecondary));
 
   static Widget _stockCell(BuildContext context, Product p) {
     if (!p.trackInventory) {
@@ -278,7 +281,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
 
   static Widget _priceCell(BuildContext context, Product p) => Text(
         '₹${p.sellingPrice.toStringAsFixed(2)}',
-        style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.primary),
+        style: const TextStyle(
+            fontWeight: FontWeight.w700, color: AppTheme.primary),
       );
 
   static Widget _mrpCell(BuildContext context, Product p) => Text(

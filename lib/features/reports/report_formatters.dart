@@ -1,12 +1,22 @@
 import 'package:intl/intl.dart';
 
-final _inr = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
-final _inrCompact = NumberFormat.compactCurrency(locale: 'en_IN', symbol: '₹');
+final _inr =
+    NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
 final _pct = NumberFormat.decimalPattern('en_IN');
 
 String formatReportCurrency(double value) => _inr.format(value);
 
-String formatReportCurrencyCompact(double value) => _inrCompact.format(value);
+String formatReportCurrencyCompact(double value) {
+  final absolute = value.abs();
+  if (absolute >= 100000) return '₹${_compactDecimal(value / 100000)}L';
+  if (absolute >= 1000) return '₹${_compactDecimal(value / 1000)}K';
+  return _inr.format(value);
+}
+
+String _compactDecimal(double value) {
+  final formatted = value.toStringAsFixed(value.abs() >= 100 ? 0 : 2);
+  return formatted.replaceFirst(RegExp(r'\.?0+$'), '');
+}
 
 String formatReportNumber(double value) => _pct.format(value);
 
@@ -26,8 +36,10 @@ String paymentModeLabel(String mode) {
   return labels[mode] ?? mode.replaceAll('_', ' ');
 }
 
-String titleCaseStatus(String status) =>
-    status.split('_').map((p) => p.isEmpty ? p : '${p[0].toUpperCase()}${p.substring(1)}').join(' ');
+String titleCaseStatus(String status) => status
+    .split('_')
+    .map((p) => p.isEmpty ? p : '${p[0].toUpperCase()}${p.substring(1)}')
+    .join(' ');
 
 String productTypeLabel(String type) {
   switch (type) {

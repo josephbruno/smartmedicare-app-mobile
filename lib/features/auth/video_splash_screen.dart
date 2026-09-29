@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/app_config.dart';
 import '../../core/update/windows_update_gate.dart';
 
 /// Full-screen branded video shown once at cold start, before login / PIN.
@@ -27,6 +28,12 @@ class _VideoSplashScreenState extends State<VideoSplashScreen> {
   @override
   void initState() {
     super.initState();
+    // video_player has no Linux implementation in this app. Starting it there
+    // throws during the first frame and leaves semantics in an invalid state.
+    if (AppConfig.isDesktopPlatform) {
+      unawaited(_finish());
+      return;
+    }
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     unawaited(_start());
   }

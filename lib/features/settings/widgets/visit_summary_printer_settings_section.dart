@@ -209,17 +209,71 @@ class _VisitSummaryPrinterSettingsSectionState
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
+      clipBehavior: Clip.antiAlias,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFDCE9F8)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const ListTile(
-            leading: Icon(Icons.description_outlined, color: AppTheme.primary),
-            title: Text(
-              'Visit Summary Printer',
-              style: TextStyle(fontWeight: FontWeight.bold),
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFF5FFFA), Color(0xFFEAFBF1)],
+              ),
             ),
-            subtitle: Text(
-              'A5 PDF on this computer — choose portrait or landscape below',
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(11),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFDDF8E7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.description_rounded,
+                      color: AppTheme.accent, size: 25),
+                ),
+                const SizedBox(width: 13),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Visit Summary Printer',
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w800)),
+                      SizedBox(height: 2),
+                      Text(
+                          'A5 PDF on this computer — choose portrait or landscape below',
+                          style: TextStyle(
+                              fontSize: 13, color: AppTheme.textSecondary)),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDDF8E7),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle,
+                          size: 15, color: AppTheme.accent),
+                      SizedBox(width: 5),
+                      Text('Connected',
+                          style: TextStyle(
+                              color: Color(0xFF15803D),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           if (_desktop) ...[
@@ -354,15 +408,12 @@ class _VisitSummaryPrinterSettingsSectionState
                           )
                         : const Icon(Icons.print_outlined, size: 18),
                     label: Text(
-                      _testingDirect
-                          ? 'Printing…'
-                          : 'Test print (direct)',
+                      _testingDirect ? 'Printing…' : 'Test print (direct)',
                     ),
                   ),
                   OutlinedButton.icon(
-                    onPressed: _testingDialog
-                        ? null
-                        : () => _testPrint(dialog: true),
+                    onPressed:
+                        _testingDialog ? null : () => _testPrint(dialog: true),
                     icon: _testingDialog
                         ? const SizedBox(
                             width: 16,
@@ -371,9 +422,7 @@ class _VisitSummaryPrinterSettingsSectionState
                           )
                         : const Icon(Icons.print_disabled_outlined, size: 18),
                     label: Text(
-                      _testingDialog
-                          ? 'Printing…'
-                          : 'Test print (dialog)',
+                      _testingDialog ? 'Printing…' : 'Test print (dialog)',
                     ),
                   ),
                 ],

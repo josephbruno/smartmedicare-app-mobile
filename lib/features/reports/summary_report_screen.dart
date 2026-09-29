@@ -176,9 +176,13 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: AppTheme.danger)),
+                              Text(_error!,
+                                  textAlign: TextAlign.center,
+                                  style:
+                                      const TextStyle(color: AppTheme.danger)),
                               const SizedBox(height: 12),
-                              FilledButton(onPressed: _load, child: const Text('Retry')),
+                              FilledButton(
+                                  onPressed: _load, child: const Text('Retry')),
                             ],
                           ),
                         ),
@@ -199,12 +203,17 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                                   ),
                                   const SizedBox(height: 16),
                                 ],
-                                _PeriodChart(data: _data!),
+                                _PeriodChart(
+                                  data: _data!,
+                                  range: _range,
+                                  onPickRange: _pickCustomRange,
+                                ),
                                 const SizedBox(height: 16),
                                 _BreakdownTable(
                                   data: _data!,
                                   money: formatReportCurrency,
-                                  showBranch: _branchId == null && _data!.byBranch.length > 1,
+                                  showBranch: _branchId == null &&
+                                      _data!.byBranch.length > 1,
                                   onOpen: (row) => _openInvoices(row.period),
                                 ),
                               ],
@@ -224,7 +233,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
         physics: const NeverScrollableScrollPhysics(),
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        childAspectRatio: ResponsiveLayout.isMobile(context) ? 1.35 : 1.55,
+        childAspectRatio: ResponsiveLayout.isMobile(context) ? 1.35 : 2.45,
         children: [
           ReportKpiCard(
             title: 'Invoices',
@@ -294,81 +303,147 @@ class _Toolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Summary Report',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+    final branchValue =
+        branches.any((branch) => branch.id == branchId) ? branchId : null;
+    final controls = Wrap(
+      spacing: 0,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'day', label: Text('Daywise')),
+            ButtonSegment(value: 'month', label: Text('Monthwise')),
+          ],
+          selected: {groupBy},
+          onSelectionChanged: (selection) => onGroupBy(selection.first),
+          style: ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 12)),
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'Invoice count, total, cash, UPI and pending · Super admin',
-            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+        ),
+        const SizedBox(width: 10),
+        for (final key in const [
+          'today',
+          'week',
+          'month',
+          'last_month',
+          'year'
+        ])
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: ChoiceChip(
+              label:
+                  Text(_presetLabel(key), style: const TextStyle(fontSize: 12)),
+              selected: preset == key,
+              onSelected: (_) => onPreset(key),
+              visualDensity: VisualDensity.compact,
+              selectedColor: AppTheme.primary,
+              labelStyle: TextStyle(
+                color: preset == key ? Colors.white : AppTheme.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'day', label: Text('Daywise')),
-                  ButtonSegment(value: 'month', label: Text('Monthwise')),
-                ],
-                selected: {groupBy},
-                onSelectionChanged: (s) => onGroupBy(s.first),
-                style: ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 12)),
-                ),
+        ActionChip(
+          label: Text(
+            preset == 'custom' ? range.label : 'Custom',
+            style: const TextStyle(fontSize: 12),
+          ),
+          onPressed: onCustomRange,
+          visualDensity: VisualDensity.compact,
+        ),
+        if (branches.length > 1) ...[
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 190,
+            child: AppDropdownButtonFormField<int?>(
+              value: branchValue,
+              isDense: true,
+              decoration: const InputDecoration(
+                labelText: 'Branch',
+                isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               ),
-              for (final key in const ['today', 'week', 'month', 'last_month', 'year'])
-                ChoiceChip(
-                  label: Text(_presetLabel(key), style: const TextStyle(fontSize: 12)),
-                  selected: preset == key,
-                  onSelected: (_) => onPreset(key),
-                  visualDensity: VisualDensity.compact,
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('All branches'),
                 ),
-              ActionChip(
-                label: Text(
-                  preset == 'custom' ? range.label : 'Custom',
-                  style: const TextStyle(fontSize: 12),
-                ),
-                onPressed: onCustomRange,
-                visualDensity: VisualDensity.compact,
-              ),
-              if (branches.length > 1)
-                SizedBox(
-                  width: 200,
-                  child: AppDropdownButtonFormField<int?>(
-                    value: branchId,
-                    isDense: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Branch',
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    ),
-                    items: [
-                      const DropdownMenuItem(value: null, child: Text('All branches')),
-                      for (final b in branches)
-                        DropdownMenuItem(value: b.id, child: Text(b.name, overflow: TextOverflow.ellipsis)),
-                    ],
-                    onChanged: onBranch,
+                for (final branch in branches)
+                  DropdownMenuItem<int?>(
+                    value: branch.id,
+                    child: Text(branch.name, overflow: TextOverflow.ellipsis),
                   ),
-                ),
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: onRefresh,
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
+              ],
+              onChanged: onBranch,
+            ),
           ),
         ],
+        const SizedBox(width: 4),
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+      ],
+    );
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 1080;
+          final title = const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'REPORTS',
+                style: TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.primary,
+                ),
+              ),
+              SizedBox(height: 3),
+              Text(
+                'Summary Report',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              SizedBox(height: 3),
+              Text(
+                'Invoice count, total, cash, UPI and pending · Super admin',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          );
+          if (!wide) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [title, const SizedBox(height: 14), controls],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Expanded(
+                  child: Align(
+                      alignment: Alignment.centerLeft, child: _ToolbarTitle())),
+              const SizedBox(width: 24),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1080),
+                child: Align(alignment: Alignment.centerRight, child: controls),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -383,22 +458,61 @@ class _Toolbar extends StatelessWidget {
       };
 }
 
+class _ToolbarTitle extends StatelessWidget {
+  const _ToolbarTitle();
+
+  @override
+  Widget build(BuildContext context) => const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('REPORTS',
+              style: TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.primary)),
+          SizedBox(height: 3),
+          Text('Summary Report',
+              style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary)),
+          SizedBox(height: 3),
+          Text('Invoice count, total, cash, UPI and pending · Super admin',
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+        ],
+      );
+}
+
 class _PeriodChart extends StatelessWidget {
-  const _PeriodChart({required this.data});
+  const _PeriodChart({
+    required this.data,
+    required this.range,
+    required this.onPickRange,
+  });
 
   final SummaryReportData data;
+  final ReportDateRange range;
+  final VoidCallback onPickRange;
 
   @override
   Widget build(BuildContext context) {
     final periods = data.byPeriod;
     final labels = periods.map((e) => e.label).toList();
-    final visible = labels.length > 14 ? periods.sublist(periods.length - 14) : periods;
+    final visible =
+        labels.length > 14 ? periods.sublist(periods.length - 14) : periods;
     final visibleLabels = visible.map((e) => e.label).toList();
 
     return ReportSectionCard(
       title: data.isMonth ? 'Sales by month' : 'Sales by day',
       subtitle: 'Cash, UPI and pending',
-      height: 280,
+      height: 250,
+      trailing: OutlinedButton.icon(
+        onPressed: onPickRange,
+        icon: const Icon(Icons.date_range_outlined, size: 16),
+        label: Text(
+            '${DateFormat('MMM dd, yyyy').format(range.from)} – ${DateFormat('MMM dd, yyyy').format(range.to)}'),
+      ),
       child: visible.isEmpty
           ? const ReportEmptyChart(message: 'No invoices in this range')
           : ReportBarChart(
@@ -438,7 +552,8 @@ class _BranchTotalsTable extends StatelessWidget {
       title: 'Branch totals',
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final tableWidth = constraints.maxWidth < 760 ? 760.0 : constraints.maxWidth;
+          final tableWidth =
+              constraints.maxWidth < 760 ? 760.0 : constraints.maxWidth;
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SizedBox(
@@ -495,7 +610,8 @@ class _BreakdownTable extends StatelessWidget {
             )
           : LayoutBuilder(
               builder: (context, constraints) {
-                final tableWidth = constraints.maxWidth < 760 ? 760.0 : constraints.maxWidth;
+                final tableWidth =
+                    constraints.maxWidth < 760 ? 760.0 : constraints.maxWidth;
                 return SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: SizedBox(
@@ -517,7 +633,9 @@ class _BreakdownTable extends StatelessWidget {
                                 onTap: () => onOpen(row),
                                 borderRadius: BorderRadius.circular(10),
                                 child: _MetricRow(
-                                  label: showBranch ? '${row.branchName}  ·  ${row.label}' : row.label,
+                                  label: showBranch
+                                      ? '${row.branchName}  ·  ${row.label}'
+                                      : row.label,
                                   count: row.invoiceCount,
                                   total: row.totalAmount,
                                   cash: row.cashTotal,
@@ -558,20 +676,30 @@ class _TableHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const style = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.textSecondary);
+    const style = TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: AppTheme.textSecondary);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text(showBranch ? 'Branch / $periodLabel' : periodLabel, style: style)),
+          Expanded(
+              flex: 3,
+              child: Text(showBranch ? 'Branch / $periodLabel' : periodLabel,
+                  style: style)),
           const SizedBox(
             width: 56,
             child: Text('Bills', style: style, textAlign: TextAlign.right),
           ),
-          Expanded(child: Text('Total', style: style, textAlign: TextAlign.right)),
-          Expanded(child: Text('Cash', style: style, textAlign: TextAlign.right)),
-          Expanded(child: Text('UPI', style: style, textAlign: TextAlign.right)),
-          Expanded(child: Text('Pending', style: style, textAlign: TextAlign.right)),
+          Expanded(
+              child: Text('Total', style: style, textAlign: TextAlign.right)),
+          Expanded(
+              child: Text('Cash', style: style, textAlign: TextAlign.right)),
+          Expanded(
+              child: Text('UPI', style: style, textAlign: TextAlign.right)),
+          Expanded(
+              child: Text('Pending', style: style, textAlign: TextAlign.right)),
         ],
       ),
     );
@@ -609,7 +737,8 @@ class _MetricRow extends StatelessWidget {
       color: AppTheme.textPrimary,
     );
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: padded ? 12 : 12, vertical: padded ? 10 : 6),
+      padding: EdgeInsets.symmetric(
+          horizontal: padded ? 12 : 12, vertical: padded ? 10 : 6),
       child: Row(
         children: [
           Expanded(
@@ -627,9 +756,12 @@ class _MetricRow extends StatelessWidget {
           ),
           SizedBox(
             width: 56,
-            child: Text('$count', style: valueStyle, textAlign: TextAlign.right),
+            child:
+                Text('$count', style: valueStyle, textAlign: TextAlign.right),
           ),
-          Expanded(child: Text(money(total), style: valueStyle, textAlign: TextAlign.right)),
+          Expanded(
+              child: Text(money(total),
+                  style: valueStyle, textAlign: TextAlign.right)),
           Expanded(
             child: Text(
               money(cash),
@@ -647,7 +779,8 @@ class _MetricRow extends StatelessWidget {
           Expanded(
             child: Text(
               money(pending),
-              style: valueStyle.copyWith(color: pending > 0 ? AppTheme.warning : AppTheme.textPrimary),
+              style: valueStyle.copyWith(
+                  color: pending > 0 ? AppTheme.warning : AppTheme.textPrimary),
               textAlign: TextAlign.right,
             ),
           ),
