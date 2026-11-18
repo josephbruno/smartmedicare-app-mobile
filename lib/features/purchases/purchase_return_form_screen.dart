@@ -91,7 +91,8 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
     try {
       final auth = context.read<AuthSession>();
       final svc = context.read<AppServices>();
-      _isSuperAdmin = auth.isSuperAdmin;
+      // Choosing another branch follows reports.all_branches (same rule as the API).
+      _isSuperAdmin = auth.canViewAllBranches;
 
       if (_isSuperAdmin) {
         _branchId = auth.currentBranchId;

@@ -71,6 +71,9 @@ class _UsersScreenState extends State<UsersScreen> {
       setState(() {
         _branches = results[0] as List<Branch>;
         _roles = results[1] as List<({String value, String label})>;
+        for (final r in _roles) {
+          _roleLabels[r.value] = r.label;
+        }
       });
     } catch (_) {
       // Form still works with defaults if options fail to load.
@@ -90,12 +93,10 @@ class _UsersScreenState extends State<UsersScreen> {
     return const [(value: 'doctor', label: 'Doctor')];
   }
 
-  /// Non-doctor roles cannot be changed from the mobile app.
-  bool _isRoleLockedOnMobile(User? user) {
-    if (!AppConfig.isNativeMobile || user == null) return false;
-    final current = user.roles.isNotEmpty ? user.roles.first : '';
-    return current != 'doctor';
-  }
+  /// Roles & permissions are managed only in the web app (Admin → Roles / Users).
+  /// The app never changes an existing user's access; a role is only picked when
+  /// creating a user (the API requires one).
+  bool _isRoleLockedOnMobile(User? user) => user != null;
 
   Future<void> _refreshTable() async {
     await _tableKey.currentState?.refresh();
@@ -117,7 +118,8 @@ class _UsersScreenState extends State<UsersScreen> {
     final roleOptions = _assignableRoleOptions();
     final roleLocked = _isRoleLockedOnMobile(user);
     final doctorRoleOnly = AppConfig.isNativeMobile;
-    final canUpdatePin = context.read<AuthSession>().isSuperAdmin;
+    final canUpdatePin =
+        context.read<AuthSession>().hasPermission(AppPermissions.usersPinReset);
 
     final result = await _showUserFormDialog(
       context,
@@ -191,7 +193,7 @@ class _UsersScreenState extends State<UsersScreen> {
   }
 
   Future<void> _openUpdatePin(User user) async {
-    if (!context.read<AuthSession>().isSuperAdmin) {
+    if (!context.read<AuthSession>().hasPermission(AppPermissions.usersPinReset)) {
       context.showPermissionDenied();
       return;
     }
@@ -236,7 +238,8 @@ class _UsersScreenState extends State<UsersScreen> {
     final services = context.read<AppServices>();
     final canCreate = context.watch<AuthSession>().hasPermission(AppPermissions.usersCreate);
     final canEdit = context.watch<AuthSession>().hasPermission(AppPermissions.usersEdit);
-    final canUpdatePin = context.watch<AuthSession>().isSuperAdmin;
+    final canUpdatePin =
+        context.watch<AuthSession>().hasPermission(AppPermissions.usersPinReset);
 
     final columns = <TableColumnDef<User>>[
       const TableColumnDef(label: 'User', flex: 2, cellBuilder: _userCell),
@@ -417,6 +420,7 @@ class _UsersScreenState extends State<UsersScreen> {
   static Widget _rolesCell(BuildContext context, User u) {
     if (u.roles.isEmpty) return const Text('—');
     final role = u.roles.first;
+    if (u.roleDisplayName != null) _roleLabels[role] = u.roleDisplayName!;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -477,8 +481,12 @@ class _UsersScreenState extends State<UsersScreen> {
         ),
       );
 
+  /// Server-provided labels (custom roles have internal names like `s12_senior_nurse`).
+  static final Map<String, String> _roleLabels = {};
+
   static String _roleLabel(String role) =>
-      role.replaceAll('_', ' ').split(' ').map((w) {
+      _roleLabels[role] ??
+      role.replaceFirst(RegExp(r'^s\d+_'), '').replaceAll('_', ' ').split(' ').map((w) {
         if (w.isEmpty) return w;
         return '${w[0].toUpperCase()}${w.substring(1)}';
       }).join(' ');
@@ -1290,7 +1298,7 @@ class _UserFormFields extends StatelessWidget {
     if (roleLocked) {
       return _LockedRoleField(
         role: selectedRole,
-        helperText: 'This role can only be changed from the desktop app',
+        helperText: 'Roles and permissions are managed in the web app',
       );
     }
     if (doctorRoleOnly) {

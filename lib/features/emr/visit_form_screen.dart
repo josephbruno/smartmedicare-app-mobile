@@ -543,7 +543,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (_isAdminSession(auth)) {
       _doctors = [];
       _selectedDoctor = null;
-    } else if (auth.hasRole(AppRoles.doctor)) {
+    } else if (!auth.canAssignAnyDoctor) {
       _lockDoctorToLoggedInUser(auth);
       if (!_isEdit) {
         _applyDoctorServiceChargeDefaults();
@@ -705,10 +705,10 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     if (doctor != null) _ensureDoctorInList(doctor);
   }
 
-  /// Doctor logins: Doctor field is that user only (not the full doctor list).
+  /// Without "assign any doctor": Doctor field is that user only (not the full list).
   void _lockDoctorToLoggedInUser(AuthSession auth) {
     final user = auth.user;
-    if (user == null || !auth.hasRole(AppRoles.doctor)) return;
+    if (user == null || auth.canAssignAnyDoctor) return;
     if (_isAdminSession(auth)) return;
 
     final fromList = _doctors.where((d) => d.id == user.id).firstOrNull;

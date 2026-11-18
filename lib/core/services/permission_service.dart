@@ -59,6 +59,8 @@ abstract class AppPermissions {
   static const String expensesDelete = 'expenses.delete';
   static const String reportsView = 'reports.view';
   static const String reportsExport = 'reports.export';
+  static const String reportsAdvanced = 'reports.advanced';
+  static const String reportsAllBranches = 'reports.all_branches';
   static const String analyticsView = 'analytics.view';
 
   // Users, roles & shop
@@ -67,6 +69,10 @@ abstract class AppPermissions {
   static const String usersEdit = 'users.edit';
   static const String usersDelete = 'users.delete';
   static const String rolesManage = 'roles.manage';
+  static const String usersPinReset = 'users.pin_reset';
+  static const String branchesSwitch = 'branches.switch';
+  static const String printersManage = 'printers.manage';
+  static const String productDatasheetsDelete = 'product_datasheets.delete';
   static const String shopManage = 'shop.manage';
   static const String branchManage = 'branch.manage';
   static const String doctorsManage = 'doctors.manage';
@@ -77,6 +83,7 @@ abstract class AppPermissions {
   static const String emrVisitsCreate = 'emr.visits.create';
   static const String emrVisitsEdit = 'emr.visits.edit';
   static const String emrVisitsBill = 'emr.visits.bill';
+  static const String emrVisitsAssignAnyDoctor = 'emr.visits.assign_any_doctor';
   static const String emrDewormingView = 'emr.deworming.view';
   static const String emrDewormingCreate = 'emr.deworming.create';
   static const String emrSurgeriesView = 'emr.surgeries.view';
@@ -90,6 +97,7 @@ abstract class AppPermissions {
 
   // Appointments
   static const String patientAppointmentsView = 'patient_appointments.view';
+  static const String patientAppointmentsViewAll = 'patient_appointments.view_all';
   static const String patientAppointmentsCreate = 'patient_appointments.create';
   static const String patientAppointmentsEdit = 'patient_appointments.edit';
   static const String patientAppointmentsCancel = 'patient_appointments.cancel';
@@ -109,81 +117,8 @@ abstract class AppRoles {
     cashier,
   ];
 
-  /// Roles assignable by clinic owner when creating staff.
-  static const List<String> staffRoles = [
-    branchManager,
-    doctor,
-    cashier,
-  ];
-
-  /// Default cashier permissions (mirrors RolePermissionSeeder).
-  static const List<String> cashierPermissions = [
-    AppPermissions.productsView,
-    AppPermissions.productsCreate,
-    AppPermissions.productsEdit,
-    AppPermissions.categoriesView,
-    AppPermissions.categoriesCreate,
-    AppPermissions.categoriesEdit,
-    AppPermissions.categoriesDelete,
-    AppPermissions.brandsView,
-    AppPermissions.brandsCreate,
-    AppPermissions.brandsEdit,
-    AppPermissions.inventoryView,
-    AppPermissions.inventoryAdjust,
-    AppPermissions.purchasesView,
-    AppPermissions.purchasesCreate,
-    AppPermissions.purchasesEdit,
-    AppPermissions.suppliersView,
-    AppPermissions.suppliersCreate,
-    AppPermissions.suppliersEdit,
-    AppPermissions.invoicesView,
-    AppPermissions.invoicesCreate,
-    AppPermissions.paymentsCreate,
-    AppPermissions.customersView,
-    AppPermissions.customersCreate,
-    AppPermissions.customersEdit,
-    AppPermissions.petsView,
-    AppPermissions.petsCreate,
-    AppPermissions.emrVisitsView,
-    AppPermissions.emrVisitsCreate,
-    AppPermissions.emrVisitsBill,
-    AppPermissions.emrRemindersView,
-    AppPermissions.patientAppointmentsView,
-    AppPermissions.patientAppointmentsCreate,
-    AppPermissions.discountsApply,
-  ];
-
-  /// Default doctor permissions (mirrors RolePermissionSeeder).
-  static const List<String> doctorPermissions = [
-    AppPermissions.customersView,
-    AppPermissions.customersCreate,
-    AppPermissions.customersEdit,
-    AppPermissions.petsView,
-    AppPermissions.petsCreate,
-    AppPermissions.petsEdit,
-    AppPermissions.invoicesView,
-    AppPermissions.invoicesCreate,
-    AppPermissions.paymentsView,
-    AppPermissions.productsView,
-    AppPermissions.inventoryView,
-    AppPermissions.emrVisitsView,
-    AppPermissions.emrVisitsCreate,
-    AppPermissions.emrVisitsEdit,
-    AppPermissions.emrDewormingView,
-    AppPermissions.emrDewormingCreate,
-    AppPermissions.emrSurgeriesView,
-    AppPermissions.emrSurgeriesCreate,
-    AppPermissions.emrLabReportsView,
-    AppPermissions.emrLabReportsUpload,
-    AppPermissions.emrDocumentsView,
-    AppPermissions.emrDocumentsUpload,
-    AppPermissions.emrRemindersView,
-    AppPermissions.emrRemindersManage,
-    AppPermissions.patientAppointmentsView,
-    AppPermissions.patientAppointmentsCreate,
-    AppPermissions.patientAppointmentsEdit,
-    AppPermissions.patientAppointmentsCancel,
-  ];
+  // Role → permission mapping lives on the server (Admin → Roles in the web app).
+  // The app only enforces the permission list it receives from /auth/me.
 }
 
 /// Permission service for checking user permissions and roles.
@@ -193,7 +128,6 @@ class PermissionService {
     String permission, {
     List<String> userRoles = const [],
   }) {
-    if (isSuperAdmin(userRoles)) return true;
     if (userPermissions.contains('*')) return true;
     return userPermissions.contains(permission);
   }
@@ -203,7 +137,6 @@ class PermissionService {
     List<String> permissions, {
     List<String> userRoles = const [],
   }) {
-    if (isSuperAdmin(userRoles)) return true;
     if (userPermissions.contains('*')) return true;
     return permissions.any((p) => userPermissions.contains(p));
   }
@@ -213,7 +146,6 @@ class PermissionService {
     List<String> permissions, {
     List<String> userRoles = const [],
   }) {
-    if (isSuperAdmin(userRoles)) return true;
     if (userPermissions.contains('*')) return true;
     return permissions.every((p) => userPermissions.contains(p));
   }

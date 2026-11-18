@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
 import '../session/auth_session.dart';
 import 'app_route_observer.dart';
 import '../services/permission_service.dart';
 import '../update/windows_update_gate.dart';
 import '../widgets/permission_guard.dart';
-import '../app_config.dart';
 import '../../features/auth/cashier_desktop_only_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
 import '../../features/auth/landing_screen.dart';
@@ -231,7 +229,8 @@ GoRouter createAppRouter({
         path.startsWith('/reports/sales')) {
       if (need(AppPermissions.reportsView)) return denied;
     } else if (path.startsWith('/reports')) {
-      if (need(AppPermissions.reportsView) || !auth.isSuperAdmin) return denied;
+      // GST, summary, shift, stock-transfer and visit reports.
+      if (need(AppPermissions.reportsAdvanced)) return denied;
     }
     if (path.startsWith('/settings/doctors')) {
       if (need(AppPermissions.doctorsManage)) return denied;
@@ -682,19 +681,17 @@ GoRouter createAppRouter({
           GoRoute(
             path: '/reports/summary',
             name: 'SummaryReport',
-            builder: (c, s) => PermissionGuard(
-              permission: AppPermissions.reportsView,
-              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
-              child: const SummaryReportScreen(),
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.reportsAdvanced,
+              child: SummaryReportScreen(),
             ),
           ),
           GoRoute(
             path: '/reports/shift-summary',
             name: 'ShiftSummaryReport',
-            builder: (c, s) => PermissionGuard(
-              permission: AppPermissions.reportsView,
-              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
-              child: const ShiftSummaryReportScreen(),
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.reportsAdvanced,
+              child: ShiftSummaryReportScreen(),
             ),
           ),
           GoRoute(
@@ -708,28 +705,25 @@ GoRouter createAppRouter({
           GoRoute(
             path: '/reports/gst',
             name: 'GSTReport',
-            builder: (c, s) => PermissionGuard(
-              permission: AppPermissions.reportsView,
-              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
-              child: const GstReportScreen(),
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.reportsAdvanced,
+              child: GstReportScreen(),
             ),
           ),
           GoRoute(
             path: '/reports/stock-transfers',
             name: 'StockTransferReport',
-            builder: (c, s) => PermissionGuard(
-              permission: AppPermissions.reportsView,
-              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
-              child: const StockTransferReportScreen(),
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.reportsAdvanced,
+              child: StockTransferReportScreen(),
             ),
           ),
           GoRoute(
             path: '/reports/visits',
             name: 'VisitReport',
-            builder: (c, s) => PermissionGuard(
-              permission: AppPermissions.reportsView,
-              additionalCheck: () => c.read<AuthSession>().isSuperAdmin,
-              child: const VisitReportScreen(),
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.reportsAdvanced,
+              child: VisitReportScreen(),
             ),
           ),
           GoRoute(
@@ -759,9 +753,9 @@ GoRouter createAppRouter({
           GoRoute(
             path: '/settings/subscription',
             name: 'MySubscription',
-            // Super admin only; other staff see the trial / expiry banner.
+            // Clinic owner only (SaaS subscription); other staff see the trial / expiry banner.
             builder: (c, s) => AccessGuard(
-              allow: (session) => session.isSuperAdmin,
+              allow: (session) => session.isShopOwner,
               child: const SubscriptionScreen(),
             ),
           ),
@@ -776,11 +770,7 @@ GoRouter createAppRouter({
             path: '/settings/printer',
             name: 'UsbPrinterSettings',
             builder: (c, s) => AccessGuard(
-              allow: (session) =>
-                  session.hasPermission(AppPermissions.shopManage) ||
-                  (session.hasRole(AppRoles.cashier) &&
-                      AppConfig.isCashierPlatform &&
-                      session.hasPermission(AppPermissions.invoicesCreate)),
+              allow: (session) => session.canAccessPrinterSettings,
               child: const UsbPrinterSettingsScreen(),
             ),
           ),

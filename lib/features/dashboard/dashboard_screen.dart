@@ -31,7 +31,8 @@ class DashboardScreen extends StatelessWidget {
       return const CashierDashboardSection();
     }
 
-    if (auth.hasRole(AppRoles.doctor)) {
+    // Layout follows permissions: clinical (visits, no reports) → doctor-style view.
+    if (auth.isClinicalFocus) {
       final mobile = ResponsiveLayout.isMobile(context);
       return SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -41,8 +42,8 @@ class DashboardScreen extends StatelessWidget {
       );
     }
 
-    if (auth.hasRole(AppRoles.branchManager) &&
-        !auth.hasRole(AppRoles.superAdmin)) {
+    // Without all-branch access the dashboard is scoped to the current branch.
+    if (!auth.canViewAllBranches) {
       final mobile = ResponsiveLayout.isMobile(context);
       return SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -547,7 +548,7 @@ class _ReferenceDesktopDashboard extends StatelessWidget {
                 color: AppTheme.primary,
                 borderRadius: BorderRadius.circular(24)),
             child: Text(
-                auth.isSuperAdmin
+                auth.canViewAllBranches
                     ? 'All Branches Overview'
                     : (auth.currentBranch?.name ?? 'Branch Dashboard'),
                 style: const TextStyle(
@@ -556,7 +557,7 @@ class _ReferenceDesktopDashboard extends StatelessWidget {
                     fontWeight: FontWeight.w700))),
         const SizedBox(width: 16),
         Text(
-            !auth.isSuperAdmin
+            !auth.canViewAllBranches
                 ? 'Showing stats for the current branch'
                 : data.branches != null && data.branches!.isNotEmpty
                 ? 'Combined totals + per-branch chart (${data.branches!.length} branches)'

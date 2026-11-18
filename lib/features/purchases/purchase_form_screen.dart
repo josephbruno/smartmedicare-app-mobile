@@ -95,7 +95,8 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     try {
       final auth = context.read<AuthSession>();
       final svc = context.read<AppServices>();
-      _isSuperAdmin = auth.isSuperAdmin;
+      // Choosing another branch follows reports.all_branches (same rule as the API).
+      _isSuperAdmin = auth.canViewAllBranches;
 
       // Non–super-admin: always use mapped branch. Super Admin: selectable.
       if (_isSuperAdmin) {

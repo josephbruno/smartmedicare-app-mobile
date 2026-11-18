@@ -44,7 +44,8 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
 
   Future<void> _bootstrap() async {
     final auth = context.read<AuthSession>();
-    if (auth.isSuperAdmin) {
+    // Branch picker for users with all-branch report access.
+    if (auth.canViewAllBranches) {
       try {
         final branches = await context.read<AppServices>().branches.list();
         if (!mounted) return;
@@ -65,7 +66,7 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
       final data = await context.read<AppServices>().reports.payments(
             dateFrom: _range.fromYmd,
             dateTo: _range.toYmd,
-            branchId: context.read<AuthSession>().isSuperAdmin ? _selectedBranchId : null,
+            branchId: context.read<AuthSession>().canViewAllBranches ? _selectedBranchId : null,
           );
       if (!mounted) return;
       setState(() {
@@ -192,7 +193,7 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
   }
 
   Widget _buildToolbar() {
-    final isSuperAdmin = context.watch<AuthSession>().isSuperAdmin;
+    final isSuperAdmin = context.watch<AuthSession>().canViewAllBranches;
     final branchValue = _selectedBranchId != null &&
             _branches.any((b) => b.id == _selectedBranchId)
         ? _selectedBranchId

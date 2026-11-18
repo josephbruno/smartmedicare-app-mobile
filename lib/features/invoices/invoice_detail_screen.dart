@@ -260,8 +260,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
   bool _canCancelInvoice(Invoice inv) {
     final auth = context.read<AuthSession>();
-    return auth.isSuperAdmin &&
-        auth.hasPermission(AppPermissions.invoicesCancel) &&
+    return auth.hasPermission(AppPermissions.invoicesCancel) &&
         inv.canCancel;
   }
 

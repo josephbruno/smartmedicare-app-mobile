@@ -93,7 +93,8 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
       } else {
         _doctors = await emr.listDoctors();
         final user = auth.user;
-        if (user != null && auth.hasRole(AppRoles.doctor)) {
+        // Without "assign any doctor" the user records the visit as themselves.
+        if (user != null && !auth.canAssignAnyDoctor) {
           final fromList = _doctors.where((d) => d.id == user.id).firstOrNull;
           final me = fromList ??
               DoctorLite(
@@ -311,7 +312,7 @@ class _QuickVisitSheetState extends State<_QuickVisitSheet> {
                           final isAdmin = auth.hasRole(AppRoles.superAdmin) ||
                               auth.hasRole(AppRoles.branchManager);
                           if (isAdmin) return const SizedBox.shrink();
-                          final locked = auth.hasRole(AppRoles.doctor) &&
+                          final locked = !auth.canAssignAnyDoctor &&
                               auth.user != null &&
                               _selectedDoctor?.id == auth.user!.id &&
                               _doctors.length == 1;

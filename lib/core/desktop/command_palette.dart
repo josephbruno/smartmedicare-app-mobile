@@ -285,10 +285,10 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
   );
   add('Expenses', '/expenses', Icons.payments_outlined, visible: () => can(AppPermissions.expensesView));
   add('Summary report', '/reports/summary', Icons.insights_outlined,
-      visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView),
+      visible: () => can(AppPermissions.reportsAdvanced),
       keywords: ['summary', 'cash', 'upi', 'pending', 'daywise', 'monthwise', 'branch']);
   add('Shift summary', '/reports/shift-summary', Icons.schedule_outlined,
-      visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView),
+      visible: () => can(AppPermissions.reportsAdvanced),
       keywords: ['cashier', 'shift', 'drawer', 'daywise', 'branch', 'day close']);
   add('Payment report', '/reports/payments', Icons.account_balance_wallet_outlined,
       visible: () => can(AppPermissions.reportsView),
@@ -296,10 +296,10 @@ List<_PaletteEntry> _buildNavEntries(AuthSession auth) {
   add('Sales report', '/reports/sales', Icons.bar_chart_outlined,
       visible: () => can(AppPermissions.reportsView));
   add('Stock transfer report', '/reports/stock-transfers', Icons.swap_horiz_outlined,
-      visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView),
+      visible: () => can(AppPermissions.reportsAdvanced),
       keywords: ['inventory', 'transfer']);
   add('Visit report', '/reports/visits', Icons.medical_services_outlined,
-      visible: () => auth.isSuperAdmin && can(AppPermissions.reportsView),
+      visible: () => can(AppPermissions.reportsAdvanced),
       keywords: ['doctor', 'treatment', 'emr', 'visits']);
   add('Day close report', '/reports/day-close', Icons.summarize_outlined,
       visible: () => can(AppPermissions.cashierDayClose),

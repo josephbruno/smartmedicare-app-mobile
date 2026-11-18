@@ -200,6 +200,7 @@ class User {
     required this.language,
     required this.roles,
     required this.permissions,
+    this.role,
     this.shop,
     this.branch,
     this.createdAt,
@@ -217,9 +218,15 @@ class User {
   final String language;
   final List<String> roles;
   final List<String> permissions;
+
+  /// Primary role summary from the server ({id, name, display_name, is_system}).
+  /// Custom roles are created in the web app; the app only shows the name.
+  final Map<String, dynamic>? role;
   final ShopLite? shop;
   final BranchLite? branch;
   final String? createdAt;
+
+  String? get roleDisplayName => role?['display_name']?.toString();
 
   factory User.fromJson(Map<String, dynamic> j) {
     List<String> listOf(dynamic v) {
@@ -240,6 +247,7 @@ class User {
       language: j['language']?.toString() ?? 'en',
       roles: listOf(j['roles']),
       permissions: listOf(j['permissions']),
+      role: j['role'] is Map ? Map<String, dynamic>.from(j['role'] as Map) : null,
       shop: j['shop'] is Map
           ? ShopLite.fromJson(Map<String, dynamic>.from(j['shop'] as Map))
           : null,
@@ -263,6 +271,7 @@ class User {
         'language': language,
         'roles': roles,
         'permissions': permissions,
+        if (role != null) 'role': role,
         if (shop != null) 'shop': shop!.toJson(),
         if (branch != null) 'branch': branch!.toJson(),
         if (createdAt != null) 'created_at': createdAt,

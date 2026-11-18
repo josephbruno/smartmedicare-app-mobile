@@ -72,7 +72,8 @@ class _AppShellState extends State<AppShell> {
   }
 
   static List<_NavDest> _mobileDestinations(AuthSession auth) {
-    if (auth.hasRole(AppRoles.doctor)) {
+    // Clinical layout follows permissions (visits without reports access), not a role name.
+    if (auth.isClinicalFocus) {
       return [
         const _NavDest(
           label: 'Home',
@@ -310,7 +311,7 @@ class _PosFullscreenShellState extends State<_PosFullscreenShell> {
     final bool desktop = AppConfig.usesLargeUiScale;
     double ic(double base) => MediaQuery.textScalerOf(context).scale(base);
     final showPrinter = AppConfig.isCashierPlatform &&
-        (widget.auth.hasRole(AppRoles.cashier) ||
+        (widget.auth.hasPermission(AppPermissions.printersManage) ||
             widget.auth.hasPermission(AppPermissions.shopManage));
 
     return Scaffold(
@@ -447,7 +448,7 @@ class _DesktopShellState extends State<_DesktopShell> {
   }
 
   Future<void> _loadBranches() async {
-    if (!widget.auth.isSuperAdmin) return;
+    if (!widget.auth.canSwitchBranch) return;
     setState(() => _loadingBranches = true);
     try {
       final list = await context.read<AppServices>().branches.list();
@@ -697,7 +698,7 @@ class _DesktopShellState extends State<_DesktopShell> {
                             ),
                           ),
                         ),
-                        if (widget.auth.isSuperAdmin &&
+                        if (widget.auth.canSwitchBranch &&
                             _branches.length > 1) ...[
                           _buildHeaderBranchSwitcher(desktop: false),
                           const SizedBox(width: 12),
@@ -826,13 +827,14 @@ class _MenuItem {
 }
 
 List<_MenuItem> _menuItems(AuthSession auth) {
-  // Mirrors `menuOptions` in frontend/src/layouts/AppLayout.vue: same groups,
-  // order and gates. Screens that only exist in the app (Stock Alerts,
+  // Mirrors the web registry (frontend/src/config/navigation.ts): same groups,
+  // order and permission gates. Access is fully dynamic — every item is gated only
+  // by permissions from /auth/me (role + extra permissions set in the web app) and
+  // plan capabilities. Screens that only exist in the app (Stock Alerts,
   // Summary / Shift Summary / Stock Transfer reports, Printers) sit in the
   // matching web group so nothing is lost.
   bool can(String p) => auth.hasPermission(p);
   bool has(String c) => auth.hasCapability(c);
-  final isSuperAdmin = auth.isSuperAdmin;
 
   final result = <_MenuItem>[];
 
@@ -887,13 +889,6 @@ List<_MenuItem> _menuItems(AuthSession auth) {
 
   result.add(_MenuItem(
       label: 'Dashboard', icon: Icons.home_outlined, path: '/dashboard'));
-
-  // ── Doctor role: medical menus only ──────────────────────────────────
-  if (auth.hasRole('doctor')) {
-    addSection(auth.responsiblePartiesLabel, customerItems);
-    addSection('Medical Records', emrItems);
-    return result;
-  }
 
   if (can('invoices.create')) {
     result.add(_MenuItem(
@@ -978,7 +973,7 @@ List<_MenuItem> _menuItems(AuthSession auth) {
           icon: Icons.credit_card_outlined,
           path: '/reports/payments'),
     ],
-    if (can('reports.view') && has('reports') && has('animal_profiles'))
+    if (can('reports.advanced') && has('reports') && has('animal_profiles'))
       _MenuItem(
           label: 'Visit Report',
           icon: Icons.medical_services_outlined,
@@ -988,13 +983,13 @@ List<_MenuItem> _menuItems(AuthSession auth) {
           label: 'Day Close',
           icon: Icons.summarize_outlined,
           path: '/reports/day-close'),
-    if (isSuperAdmin && can('reports.view') && has('advanced_reports'))
+    if (can('reports.advanced') && has('advanced_reports'))
       _MenuItem(
           label: 'GST Report',
           icon: Icons.request_page_outlined,
           path: '/reports/gst'),
     // App-only reports.
-    if (isSuperAdmin && can('reports.view')) ...[
+    if (can('reports.advanced')) ...[
       _MenuItem(
           label: 'Summary Report',
           icon: Icons.insights_outlined,
@@ -1016,32 +1011,30 @@ List<_MenuItem> _menuItems(AuthSession auth) {
   ]);
 
   addSection('Admin', [
-    if (isSuperAdmin && can('shop.manage'))
+    if (can('shop.manage'))
       _MenuItem(
           label: 'Settings', icon: Icons.settings_outlined, path: '/settings'),
-    if (isSuperAdmin && can('emr.master_data.manage'))
+    if (can('emr.master_data.manage'))
       _MenuItem(
           label: 'EMR Master Data',
           icon: Icons.list_alt_outlined,
           path: '/settings/emr-master-data'),
-    if (isSuperAdmin && can('emr.master_data.manage'))
+    if (can('emr.master_data.manage'))
       _MenuItem(
           label: 'Procedure Kits',
           icon: Icons.medical_services_outlined,
           path: '/settings/procedure-kits'),
-    if (isSuperAdmin &&
-        can('pets.master_data.manage') &&
-        has('species_breeds'))
+    if (can('pets.master_data.manage') && has('species_breeds'))
       _MenuItem(
           label: 'Species & Breeds',
           icon: Icons.pets_outlined,
           path: '/settings/species-breeds'),
-    if (isSuperAdmin && can('users.view'))
+    if (can('users.view'))
       _MenuItem(
           label: 'Users',
           icon: Icons.person_outline,
           path: '/settings/users'),
-    if (isSuperAdmin && can('branch.manage'))
+    if (can('branch.manage'))
       _MenuItem(
           label: 'Branches',
           icon: Icons.business_outlined,
@@ -1051,7 +1044,8 @@ List<_MenuItem> _menuItems(AuthSession auth) {
           label: 'Doctors',
           icon: Icons.medical_information_outlined,
           path: '/settings/doctors'),
-    if (isSuperAdmin)
+    // Clinic owner only (SaaS subscription) — not an assignable permission.
+    if (auth.isShopOwner)
       _MenuItem(
           label: 'Subscription & Plans',
           icon: Icons.credit_card_outlined,
@@ -1262,7 +1256,8 @@ class _UserMenuButton extends StatelessWidget {
     final name = auth.user?.name ?? 'User';
     final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
     final roles = auth.user?.roles ?? const <String>[];
-    final role = roles.isNotEmpty ? roles.first.replaceAll('_', ' ') : 'Staff';
+    final role = auth.user?.roleDisplayName ??
+        (roles.isNotEmpty ? roles.first.replaceAll('_', ' ') : 'Staff');
     final can = auth.hasPermission;
     final has = auth.hasCapability;
 
@@ -1279,19 +1274,18 @@ class _UserMenuButton extends StatelessWidget {
           child: Text(auth.currentBranch?.name ?? 'Branch',
               style: const TextStyle(fontSize: 12, color: AppTokens.text3))),
       const PopupMenuDivider(),
-      if (auth.isSuperAdmin && can('shop.manage'))
+      if (can('shop.manage'))
         _userItem('/settings', Icons.settings_outlined, 'Settings'),
-      if (auth.isSuperAdmin &&
-          can('emr.master_data.manage') &&
+      if (can('emr.master_data.manage') &&
           has('species_breeds')) ...[
         _userItem('/settings/emr-master-data', Icons.list_alt_outlined,
             'EMR Master Data'),
         _userItem(
             '/settings/species-breeds', Icons.pets_outlined, 'Species & Breeds'),
       ],
-      if (auth.isSuperAdmin && can('users.view'))
+      if (can('users.view'))
         _userItem('/settings/users', Icons.person_outline, 'Manage Users'),
-      if (auth.isSuperAdmin && can('branch.manage'))
+      if (can('branch.manage'))
         _userItem(
             '/settings/branches', Icons.business_outlined, 'Manage Branches'),
       if (can('doctors.manage') && has('staff_management'))
@@ -1299,7 +1293,7 @@ class _UserMenuButton extends StatelessWidget {
             'Manage Doctors'),
       if (auth.canAccessPrinterSettings)
         _userItem('/settings/printer', Icons.print_outlined, 'Manage Printers'),
-      if (auth.isSuperAdmin)
+      if (auth.isShopOwner)
         _userItem('/settings/subscription', Icons.credit_card_outlined,
             'Subscription & Plans'),
       _userItem('/settings/security', Icons.shield_outlined, 'Account Security'),
@@ -1526,7 +1520,7 @@ class _MobileShellState extends State<_MobileShell> {
   }
 
   Future<void> _loadBranches() async {
-    if (!widget.auth.isSuperAdmin) return;
+    if (!widget.auth.canSwitchBranch) return;
     setState(() => _loadingBranches = true);
     try {
       final list = await context.read<AppServices>().branches.list();
@@ -1769,7 +1763,7 @@ class _MobileShellState extends State<_MobileShell> {
                       ],
                     ),
                   ),
-                  if (auth.isSuperAdmin)
+                  if (auth.canSwitchBranch)
                     IconButton(
                       tooltip: 'Switch branch',
                       onPressed: _loadingBranches ? null : _showBranchPicker,

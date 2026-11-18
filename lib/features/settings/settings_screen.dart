@@ -78,7 +78,7 @@ class SettingsScreen extends StatelessWidget {
                 onTap: () => context.go('/settings/security'),
               ),
             ),
-            if (context.watch<AuthSession>().isSuperAdmin)
+            if (context.watch<AuthSession>().isShopOwner)
               Card(
                 margin: const EdgeInsets.only(top: 8),
                 child: ListTile(

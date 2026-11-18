@@ -54,14 +54,21 @@ class AuthSession extends ChangeNotifier {
   /// Full app access: stored credentials and PIN verified (or fresh login).
   bool get isAuthenticated => hasStoredSession && _isUnlocked;
 
+  /// Clinic owner. Used only for owner-only areas (subscription / billing of the SaaS).
+  /// Feature access is decided by [hasPermission] — the backend sends the owner every
+  /// permission, so no role bypass is needed.
   bool get isSuperAdmin => _user?.roles.contains('super_admin') ?? false;
 
   bool get isShopOwner => isSuperAdmin;
 
+  /// Role display name from the server (custom roles are created in the web app).
+  String get roleLabel =>
+      _user?.roleDisplayName ??
+      PermissionService.getRoleDisplayName(_user?.roles.firstOrNull ?? '');
+
   /// True when cached user is missing permission names (stale session data).
   bool get needsPermissionRefresh {
     if (_user == null || _token == null || _token!.isEmpty) return false;
-    if (isSuperAdmin) return false;
     return _user!.permissions.isEmpty;
   }
 
@@ -94,19 +101,35 @@ class AuthSession extends ChangeNotifier {
   String get responsiblePartiesLabel =>
       isVeterinary ? 'Owners' : 'Responsible Parties';
 
-  bool hasPermission(String permission) {
-    if (isSuperAdmin) return true;
-    final perms = _user?.permissions ?? [];
-    if (perms.contains(permission)) return true;
-    // Stale cached sessions may have roles but an empty permissions list.
-    if (perms.isEmpty && hasRole(AppRoles.cashier)) {
-      return AppRoles.cashierPermissions.contains(permission);
-    }
-    if (perms.isEmpty && hasRole(AppRoles.doctor)) {
-      return AppRoles.doctorPermissions.contains(permission);
-    }
-    return false;
-  }
+  /// Pure check against the permission list from /auth/me (role + extra permissions
+  /// assigned by the super admin in the web app). Menus, routes and actions all use it.
+  bool hasPermission(String permission) =>
+      _user?.permissions.contains(permission) ?? false;
+
+  /// At least one of [permissions] (empty list = allowed).
+  bool hasAnyPermission(Iterable<String> permissions) =>
+      permissions.isEmpty || permissions.any(hasPermission);
+
+  /// Data across all branches (dashboard, reports, invoices, purchases).
+  bool get canViewAllBranches =>
+      hasPermission(AppPermissions.reportsAllBranches);
+
+  /// Branch switcher + choosing a branch on forms.
+  bool get canSwitchBranch => hasPermission(AppPermissions.branchesSwitch);
+
+  /// GST, summary, shift, stock-transfer and visit reports.
+  bool get canViewAdvancedReports =>
+      hasPermission(AppPermissions.reportsAdvanced);
+
+  /// Pick any doctor on visits/appointments. Without it the user records as themselves.
+  bool get canAssignAnyDoctor =>
+      hasPermission(AppPermissions.emrVisitsAssignAnyDoctor);
+
+  /// Clinical-focus layout (doctor-like): works with visits but has no reports access.
+  /// Derived from permissions, so it follows whatever role the user is given.
+  bool get isClinicalFocus =>
+      hasPermission(AppPermissions.emrVisitsView) &&
+      !hasPermission(AppPermissions.reportsView);
 
   bool hasRole(String role) => _user?.roles.contains(role) ?? false;
 
@@ -130,9 +153,8 @@ class AuthSession extends ChangeNotifier {
   /// Local printer setup on this PC (POS thermal + visit summary PDF).
   bool get canAccessPrinterSettings {
     if (hasPermission(AppPermissions.shopManage)) return true;
-    if (hasRole(AppRoles.cashier) &&
-        AppConfig.isCashierPlatform &&
-        hasPermission(AppPermissions.invoicesCreate)) {
+    if (AppConfig.isCashierPlatform &&
+        hasPermission(AppPermissions.printersManage)) {
       return true;
     }
     return AppConfig.isDesktopPlatform &&
@@ -142,10 +164,9 @@ class AuthSession extends ChangeNotifier {
   /// First settings screen the user is allowed to open.
   String? get settingsRoute {
     if (hasPermission(AppPermissions.shopManage)) return '/settings';
-    // Cashier desktops: local USB TSPL printer config (no shop.manage needed).
-    if (hasRole(AppRoles.cashier) &&
-        AppConfig.isCashierPlatform &&
-        hasPermission(AppPermissions.invoicesCreate)) {
+    // Desktops: local USB TSPL printer config (no shop.manage needed).
+    if (AppConfig.isCashierPlatform &&
+        hasPermission(AppPermissions.printersManage)) {
       return '/settings/printer';
     }
     if (hasPermission(AppPermissions.usersView)) return '/settings/users';

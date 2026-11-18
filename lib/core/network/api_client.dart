@@ -7,7 +7,7 @@ import 'network_resilience.dart';
 
 typedef TokenGetter = String? Function();
 typedef BranchIdGetter = int? Function();
-typedef SuperAdminGetter = bool Function();
+typedef BoolGetter = bool Function();
 typedef VoidCallback = void Function();
 
 /// Called for 403 PLAN_UPGRADE_REQUIRED / 422 PLAN_LIMIT_REACHED with the API's message.
@@ -16,22 +16,28 @@ typedef PlanErrorCallback = void Function(String code, String message);
 /// Called with the X-Plan-Version response header (changes on upgrade / CMS module edits).
 typedef PlanVersionCallback = void Function(String version);
 
+/// Called with the X-Perm-Version header (changes when the super admin edits roles or a
+/// user's access in the web app). [path] lets the caller skip /auth/me itself.
+typedef PermVersionCallback = void Function(String version, String path);
+
 /// HTTP client aligned with [frontend/src/api/client.ts].
 class ApiClient {
   ApiClient({
     required TokenGetter getToken,
     required BranchIdGetter getBranchId,
-    required SuperAdminGetter isSuperAdmin,
+    required BoolGetter canViewAllBranches,
     required VoidCallback onUnauthorized,
     required VoidCallback onSubscriptionExpired,
     PlanErrorCallback? onPlanError,
     PlanVersionCallback? onPlanVersion,
+    PermVersionCallback? onPermVersion,
     String? baseUrl,
   })  : _onPlanError = onPlanError,
         _onPlanVersion = onPlanVersion,
+        _onPermVersion = onPermVersion,
         _getToken = getToken,
         _getBranchId = getBranchId,
-        _isSuperAdmin = isSuperAdmin,
+        _canViewAllBranches = canViewAllBranches,
         _onUnauthorized = onUnauthorized,
         _onSubscriptionExpired = onSubscriptionExpired,
         dio = Dio(
@@ -54,7 +60,8 @@ class ApiClient {
             options.headers['Authorization'] = 'Bearer $token';
           }
           final branchId = _getBranchId();
-          final skipBranch = _isSuperAdmin() &&
+          // All-branch reports (reports.all_branches) are not scoped to one branch.
+          final skipBranch = _canViewAllBranches() &&
               options.path.contains('/reports/');
           if (branchId != null && !skipBranch) {
             options.headers['X-Branch-Id'] = branchId.toString();
@@ -64,6 +71,7 @@ class ApiClient {
         onResponse: (response, handler) {
           final version = response.headers.value('x-plan-version');
           if (version != null && version.isNotEmpty) _onPlanVersion?.call(version);
+          _notifyPermVersion(response);
           return handler.next(response);
         },
         onError: (e, handler) {
@@ -73,6 +81,8 @@ class ApiClient {
           } else if (status == 402) {
             _onSubscriptionExpired();
           } else if (status == 403 || status == 422) {
+            // A denial may mean access was just changed — re-sync on a new version.
+            if (e.response != null) _notifyPermVersion(e.response!);
             final data = e.response?.data;
             if (data is Map) {
               final code = data['code']?.toString();
@@ -91,7 +101,15 @@ class ApiClient {
   final Dio dio;
   final TokenGetter _getToken;
   final BranchIdGetter _getBranchId;
-  final SuperAdminGetter _isSuperAdmin;
+  final BoolGetter _canViewAllBranches;
+  final PermVersionCallback? _onPermVersion;
+
+  void _notifyPermVersion(Response<dynamic> response) {
+    final v = response.headers.value('x-perm-version');
+    if (v != null && v.isNotEmpty) {
+      _onPermVersion?.call(v, response.requestOptions.path);
+    }
+  }
   final VoidCallback _onUnauthorized;
   final VoidCallback _onSubscriptionExpired;
   final PlanErrorCallback? _onPlanError;

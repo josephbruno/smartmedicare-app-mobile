@@ -48,6 +48,7 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
   late final AppServices _services;
   late GoRouter _router;
   String? _planVersion;
+  String? _permVersion;
   late final AuthRepository _authRepository;
   late final OfflineInvoiceQueue _offlineQueue;
   late final ProductLocalDao _productDao;
@@ -69,7 +70,7 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
     _api = ApiClient(
       getToken: () => _session.token,
       getBranchId: () => _session.currentBranchId,
-      isSuperAdmin: () => _session.isSuperAdmin,
+      canViewAllBranches: () => _session.canViewAllBranches,
       onUnauthorized: () {
         _session.logout();
         _router.go('/');
@@ -99,6 +100,14 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
         final previous = _planVersion;
         _planVersion = version;
         if (previous != null && previous != version) _session.refreshMe();
+      },
+      // Roles / user access changed in the web app → refresh permissions, menus, routes.
+      // The first version seen also refreshes once, so a session cached before a change
+      // (or before this header existed) picks up the current access.
+      onPermVersion: (version, path) {
+        final previous = _permVersion;
+        _permVersion = version;
+        if (previous != version && !path.contains('/auth/me')) _session.refreshMe();
       },
     );
     _services = AppServices(_api);

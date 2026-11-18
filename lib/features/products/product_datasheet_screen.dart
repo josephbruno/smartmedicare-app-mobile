@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/product.dart';
@@ -223,7 +224,9 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
 
   AppServices get _services => context.read<AppServices>();
 
-  bool get _canDeleteRows => context.read<AuthSession>().isSuperAdmin;
+  bool get _canDeleteRows => context
+      .read<AuthSession>()
+      .hasPermission(AppPermissions.productDatasheetsDelete);
 
   double get _sheetWidth {
     var w = _columns.fold<double>(0, (s, c) => s + c.width);
@@ -1690,7 +1693,9 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
 
   Widget _buildExcelGrid() {
     final rows = _visibleRows;
-    final canDelete = context.watch<AuthSession>().isSuperAdmin;
+    final canDelete = context
+        .watch<AuthSession>()
+        .hasPermission(AppPermissions.productDatasheetsDelete);
     return Padding(
       padding: const EdgeInsets.all(8),
       child: DecoratedBox(

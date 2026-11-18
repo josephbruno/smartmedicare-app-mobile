@@ -79,7 +79,8 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
       } else {
         _doctors = await context.read<AppServices>().emr.listDoctors();
         final user = auth.user;
-        if (user != null && auth.hasRole(AppRoles.doctor)) {
+        // Without "assign any doctor" the user books for themselves.
+        if (user != null && !auth.canAssignAnyDoctor) {
           final fromList = _doctors.where((d) => d.id == user.id).firstOrNull;
           final me = fromList ??
               DoctorLite(
@@ -344,7 +345,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                         final isAdmin = auth.hasRole(AppRoles.superAdmin) ||
                             auth.hasRole(AppRoles.branchManager);
                         if (isAdmin) return const SizedBox.shrink();
-                        final locked = auth.hasRole(AppRoles.doctor) &&
+                        final locked = !auth.canAssignAnyDoctor &&
                             auth.user != null &&
                             _selectedDoctor?.id == auth.user!.id &&
                             _doctors.length == 1;
