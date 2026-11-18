@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import 'widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -127,8 +129,12 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
     final wide = width >= 960;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        title: 'Payment Report',
+        subtitle: 'View detailed payment collection report including cash, UPI, credit, advance and other payments.',
+        icon: Icons.credit_card_outlined,
+        child: Column(
         children: [
           _buildToolbar(),
           Expanded(
@@ -180,6 +186,7 @@ class _PaymentReportScreenState extends State<PaymentReportScreen> {
                       ),
           ),
         ],
+      ),
       ),
     );
   }

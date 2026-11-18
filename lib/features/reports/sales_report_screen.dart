@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import 'widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -154,8 +156,12 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        title: 'Sales Report',
+        subtitle: "Analyze your clinic's sales, invoices and payment performance.",
+        icon: Icons.bar_chart_outlined,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildToolbar(context),
@@ -167,6 +173,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                     : _buildContent(context),
           ),
         ],
+      ),
       ),
     );
   }

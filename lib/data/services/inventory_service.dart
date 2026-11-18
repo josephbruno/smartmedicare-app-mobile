@@ -139,11 +139,15 @@ class InventoryService {
     String? search,
     int? categoryId,
     bool? lowStock,
+    String? stockStatus,
+    bool withStats = false,
   }) async {
     final result = await list(query: {
       'page': page,
       'per_page': perPage,
       if (includeSummary) 'include_summary': true,
+      if (stockStatus != null && stockStatus.isNotEmpty) 'stock_status': stockStatus,
+      if (withStats) 'with_stats': 1,
       if (search != null && search.isNotEmpty) 'search': search,
       if (categoryId != null) 'category_id': categoryId,
       if (lowStock == true) 'low_stock': 'true',

@@ -516,8 +516,7 @@ class _PosScreenState extends State<PosScreen> {
 
   bool get _desktop => AppConfig.isDesktopPlatform;
 
-  double _ic(double size) =>
-      _desktop ? size * AppConfig.desktopIconScale : size;
+  double _ic(double size) => MediaQuery.textScalerOf(context).scale(size);
 
   double _fs(double size) => size;
 

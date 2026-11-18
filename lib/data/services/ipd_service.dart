@@ -39,6 +39,15 @@ class IpdService {
     }
   }
 
+  /// Creates a ward with its beds (`POST /ipd/wards`).
+  Future<void> createWard(Map<String, dynamic> payload) async {
+    try {
+      await _client.post('/ipd/wards', data: payload);
+    } on DioException catch (error) {
+      ApiClient.throwFromDio(error);
+    }
+  }
+
   Future<IpdAdmission> admit(Map<String, dynamic> payload) async {
     try {
       final response = await _client.post('/ipd/admissions', data: payload);

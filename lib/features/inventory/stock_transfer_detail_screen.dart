@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:go_router/go_router.dart';
@@ -190,7 +191,7 @@ class _StockTransferDetailScreenState extends State<StockTransferDetailScreen> {
   Widget build(BuildContext context) {
     final t = _transfer;
     return Scaffold(
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         automaticallyImplyLeading: false,
         title: Text(t?.transferNumber ?? 'Transfer'),
       ),

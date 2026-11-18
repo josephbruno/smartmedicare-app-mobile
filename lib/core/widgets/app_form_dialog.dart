@@ -59,7 +59,7 @@ class AppFormDialogShell extends StatelessWidget {
       surfaceTintColor: Colors.white,
       alignment: Alignment.center,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: width,
@@ -123,7 +123,7 @@ class AppFormBottomSheetShell extends StatelessWidget {
         alignment: Alignment.bottomCenter,
         child: Material(
           color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           clipBehavior: Clip.antiAlias,
           child: SafeArea(
             top: false,
@@ -174,59 +174,46 @@ class AppFormFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final buttonStyle = ButtonStyle(
-      minimumSize: const WidgetStatePropertyAll(Size(64, 52)),
-      padding: const WidgetStatePropertyAll(EdgeInsets.all(8)),
-      shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      textStyle: const WidgetStatePropertyAll(
-        TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-      ),
+    final progress = const SizedBox(
+      height: 18,
+      width: 18,
+      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
     );
+    final cancel = OutlinedButton(
+      onPressed: saving ? null : onCancel,
+      child: const Text('Cancel'),
+    );
+    final submit = FilledButton(
+      onPressed: saving ? null : onSubmit,
+      child: saving ? progress : Text(primaryLabel),
+    );
+    // Web modal footer: right-aligned [Cancel] [Primary]; phones share the row.
+    final wide =
+        MediaQuery.sizeOf(context).width >= AppConfig.mobileCompactBreakpoint;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton(
-              onPressed: saving ? null : onCancel,
-              style: buttonStyle.copyWith(
-                foregroundColor: const WidgetStatePropertyAll(AppTheme.primary),
-                side: const WidgetStatePropertyAll(
-                  BorderSide(color: AppTheme.primary, width: 1.5),
-                ),
-              ),
-              child: const Text('Cancel'),
+      child: wide
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                SizedBox(width: 110, child: cancel),
+                const SizedBox(width: 12),
+                ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 140),
+                    child: submit),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: cancel),
+                const SizedBox(width: 12),
+                Expanded(flex: 2, child: submit),
+              ],
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: FilledButton(
-              onPressed: saving ? null : onSubmit,
-              style: buttonStyle.copyWith(
-                backgroundColor: const WidgetStatePropertyAll(AppTheme.primary),
-                foregroundColor: const WidgetStatePropertyAll(Colors.white),
-              ),
-              child: saving
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(primaryLabel),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -253,7 +240,7 @@ Future<T?> showAppAlertForm<T>({
         surfaceTintColor: Colors.white,
         alignment: Alignment.center,
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: ConstrainedBox(
           constraints: BoxConstraints(
             maxWidth: width,

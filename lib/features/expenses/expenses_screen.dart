@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -8,12 +10,18 @@ import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/web_page.dart';
+import '../../data/models/api_response.dart';
 import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/app_form_dialog.dart';
 import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
 import '../../data/models/expense.dart';
 
+/// Expenses — mirrors `frontend/src/pages/expense/ExpenseListPage.vue`:
+/// date range + category + "Manage categories" drawer + Add, four KPIs,
+/// category tabs, search, payment-mode filter, sortable table.
 class ExpensesScreen extends StatefulWidget {
   const ExpensesScreen({super.key});
 
@@ -21,37 +29,73 @@ class ExpensesScreen extends StatefulWidget {
   State<ExpensesScreen> createState() => _ExpensesScreenState();
 }
 
-class _ExpensesScreenState extends State<ExpensesScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
-  int _expensesReloadToken = 0;
+class _ExpensesScreenState extends State<ExpensesScreen> {
+  final _search = TextEditingController();
+  Timer? _debounce;
+  String _appliedSearch = '';
+  int? _categoryId;
+  String? _mode;
+  String? _dateFrom;
+  String? _dateTo;
+  String _sortBy = 'date';
+  bool _sortAsc = false;
+  int _reloadToken = 0;
+  PaginationMetaView _meta = const PaginationMetaView();
+  List<ExpenseCategory> _categories = [];
+
+  static const _modeLabels = {
+    'cash': 'Cash',
+    'upi': 'UPI',
+    'card': 'Card',
+    'bank_transfer': 'Bank Transfer',
+    'cheque': 'Cheque',
+    'other': 'Other',
+  };
+  static final _fmt2 = NumberFormat('#,##,##0.00', 'en_IN');
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCategories());
   }
 
   @override
   void dispose() {
-    _tabs.dispose();
+    _debounce?.cancel();
+    _search.dispose();
     super.dispose();
   }
 
-  void _refreshExpenses({String? successMessage}) {
-    if (!mounted) return;
-    setState(() => _expensesReloadToken++);
-    if (successMessage != null) {
-      AppMessenger.success(context, successMessage);
-    }
+  Future<void> _loadCategories() async {
+    try {
+      final list = await context.read<AppServices>().expenses.categories();
+      if (mounted) setState(() => _categories = list);
+    } catch (_) {}
   }
 
-  Future<void> _openCreateExpense() async {
+  void _reload() => setState(() => _reloadToken++);
+
+  void _setCategory(int? id) {
+    _categoryId = id;
+    _reload();
+  }
+
+  void _onSort(String key) {
+    if (_sortBy == key) {
+      _sortAsc = !_sortAsc;
+    } else {
+      _sortBy = key;
+      _sortAsc = false;
+    }
+    _reload();
+  }
+
+  Future<void> _openForm([Expense? expense]) async {
     final bool? saved;
     if (useCenteredFormDialog(context)) {
       saved = await showAppDialog<bool>(
         context: context,
-        builder: (ctx) => const _ExpenseFormHost(asDialog: true),
+        builder: (ctx) => _ExpenseFormHost(asDialog: true, expense: expense),
       );
     } else {
       saved = await showModalBottomSheet<bool>(
@@ -59,143 +103,355 @@ class _ExpensesScreenState extends State<ExpensesScreen>
         isScrollControlled: true,
         useRootNavigator: true,
         backgroundColor: Colors.transparent,
-        builder: (ctx) => const _ExpenseFormHost(asDialog: false),
+        builder: (ctx) => _ExpenseFormHost(asDialog: false, expense: expense),
       );
     }
+    if (saved == true && mounted) {
+      AppMessenger.success(context, expense == null ? 'Expense saved successfully' : 'Expense updated');
+      _reload();
+    }
+  }
 
-    if (saved == true) {
-      _refreshExpenses(successMessage: 'Expense saved successfully');
+  Future<void> _delete(Expense e) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete expense'),
+        content: Text('Delete ${e.expenseNumber}? This cannot be undone.'),
+        actions: [
+          OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTokens.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await context.read<AppServices>().expenses.delete(e.id);
+      if (!mounted) return;
+      AppMessenger.success(context, 'Expense deleted');
+      _reload();
+    } catch (err) {
+      if (mounted) AppMessenger.error(context, 'Failed to delete expense: $err');
+    }
+  }
+
+  /// Right-side drawer (web `ExpenseCategoriesDrawer`).
+  Future<void> _manageCategories(bool canCreate) async {
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      barrierColor: const Color(0x730F172A),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (ctx, _, __) {
+        final w = MediaQuery.sizeOf(ctx).width;
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Material(
+            color: Colors.white,
+            child: SizedBox(
+              width: w < 480 ? w : 440,
+              height: double.infinity,
+              child: SafeArea(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 8, 4),
+                    child: Row(children: [
+                      const Expanded(
+                        child: Text('Manage Expense Categories',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppTokens.text1)),
+                      ),
+                      IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
+                    ]),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+                    child: Text(
+                      'Categories group your expenses in reports and filters. Deactivate one to hide it from new expenses without losing history.',
+                      style: TextStyle(fontSize: 13, color: AppTokens.text3),
+                    ),
+                  ),
+                  Expanded(child: ExpenseCategoriesTab(canCreate: canCreate)),
+                ]),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (ctx, anim, _, child) => SlideTransition(
+        position: Tween(begin: const Offset(1, 0), end: Offset.zero).animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
+        child: child,
+      ),
+    );
+    if (mounted) {
+      await _loadCategories();
+      _reload();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final canCreate =
-        context.watch<AuthSession>().hasPermission(AppPermissions.expensesCreate);
+    final services = context.read<AppServices>();
+    final auth = context.watch<AuthSession>();
+    final canCreate = auth.hasPermission(AppPermissions.expensesCreate);
+    final canEdit = auth.hasPermission(AppPermissions.expensesEdit);
+    final canDelete = auth.hasPermission(AppPermissions.expensesDelete);
+    final top = (_meta.meta?.raw['summary'] is Map) ? (_meta.meta!.raw['summary'] as Map)['top_category'] : null;
+    final hasChange = (_meta.meta?.raw['summary'] is Map) && (_meta.meta!.raw['summary'] as Map)['change'] != null;
+    final activeCats = _categories.where((c) => c.isActive).toList();
+    final tabCats = activeCats.take(6).toList();
+    final moreCats = activeCats.skip(6).toList();
+
+    Widget chip(String label, bool active, VoidCallback onTap, {Color? dot}) => Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: ChoiceChip(
+            selected: active,
+            onSelected: (_) => onTap(),
+            showCheckmark: false,
+            selectedColor: AppTokens.primaryLight,
+            side: BorderSide(color: active ? AppTokens.primary : AppTokens.border),
+            label: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (dot != null) ...[
+                Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+                const SizedBox(width: 6),
+              ],
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                      color: active ? AppTokens.primary : AppTokens.text2)),
+            ]),
+          ),
+        );
 
     return Scaffold(
-      body: Column(
-        children: [
-          Container(
-            color: Colors.white,
-            child: TabBar(
-              controller: _tabs,
-              labelColor: AppTheme.primary,
-              unselectedLabelColor: AppTheme.textSecondary,
-              indicatorColor: AppTheme.primary,
-              tabs: const [
-                Tab(text: 'Expenses'),
-                Tab(text: 'Categories'),
-              ],
-            ),
+      backgroundColor: AppTokens.bgSecondary,
+      body: WebPageScaffold(
+        title: 'Expenses',
+        subtitle:
+            'Manage and track all clinic expenses in one place${auth.currentBranch != null ? ' · ${auth.currentBranch!.name}' : ''}.',
+        icon: Icons.account_balance_wallet_outlined,
+        breadcrumbs: const [Crumb('Finance'), Crumb('Expenses')],
+        actions: [
+          OutlinedButton.icon(
+            onPressed: () => _manageCategories(canCreate),
+            icon: const Icon(Icons.folder_open_outlined, size: 18),
+            label: const Text('Manage categories'),
           ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabs,
-              children: [
-                _ExpensesTab(
-                  reloadToken: _expensesReloadToken,
-                  canCreate: canCreate,
-                  onAdd: _openCreateExpense,
-                ),
-                ExpenseCategoriesTab(canCreate: canCreate),
-              ],
-            ),
+          if (canCreate) FilledButton(onPressed: () => _openForm(), child: const Text('Add Expense')),
+        ],
+        kpis: [
+          KpiData(
+            label: 'Total Expenses',
+            value: '₹${_fmt2.format(_meta.summaryNum('total_amount'))}',
+            icon: Icons.account_balance_wallet_outlined,
+            tone: KpiTone.red,
+            sub: hasChange ? 'vs previous period' : 'selected filters',
+          ),
+          KpiData(
+            label: 'This Period',
+            value: '${_meta.summaryNum('count').toInt()}',
+            icon: Icons.receipt_long_outlined,
+            sub: 'Total expenses',
+          ),
+          KpiData(
+            label: 'Avg. Expense',
+            value: '₹${_fmt2.format(_meta.summaryNum('avg_amount'))}',
+            icon: Icons.analytics_outlined,
+            tone: KpiTone.purple,
+            sub: 'per expense',
+          ),
+          KpiData(
+            label: 'Top Category',
+            value: top is Map ? '${top['name'] ?? '—'}' : '—',
+            icon: Icons.emoji_events_outlined,
+            tone: KpiTone.orange,
+            sub: top is Map
+                ? '₹${_fmt2.format((top['amount'] as num?) ?? 0)} (${top['share'] ?? 0}%)'
+                : null,
           ),
         ],
+        filters: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          FilterCard(
+            searchController: _search,
+            searchHint: 'Search expenses...',
+            onSearchChanged: (v) {
+              _debounce?.cancel();
+              _debounce = Timer(const Duration(milliseconds: 400), () {
+                if (!mounted) return;
+                _appliedSearch = v.trim();
+                _reload();
+              });
+            },
+            filters: [
+              FilterSelect<int>(
+                hint: 'All Categories',
+                options: {for (final c in _categories) c.id: c.name},
+                value: _categoryId,
+                onChanged: _setCategory,
+              ),
+              FilterSelect<String>(
+                hint: 'All payment modes',
+                options: _modeLabels,
+                value: _mode,
+                onChanged: (v) {
+                  _mode = v;
+                  _reload();
+                },
+              ),
+            ],
+            trailing: [
+              DateRangeFilter(
+                from: _dateFrom,
+                to: _dateTo,
+                onChanged: (f, t) {
+                  _dateFrom = f;
+                  _dateTo = t;
+                  _reload();
+                },
+              ),
+            ],
+            onReset: () {
+              _search.clear();
+              _appliedSearch = '';
+              _categoryId = null;
+              _mode = null;
+              _dateFrom = null;
+              _dateTo = null;
+              _reload();
+            },
+            resetEnabled: _appliedSearch.isNotEmpty || _categoryId != null || _mode != null || _dateFrom != null,
+          ),
+          // Category tabs (All · first six · More ▾).
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: [
+                chip('All', _categoryId == null, () => _setCategory(null)),
+                for (final c in tabCats)
+                  chip(c.name, _categoryId == c.id, () => _setCategory(c.id), dot: _parseColor(c.color)),
+                if (moreCats.isNotEmpty)
+                  PopupMenuButton<int>(
+                    onSelected: _setCategory,
+                    itemBuilder: (_) => [for (final c in moreCats) PopupMenuItem(value: c.id, child: Text(c.name))],
+                    child: chip(
+                      moreCats.any((c) => c.id == _categoryId)
+                          ? moreCats.firstWhere((c) => c.id == _categoryId).name
+                          : 'More ▾',
+                      moreCats.any((c) => c.id == _categoryId),
+                      () {},
+                    ),
+                  ),
+              ]),
+            ),
+          ),
+        ]),
+        body: AppPaginatedTable<Expense>(
+          key: ValueKey('expenses-$_reloadToken'),
+          perPage: 15,
+          emptyMessage: 'No expenses found',
+          loadPage: ({required page, required perPage}) => services.expenses.listPaginated(
+            page: page,
+            perPage: perPage,
+            search: _appliedSearch,
+            filters: {
+              'category_id': _categoryId,
+              'payment_mode': _mode,
+              'date_from': _dateFrom,
+              'date_to': _dateTo,
+              'sort_by': _sortBy,
+              'sort_dir': _sortAsc ? 'asc' : 'desc',
+            },
+          ),
+          onLoaded: (m) {
+            if (mounted) setState(() => _meta = PaginationMetaView(m));
+          },
+          sortKey: _sortBy,
+          sortAsc: _sortAsc,
+          onSort: _onSort,
+          onRowTap: canEdit ? _openForm : null,
+          columns: [
+            TableColumnDef(label: 'Date', flex: 1, minWidth: 110, sortKey: 'date', cellBuilder: (_, e) => Text(e.expenseDate)),
+            TableColumnDef(
+              label: 'Expense #',
+              flex: 1.2,
+              minWidth: 120,
+              cellBuilder: (_, e) =>
+                  Text(e.expenseNumber, style: const TextStyle(color: AppTokens.primary, fontWeight: FontWeight.w600)),
+            ),
+            TableColumnDef(
+              label: 'Description',
+              flex: 2.2,
+              minWidth: 200,
+              cellBuilder: (_, e) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(e.description ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if ((e.referenceNumber ?? '').isNotEmpty)
+                    Text('Ref: ${e.referenceNumber}', style: const TextStyle(fontSize: 12, color: AppTokens.text3)),
+                ],
+              ),
+            ),
+            TableColumnDef(
+              label: 'Category',
+              flex: 1.4,
+              minWidth: 140,
+              cellBuilder: (_, e) => e.category == null
+                  ? const Text('—', style: TextStyle(color: AppTokens.text3))
+                  : Row(mainAxisSize: MainAxisSize.min, children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(color: _parseColor(e.category!.color) ?? AppTokens.placeholder, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(child: Text(e.category!.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    ]),
+            ),
+            TableColumnDef(
+              label: 'Mode',
+              flex: 1,
+              minWidth: 100,
+              cellBuilder: (_, e) => StatusPill(_modeLabels[e.paymentMode] ?? (e.paymentMode ?? '—'), tone: PillTone.grey),
+            ),
+            TableColumnDef(
+              label: 'Amount (₹)',
+              flex: 1.1,
+              minWidth: 110,
+              align: TextAlign.right,
+              sortKey: 'amount',
+              cellBuilder: (_, e) => Text('₹${_fmt2.format(e.amount)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            TableColumnDef(
+              label: 'Actions',
+              flex: 1,
+              minWidth: 100,
+              cellBuilder: (_, e) => Row(mainAxisSize: MainAxisSize.min, children: [
+                if (canEdit) TableIconButton(icon: Icons.edit_outlined, tooltip: 'Edit', onPressed: () => _openForm(e)),
+                if (canDelete) ...[
+                  const SizedBox(width: 8),
+                  TableIconButton(
+                      icon: Icons.delete_outline, tooltip: 'Delete', plain: true, color: AppTokens.error, onPressed: () => _delete(e)),
+                ],
+              ]),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ExpensesTab extends StatelessWidget {
-  const _ExpensesTab({
-    required this.reloadToken,
-    required this.canCreate,
-    required this.onAdd,
-  });
-
-  final int reloadToken;
-  final bool canCreate;
-  final VoidCallback onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    final services = context.read<AppServices>();
-
-    return Column(
-      children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Expenses',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-              ),
-              if (canCreate)
-                FilledButton.icon(
-                  onPressed: onAdd,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add Expense'),
-                ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: AppPaginatedTable<Expense>(
-            key: ValueKey('expenses-$reloadToken'),
-            loadPage: ({required page, required perPage}) =>
-                services.expenses.listPaginated(page: page, perPage: perPage),
-            headerFontSize: 9,
-            cellFontSize: 12,
-            columns: const [
-              TableColumnDef(label: 'Expense #', flex: 1.2, cellBuilder: _numberCell),
-              TableColumnDef(label: 'Category', flex: 1.5, cellBuilder: _categoryCell),
-              TableColumnDef(label: 'Date', flex: 1, cellBuilder: _dateCell),
-              TableColumnDef(label: 'Description', flex: 2, cellBuilder: _descCell),
-              TableColumnDef(
-                label: 'Amount',
-                flex: 1,
-                align: TextAlign.right,
-                cellBuilder: _amountCell,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  static Widget _numberCell(BuildContext context, Expense e) => Text(
-        e.expenseNumber,
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-      );
-
-  static Widget _categoryCell(BuildContext context, Expense e) => Text(
-        e.category?.name ?? '—',
-        style: const TextStyle(fontSize: 12),
-      );
-
-  static Widget _dateCell(BuildContext context, Expense e) => Text(
-        e.expenseDate,
-        style: const TextStyle(fontSize: 12),
-      );
-
-  static Widget _descCell(BuildContext context, Expense e) => Text(
-        e.description ?? '—',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 12),
-      );
-
-  static Widget _amountCell(BuildContext context, Expense e) => Text(
-        '₹${e.amount.toStringAsFixed(2)}',
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-      );
+Color? _parseColor(String? hex) {
+  if (hex == null || !hex.startsWith('#') || (hex.length != 7)) return null;
+  final v = int.tryParse(hex.substring(1), radix: 16);
+  return v == null ? null : Color(0xFF000000 | v);
 }
 
 class ExpenseCategoriesTab extends StatefulWidget {
@@ -471,9 +727,12 @@ class _ExpenseCategoriesTabState extends State<ExpenseCategoriesTab> {
 }
 
 class _ExpenseFormHost extends StatefulWidget {
-  const _ExpenseFormHost({required this.asDialog});
+  const _ExpenseFormHost({required this.asDialog, this.expense});
 
   final bool asDialog;
+
+  /// When set, the form edits this expense.
+  final Expense? expense;
 
   @override
   State<_ExpenseFormHost> createState() => _ExpenseFormHostState();
@@ -505,6 +764,15 @@ class _ExpenseFormHostState extends State<_ExpenseFormHost> {
   @override
   void initState() {
     super.initState();
+    final e = widget.expense;
+    if (e != null) {
+      _description.text = e.description ?? '';
+      _amount.text = e.amount.toStringAsFixed(2);
+      _reference.text = e.referenceNumber ?? '';
+      _categoryId = e.category?.id;
+      _paymentMode = e.paymentMode ?? 'cash';
+      _date = DateTime.tryParse((e.rawDate ?? '').length >= 10 ? e.rawDate!.substring(0, 10) : '') ?? _date;
+    }
     _loadCategories();
   }
 
@@ -562,7 +830,8 @@ class _ExpenseFormHostState extends State<_ExpenseFormHost> {
 
     setState(() => _saving = true);
     try {
-      await context.read<AppServices>().expenses.create({
+      final svc = context.read<AppServices>().expenses;
+      final body = <String, dynamic>{
         'title': description,
         'description': description,
         'category_id': _categoryId,
@@ -571,7 +840,9 @@ class _ExpenseFormHostState extends State<_ExpenseFormHost> {
         'payment_mode': _paymentMode,
         'reference_number':
             _reference.text.trim().isEmpty ? null : _reference.text.trim(),
-      });
+      };
+      final editing = widget.expense;
+      editing == null ? await svc.create(body) : await svc.update(editing.id, body);
       if (!mounted) return;
       // Success toast is shown by the parent after the dialog closes,
       // so it isn't cleared when this route is popped.
@@ -669,7 +940,7 @@ class _ExpenseFormHostState extends State<_ExpenseFormHost> {
   Widget build(BuildContext context) {
     if (widget.asDialog) {
       return AppFormDialogShell(
-        title: 'Add Expense',
+        title: widget.expense == null ? 'Add Expense' : 'Edit Expense',
         icon: Icons.payments_outlined,
         onClose: () => _close(),
         body: _fields,
@@ -678,7 +949,7 @@ class _ExpenseFormHostState extends State<_ExpenseFormHost> {
     }
 
     return AppFormBottomSheetShell(
-      title: 'Add Expense',
+      title: widget.expense == null ? 'Add Expense' : 'Edit Expense',
       icon: Icons.payments_outlined,
       onClose: () => _close(),
       body: _fields,

@@ -24,6 +24,7 @@ import '../../data/services/emr_visit_catalog_cache.dart';
 import '../../data/local/sync_coordinator.dart';
 import '../../core/connectivity/connectivity_notifier.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/app_tokens.dart';
 import '../../core/widgets/app_logo.dart';
 import '../../core/widgets/powered_by_footer.dart';
 import '../../data/local/offline_invoice_queue.dart';
@@ -307,8 +308,7 @@ class _PosFullscreenShellState extends State<_PosFullscreenShell> {
   @override
   Widget build(BuildContext context) {
     final bool desktop = AppConfig.usesLargeUiScale;
-    double ic(double base) =>
-        desktop ? base * AppConfig.desktopIconScale : base;
+    double ic(double base) => MediaQuery.textScalerOf(context).scale(base);
     final showPrinter = AppConfig.isCashierPlatform &&
         (widget.auth.hasRole(AppRoles.cashier) ||
             widget.auth.hasPermission(AppPermissions.shopManage));
@@ -609,30 +609,15 @@ class _DesktopShellState extends State<_DesktopShell> {
     );
   }
 
-  bool _isMenuItemSelected(
-      String location, String? menuPath, List<_MenuItem> allItems) {
-    if (menuPath == null) return false;
-    return _menuPathSelected(location, menuPath);
-  }
-
   @override
   Widget build(BuildContext context) {
     final items = _menuItems(widget.auth);
-    final userName = widget.auth.user?.name ?? 'Admin';
-    final userInitials =
-        userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'A';
-    final bool desktop = AppConfig.usesLargeUiScale;
-    double ic(double base) =>
-        desktop ? base * AppConfig.desktopIconScale : base;
-    // Wider sidebar on desktop to fit larger fonts/icons.
-    final sidebarWidth = _collapsed ? 72.0 : (desktop ? 280.0 : 260.0);
-
     final width = MediaQuery.of(context).size.width;
-    final subtitle = widget.location.startsWith('/dashboard')
-        ? "Welcome back! Here's what's happening today."
-        : '';
-    final showSubtitle = subtitle.isNotEmpty && width >= 900;
-    final showSearch = width >= 760;
+    final sidebarWidth = _collapsed
+        ? AppTokens.sidebarCollapsedWidth
+        : AppTokens.sidebarWidth;
+    // Web hides the name/role next to the avatar under 1100px.
+    final showProfileCopy = width >= 1100;
 
     return KeyboardShortcutHandler(
       shortcuts: {
@@ -646,230 +631,26 @@ class _DesktopShellState extends State<_DesktopShell> {
               duration: const Duration(milliseconds: 200),
               width: sidebarWidth,
               decoration: const BoxDecoration(
-                color: AppTheme.primaryDark,
-                border: Border(
-                    right: BorderSide(color: AppTheme.primary, width: 1)),
+                color: _kSiderBg,
+                boxShadow: [
+                  BoxShadow(
+                      color: Color(0x24021436),
+                      blurRadius: 24,
+                      offset: Offset(4, 0)),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    height: desktop ? 68 : 64,
-                    padding:
-                        EdgeInsets.symmetric(horizontal: _collapsed ? 12 : 18),
-                    color: Colors.white,
-                    child: _collapsed
-                        ? Center(
-                            child: IconButton(
-                              tooltip: 'Expand sidebar',
-                              icon: const AppLogo(size: 30),
-                              onPressed: _toggleSidebar,
-                            ),
-                          )
-                        : Row(children: [
-                            const AppLogo(size: 38),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                                child: Text('SmartMediCare',
-                                    style: TextStyle(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w800,
-                                        color: Color(0xFF073F7A)))),
-                            IconButton(
-                                tooltip: 'Collapse sidebar',
-                                icon: const Icon(Icons.chevron_left_rounded,
-                                    color: AppTheme.textSecondary),
-                                onPressed: _toggleSidebar),
-                          ]),
-                  ),
+                  _SidebarBrand(collapsed: _collapsed),
                   Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      itemCount: items.length,
-                      itemBuilder: (context, idx) {
-                        final m = items[idx];
-                        if (m.isHeader) {
-                          if (_collapsed) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(
-                                  vertical: 8, horizontal: 12),
-                              child:
-                                  Divider(color: Color(0x33FFFFFF), height: 1),
-                            );
-                          }
-                          return Padding(
-                            padding: const EdgeInsets.fromLTRB(14, 18, 14, 6),
-                            child: Text(
-                              m.label,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.6,
-                                color: Color(0xFF9DB8DA),
-                              ),
-                            ),
-                          );
-                        }
-                        if (m.path == null) return const SizedBox.shrink();
-
-                        final isSelected =
-                            _isMenuItemSelected(widget.location, m.path, items);
-                        if (_collapsed) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Tooltip(
-                              message: m.label,
-                              child: Center(
-                                child: Material(
-                                  color: isSelected
-                                      ? const Color(0xFF1677D2)
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: BorderSide(
-                                      color: isSelected
-                                          ? const Color(0xFFFFFFFF)
-                                          : Colors.transparent,
-                                      width: 1.2,
-                                    ),
-                                  ),
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(12),
-                                    onTap: () => context.go(m.path!),
-                                    child: SizedBox(
-                                      width: 48,
-                                      height: 50,
-                                      child: Icon(
-                                        m.icon,
-                                        color: isSelected
-                                            ? Colors.white
-                                            : const Color(0xDFFFFFFF),
-                                        size: 22,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? const Color(0xFF1677D2)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isSelected
-                                    ? Colors.white
-                                    : Colors.transparent,
-                                width: 1.5,
-                              ),
-                              boxShadow: isSelected
-                                  ? const [
-                                      BoxShadow(
-                                        color: Color(0x24000000),
-                                        blurRadius: 7,
-                                        offset: Offset(0, 2),
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                            child: ListTile(
-                              dense: false,
-                              minTileHeight: desktop ? 52 : 48,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: desktop ? 14 : 12,
-                              ),
-                              leading: Icon(
-                                m.icon,
-                                color: isSelected
-                                    ? Colors.white
-                                    : const Color(0xDFFFFFFF),
-                                size: ic(20),
-                              ),
-                              title: Text(
-                                m.label,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              onTap: () => context.go(m.path!),
-                            ),
-                          ),
-                        );
-                      },
+                    child: _SidebarMenu(
+                      items: items,
+                      location: widget.location,
+                      collapsed: _collapsed,
+                      onSelect: (p) => context.go(p),
                     ),
                   ),
-                  if (!_collapsed)
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0x14FFFFFF),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0x33FFFFFF)),
-                        ),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              radius: desktop ? 22 : 18,
-                              backgroundColor: AppTheme.primary,
-                              child: Text(userInitials,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 13)),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(userName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white)),
-                                  Text(
-                                      widget.auth.currentBranch?.name ??
-                                          'Branch',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Color(0xFF9DB8DA))),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.shield_outlined,
-                                  color: const Color(0xDFFFFFFF), size: ic(18)),
-                              onPressed: () => context.go('/settings/security'),
-                              tooltip: 'Account Security',
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.logout_rounded,
-                                  color: AppTheme.textSecondary, size: ic(18)),
-                              onPressed: () async {
-                                await widget.auth.logout();
-                                if (context.mounted) context.go('/');
-                              },
-                              tooltip: 'Logout',
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -877,147 +658,106 @@ class _DesktopShellState extends State<_DesktopShell> {
               child: Column(
                 children: [
                   Container(
-                    height: desktop ? 64 : 56,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    height: 64,
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
                     decoration: const BoxDecoration(
                       color: Colors.white,
                       border: Border(
-                          bottom:
-                              BorderSide(color: Color(0xFFE2E8F0), width: 1)),
+                          bottom: BorderSide(color: AppTokens.border)),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Color(0x0D0F2A46),
+                            blurRadius: 12,
+                            offset: Offset(0, 2)),
+                      ],
                     ),
                     child: Row(
                       children: [
-                        if (shellShowsBack(widget.location)) ...[
-                          ShellBackButton(
-                              location: widget.location, compact: true),
-                          const SizedBox(width: 4),
-                        ],
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _titleForPath(widget.location),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.1,
-                                  ),
-                            ),
-                            if (showSubtitle)
-                              Text(
-                                subtitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppTheme.textSecondary,
-                                    height: 1.1),
-                              ),
-                          ],
-                        ),
-                        if (showSearch)
-                          Expanded(
-                            child: LayoutBuilder(
-                              builder: (context, searchConstraints) {
-                                if (searchConstraints.maxWidth < 140) {
-                                  return const SizedBox.shrink();
-                                }
-                                return Align(
-                                  alignment: Alignment.center,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: AppConfig.usesLargeUiScale
-                                          ? AppConfig.desktopSearchMaxWidth
-                                          : 460,
-                                    ),
-                                    child: _TopSearchBox(auth: widget.auth),
-                                  ),
-                                );
-                              },
-                            ),
-                          )
-                        else
-                          const Spacer(),
-                        const SizedBox(width: 12),
-                        if (widget.auth.isSuperAdmin &&
-                            _branches.length > 1) ...[
-                          _buildHeaderBranchSwitcher(desktop: desktop),
-                          const SizedBox(width: 12),
-                        ],
-                        _OnlineChip(connectivity: widget.connectivity),
-                        const SizedBox(width: 8),
-                        if (_offlinePending > 0)
-                          Badge(
-                            label: Text('$_offlinePending'),
-                            child: IconButton(
-                              tooltip: 'Pending offline invoices',
-                              icon: const Icon(Icons.cloud_queue_outlined,
-                                  color: AppTheme.textSecondary),
-                              onPressed: () async {
-                                await OfflineQueueSheet.show(context);
-                                await _refreshOfflineCount();
-                              },
-                            ),
-                          ),
-                        TextButton.icon(
-                          onPressed: _handleSync,
-                          icon: Icon(Icons.cloud_upload_outlined, size: ic(18)),
-                          label: const Text('Sync'),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          tooltip: 'Notifications',
-                          icon: const Icon(Icons.notifications_none_rounded,
-                              color: AppTheme.textSecondary),
-                          onPressed: () {
-                            if (widget.auth
-                                .hasPermission('emr.reminders.view')) {
-                              context.go('/emr/reminders');
-                            } else {
-                              AppMessenger.show(
-                                context,
-                                const SnackBar(
-                                    content: Text('No new notifications')),
-                              );
-                            }
-                          },
-                        ),
-                        IconButton(
-                          tooltip: 'Command palette (Ctrl+K)',
-                          icon: const Icon(Icons.manage_search_rounded),
-                          onPressed: () =>
-                              showCommandPalette(context, widget.auth),
-                        ),
                         IconButton(
                           tooltip:
-                              widget.auth.settingsRoute == '/settings/printer'
-                                  ? 'USB Printer'
-                                  : 'Settings',
-                          icon: Icon(
-                            widget.auth.settingsRoute == '/settings/printer'
-                                ? Icons.print_outlined
-                                : Icons.settings_outlined,
-                            color: AppTheme.textSecondary,
+                              _collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+                          icon: const Icon(Icons.menu_rounded, size: 20),
+                          onPressed: _toggleSidebar,
+                        ),
+                        if (shellShowsBack(widget.location)) ...[
+                          const SizedBox(width: 4),
+                          ShellBackButton(
+                              location: widget.location, compact: true),
+                        ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _titleForPath(widget.location),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppTokens.text1,
+                            ),
                           ),
-                          onPressed: widget.auth.settingsRoute != null
-                              ? () => context.go(widget.auth.settingsRoute!)
-                              : null,
+                        ),
+                        if (widget.auth.isSuperAdmin &&
+                            _branches.length > 1) ...[
+                          _buildHeaderBranchSwitcher(desktop: false),
+                          const SizedBox(width: 12),
+                        ],
+                        if (_offlinePending > 0) ...[
+                          Badge(
+                            label: Text('$_offlinePending'),
+                            backgroundColor: AppTokens.warning,
+                            child: IconButton(
+                              tooltip: 'Pending offline invoices — sync',
+                              icon: const Icon(Icons.cloud_upload_outlined,
+                                  size: 20),
+                              onPressed: () async {
+                                await OfflineQueueSheet.show(context);
+                                await _handleSync();
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        _OfflineTag(connectivity: widget.connectivity),
+                        const SizedBox(width: 12),
+                        _UserMenuButton(
+                          auth: widget.auth,
+                          showCopy: showProfileCopy,
+                          onSync: _handleSync,
                         ),
                       ],
                     ),
                   ),
                   Expanded(child: SubscriptionBannerHost(child: widget.child)),
+                  if (!_isFullBleed(widget.location))
+                    const _ShellPoweredBy(),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Routes that render edge-to-edge without the footer (web `layout: full-bleed`).
+bool _isFullBleed(String location) =>
+    location.startsWith('/products/datasheet') || location.startsWith('/pos');
+
+/// Web `.app-powered-by` strip under the page content.
+class _ShellPoweredBy extends StatelessWidget {
+  const _ShellPoweredBy();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: AppTokens.border)),
+      ),
+      child: PoweredByFooter(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6)),
     );
   }
 }
@@ -1068,72 +808,6 @@ class _OnlineChip extends StatelessWidget {
   }
 }
 
-/// Global search in the desktop top bar — opens the command palette (Ctrl+K).
-class _TopSearchBox extends StatelessWidget {
-  const _TopSearchBox({required this.auth});
-
-  final AuthSession auth;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final showShortcut = constraints.maxWidth > 220;
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: () => showCommandPalette(context, auth),
-            child: Container(
-              height: 42,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: AppTheme.background,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.search_rounded,
-                      size: 20, color: AppTheme.textSecondary),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Search customers, invoices, visits…',
-                      style: TextStyle(
-                          color: AppTheme.textSecondary, fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (showShortcut) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: const Text(
-                        'Ctrl + K',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textSecondary),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
 class _MenuItem {
   _MenuItem({
     required this.label,
@@ -1152,7 +826,13 @@ class _MenuItem {
 }
 
 List<_MenuItem> _menuItems(AuthSession auth) {
+  // Mirrors `menuOptions` in frontend/src/layouts/AppLayout.vue: same groups,
+  // order and gates. Screens that only exist in the app (Stock Alerts,
+  // Summary / Shift Summary / Stock Transfer reports, Printers) sit in the
+  // matching web group so nothing is lost.
   bool can(String p) => auth.hasPermission(p);
+  bool has(String c) => auth.hasCapability(c);
+  final isSuperAdmin = auth.isSuperAdmin;
 
   final result = <_MenuItem>[];
 
@@ -1167,242 +847,592 @@ List<_MenuItem> _menuItems(AuthSession auth) {
     result.addAll(visible);
   }
 
+  final customerItems = <_MenuItem>[
+    if (can('customers.view'))
+      _MenuItem(
+          label: auth.responsiblePartiesLabel,
+          icon: Icons.people_outline,
+          path: '/customers'),
+    if (can('customers.view') && has('patients'))
+      _MenuItem(
+          label: auth.isVeterinary ? 'Pets' : 'Patients',
+          icon: Icons.pets_outlined,
+          path: '/patients'),
+    if (can('patient_appointments.view') && has('appointments'))
+      _MenuItem(
+          label: 'Appointments',
+          icon: Icons.event_outlined,
+          path: '/emr/appointments'),
+  ];
+
+  final emrItems = <_MenuItem>[
+    if (can('emr.visits.view') && has('clinical_visits'))
+      _MenuItem(
+          label: 'Visit Records',
+          icon: Icons.medical_services_outlined,
+          path: '/emr/visits'),
+    if (can('emr.reminders.view') &&
+        has('animal_profiles') &&
+        has('animal_vaccinations'))
+      _MenuItem(
+          label: 'Reminders',
+          icon: Icons.notifications_outlined,
+          path: '/emr/reminders'),
+    if (can('emr.visits.view') && has('ipd'))
+      _MenuItem(
+          label: 'IPD Admissions',
+          icon: Icons.local_hospital_outlined,
+          path: '/ipd/admissions'),
+  ];
+
+  result.add(_MenuItem(
+      label: 'Dashboard', icon: Icons.home_outlined, path: '/dashboard'));
+
+  // ── Doctor role: medical menus only ──────────────────────────────────
   if (auth.hasRole('doctor')) {
-    result.add(_MenuItem(
-        label: 'Dashboard', icon: Icons.dashboard_rounded, path: '/dashboard'));
-    addSection('CUSTOMERS & PATIENTS', [
-      if (can('customers.view')) ...[
-        _MenuItem(
-            label: auth.responsiblePartiesLabel,
-            icon: Icons.people_outline,
-            path: '/customers'),
-        if (auth.hasCapability('patients'))
-          _MenuItem(
-              label: auth.patientsLabel,
-              icon: Icons.pets_outlined,
-              path: '/patients'),
-      ],
-      if (can('patient_appointments.view') &&
-          auth.hasCapability('appointments'))
-        _MenuItem(
-            label: 'Appointments',
-            icon: Icons.event_outlined,
-            path: '/emr/appointments'),
-      if (can('emr.visits.view') && auth.hasCapability('ipd'))
-        _MenuItem(
-            label: 'IPD Admissions',
-            icon: Icons.local_hospital_outlined,
-            path: '/ipd/admissions'),
-      if (can('emr.visits.view') && auth.hasCapability('clinical_visits'))
-        _MenuItem(
-            label: 'Visit Records',
-            icon: Icons.medical_services_outlined,
-            path: '/emr/visits'),
-      if (can('emr.reminders.view') && auth.hasCapability('animal_profiles'))
-        _MenuItem(
-            label: 'Reminders',
-            icon: Icons.notifications_outlined,
-            path: '/emr/reminders'),
-    ]);
+    addSection(auth.responsiblePartiesLabel, customerItems);
+    addSection('Medical Records', emrItems);
     return result;
   }
 
-  result.add(_MenuItem(
-      label: 'Dashboard', icon: Icons.dashboard_rounded, path: '/dashboard'));
+  if (can('invoices.create')) {
+    result.add(_MenuItem(
+        label: 'POS Billing', icon: Icons.shopping_cart_outlined, path: '/pos'));
+  }
 
-  addSection('SALES & BILLING', [
-    if (can('invoices.create'))
+  addSection('Inventory', [
+    if (can('brands.view') && has('inventory'))
+      _MenuItem(label: 'Brands', icon: Icons.sell_outlined, path: '/brands'),
+    if (can('categories.view') && has('inventory'))
       _MenuItem(
-          label: 'POS Billing',
-          icon: Icons.point_of_sale_outlined,
-          path: '/pos'),
-    if (can('invoices.view'))
-      _MenuItem(
-          label: 'Invoices',
-          icon: Icons.receipt_long_outlined,
-          path: '/invoices'),
-    if (can('purchases.view'))
-      _MenuItem(
-          label: 'Purchases',
-          icon: Icons.shopping_bag_outlined,
-          path: '/purchases'),
-    if (can('purchases.view'))
-      _MenuItem(
-        label: 'Supplier Returns',
-        icon: Icons.assignment_return_outlined,
-        path: '/purchase-returns',
-      ),
-    if (can('expenses.view'))
-      _MenuItem(
-          label: 'Expenses', icon: Icons.payments_outlined, path: '/expenses'),
-  ]);
-
-  addSection('INVENTORY', [
-    if (can('products.view'))
+          label: 'Categories',
+          icon: Icons.folder_outlined,
+          path: '/categories'),
+    if (can('products.view') && has('inventory'))
       _MenuItem(
           label: 'Products',
           icon: Icons.inventory_2_outlined,
           path: '/products'),
-    if (can('products.edit') ||
-        can('categories.create') ||
-        can('brands.create'))
+    if (can('products.edit') && has('inventory'))
       _MenuItem(
-          label: 'Catalog',
-          icon: Icons.sell_outlined,
-          path: '/settings/catalog'),
-    if (can('inventory.view')) ...[
+          label: 'Product Datasheet',
+          icon: Icons.description_outlined,
+          path: '/products/datasheet'),
+    if (can('inventory.view') && has('inventory'))
       _MenuItem(
           label: 'Inventory',
-          icon: Icons.warehouse_outlined,
+          icon: Icons.layers_outlined,
           path: '/inventory'),
-      _MenuItem(
-          label: 'Stock Alerts',
-          icon: Icons.notification_important_outlined,
-          path: '/stock-alerts'),
+    if (can('inventory.view') && has('inventory') && has('advanced_reports'))
       _MenuItem(
           label: 'Stock Ageing',
-          icon: Icons.hourglass_bottom_outlined,
+          icon: Icons.schedule_outlined,
           path: '/stock-ageing'),
-    ],
-    if (can('inventory.transfer'))
+    if (can('inventory.transfer') && has('multi_branch'))
       _MenuItem(
           label: 'Stock Transfers',
           icon: Icons.swap_horiz_outlined,
           path: '/stock-transfers'),
   ]);
 
-  addSection('CUSTOMERS & PATIENTS', [
-    if (can('customers.view')) ...[
+  addSection('Billing', [
+    if (can('invoices.view'))
       _MenuItem(
-          label: auth.responsiblePartiesLabel,
-          icon: Icons.people_outline,
-          path: '/customers'),
-      if (auth.hasCapability('patients'))
-        _MenuItem(
-            label: auth.patientsLabel,
-            icon: Icons.pets_outlined,
-            path: '/patients'),
-    ],
-    if (can('emr.visits.view') && auth.hasCapability('clinical_visits'))
+          label: 'Invoices',
+          icon: Icons.receipt_outlined,
+          path: '/invoices'),
+    if (can('purchases.view') && has('purchases'))
       _MenuItem(
-          label: 'Visit Records',
-          icon: Icons.medical_services_outlined,
-          path: '/emr/visits'),
-    if (can('patient_appointments.view') && auth.hasCapability('appointments'))
+          label: 'Purchases',
+          icon: Icons.shopping_bag_outlined,
+          path: '/purchases'),
+    if (can('purchases.view') && has('purchases'))
       _MenuItem(
-          label: 'Appointments',
-          icon: Icons.event_outlined,
-          path: '/emr/appointments'),
-    if (can('emr.visits.view') && auth.hasCapability('ipd'))
+          label: 'Purchase Returns',
+          icon: Icons.assignment_return_outlined,
+          path: '/purchase-returns'),
+    if (can('suppliers.view') && has('purchases'))
       _MenuItem(
-          label: 'IPD Admissions',
-          icon: Icons.local_hospital_outlined,
-          path: '/ipd/admissions'),
-    if (can('emr.reminders.view') && auth.hasCapability('animal_profiles'))
-      _MenuItem(
-          label: 'Reminders',
-          icon: Icons.notifications_outlined,
-          path: '/emr/reminders'),
+          label: 'Suppliers',
+          icon: Icons.local_shipping_outlined,
+          path: '/suppliers'),
   ]);
 
-  addSection('REPORTS', [
-    if (can('reports.view')) ...[
+  addSection(auth.responsiblePartiesLabel, customerItems);
+  addSection('Medical Records', emrItems);
+
+  addSection('Finance', [
+    if (can('expenses.view') && has('expenses'))
       _MenuItem(
-          label: 'Payment Report',
-          icon: Icons.account_balance_wallet_outlined,
-          path: '/reports/payments'),
+          label: 'Expenses', icon: Icons.payments_outlined, path: '/expenses'),
+  ]);
+
+  addSection('Reports', [
+    if (can('reports.view') && has('reports')) ...[
       _MenuItem(
           label: 'Sales Report',
           icon: Icons.bar_chart_outlined,
           path: '/reports/sales'),
+      _MenuItem(
+          label: 'Payment Report',
+          icon: Icons.credit_card_outlined,
+          path: '/reports/payments'),
     ],
-    if (auth.isSuperAdmin && can('reports.view')) ...[
+    if (can('reports.view') && has('reports') && has('animal_profiles'))
+      _MenuItem(
+          label: 'Visit Report',
+          icon: Icons.medical_services_outlined,
+          path: '/reports/visits'),
+    if (can('cashier.day_close'))
+      _MenuItem(
+          label: 'Day Close',
+          icon: Icons.summarize_outlined,
+          path: '/reports/day-close'),
+    if (isSuperAdmin && can('reports.view') && has('advanced_reports'))
+      _MenuItem(
+          label: 'GST Report',
+          icon: Icons.request_page_outlined,
+          path: '/reports/gst'),
+    // App-only reports.
+    if (isSuperAdmin && can('reports.view')) ...[
       _MenuItem(
           label: 'Summary Report',
           icon: Icons.insights_outlined,
           path: '/reports/summary'),
       _MenuItem(
           label: 'Shift Summary',
-          icon: Icons.schedule_outlined,
+          icon: Icons.timer_outlined,
           path: '/reports/shift-summary'),
       _MenuItem(
           label: 'Stock Transfer Report',
-          icon: Icons.swap_horiz_outlined,
+          icon: Icons.compare_arrows_outlined,
           path: '/reports/stock-transfers'),
-      if (auth.hasCapability('animal_profiles'))
-        _MenuItem(
-            label: 'Visit Report',
-            icon: Icons.medical_services_outlined,
-            path: '/reports/visits'),
     ],
-    if (can('cashier.day_close'))
+    if (can('inventory.view') && has('inventory'))
       _MenuItem(
-          label: 'Day Close Report',
-          icon: Icons.summarize_outlined,
-          path: '/reports/day-close'),
+          label: 'Stock Alerts',
+          icon: Icons.notification_important_outlined,
+          path: '/stock-alerts'),
   ]);
 
-  addSection('MANAGEMENT', [
-    if (can('suppliers.view'))
+  addSection('Admin', [
+    if (isSuperAdmin && can('shop.manage'))
       _MenuItem(
-          label: 'Suppliers',
-          icon: Icons.local_shipping_outlined,
-          path: '/suppliers'),
-    if (can('doctors.manage'))
-      _MenuItem(
-          label: 'Doctors',
-          icon: Icons.medical_information_outlined,
-          path: '/settings/doctors'),
-    if (can('emr.master_data.manage'))
+          label: 'Settings', icon: Icons.settings_outlined, path: '/settings'),
+    if (isSuperAdmin && can('emr.master_data.manage'))
       _MenuItem(
           label: 'EMR Master Data',
           icon: Icons.list_alt_outlined,
           path: '/settings/emr-master-data'),
-    if (can('pets.master_data.manage') && auth.hasCapability('species_breeds'))
+    if (isSuperAdmin && can('emr.master_data.manage'))
+      _MenuItem(
+          label: 'Procedure Kits',
+          icon: Icons.medical_services_outlined,
+          path: '/settings/procedure-kits'),
+    if (isSuperAdmin &&
+        can('pets.master_data.manage') &&
+        has('species_breeds'))
       _MenuItem(
           label: 'Species & Breeds',
           icon: Icons.pets_outlined,
           path: '/settings/species-breeds'),
-    if (can('shop.manage'))
+    if (isSuperAdmin && can('users.view'))
       _MenuItem(
-          label: 'Settings', icon: Icons.settings_outlined, path: '/settings'),
-    if (auth.isSuperAdmin)
+          label: 'Users',
+          icon: Icons.person_outline,
+          path: '/settings/users'),
+    if (isSuperAdmin && can('branch.manage'))
+      _MenuItem(
+          label: 'Branches',
+          icon: Icons.business_outlined,
+          path: '/settings/branches'),
+    if (can('doctors.manage') && has('staff_management'))
+      _MenuItem(
+          label: 'Doctors',
+          icon: Icons.medical_information_outlined,
+          path: '/settings/doctors'),
+    if (isSuperAdmin)
       _MenuItem(
           label: 'Subscription & Plans',
-          icon: Icons.workspace_premium_outlined,
+          icon: Icons.credit_card_outlined,
           path: '/settings/subscription'),
     if (auth.canAccessPrinterSettings)
       _MenuItem(
-        label: 'Printers',
-        icon: Icons.print_outlined,
-        path: '/settings/printer',
-      ),
-    if (can('users.view'))
-      _MenuItem(
-          label: 'Users',
-          icon: Icons.manage_accounts_outlined,
-          path: '/settings/users'),
-    if (can('branch.manage'))
-      _MenuItem(
-          label: 'Branches',
-          icon: Icons.apartment_outlined,
-          path: '/settings/branches'),
+          label: 'Printers', icon: Icons.print_outlined, path: '/settings/printer'),
   ]);
 
   return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Web-style sidebar (AppLayout.vue `.app-sider`): navy, white brand block,
+// 40px items with radius 8, uppercase 11px group titles.
+// ─────────────────────────────────────────────────────────────────────────
+
+const _kSiderBg = Color(0xFF082B5C);
+const _kSiderItemText = Color(0xFFDCE8F8);
+const _kSiderHover = Color(0xFF10457D);
+const _kSiderActive = Color(0xFF1677D2);
+const _kSiderGroup = Color(0xFF8FB1DA);
+
+class _SidebarBrand extends StatelessWidget {
+  const _SidebarBrand({required this.collapsed});
+
+  final bool collapsed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 64),
+      padding: EdgeInsets.symmetric(
+          horizontal: collapsed ? 12 : 20, vertical: 13),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE8EEF5))),
+      ),
+      child: collapsed
+          ? const Center(child: AppLogo(size: 32))
+          : const Row(children: [
+              AppLogo(size: 38),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'SmartMediCare',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 18.9,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0A3D71)),
+                ),
+              ),
+            ]),
+    );
+  }
+}
+
+class _SidebarMenu extends StatelessWidget {
+  const _SidebarMenu({
+    required this.items,
+    required this.location,
+    required this.collapsed,
+    required this.onSelect,
+  });
+
+  final List<_MenuItem> items;
+  final String location;
+  final bool collapsed;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(
+          collapsed ? 6 : 10, collapsed ? 12 : 8, collapsed ? 6 : 10, 28),
+      itemCount: items.length,
+      itemBuilder: (context, idx) {
+        final m = items[idx];
+        if (m.isHeader) {
+          if (collapsed) return const SizedBox(height: 8);
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
+            child: Text(
+              m.label.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.66,
+                height: 1.2,
+                color: _kSiderGroup,
+              ),
+            ),
+          );
+        }
+        if (m.path == null) return const SizedBox.shrink();
+        final selected = _menuPathSelected(location, m.path!);
+        return _SidebarItem(
+          item: m,
+          selected: selected,
+          collapsed: collapsed,
+          onTap: () => onSelect(m.path!),
+        );
+      },
+    );
+  }
+}
+
+class _SidebarItem extends StatefulWidget {
+  const _SidebarItem({
+    required this.item,
+    required this.selected,
+    required this.collapsed,
+    required this.onTap,
+  });
+
+  final _MenuItem item;
+  final bool selected;
+  final bool collapsed;
+  final VoidCallback onTap;
+
+  @override
+  State<_SidebarItem> createState() => _SidebarItemState();
+}
+
+class _SidebarItemState extends State<_SidebarItem> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.selected;
+    final fg = active || _hover ? Colors.white : _kSiderItemText;
+    final bg = active
+        ? _kSiderActive
+        : _hover
+            ? _kSiderHover
+            : Colors.transparent;
+    final iconSize = MediaQuery.textScalerOf(context)
+        .scale(widget.collapsed ? 20 : 18);
+
+    final content = widget.collapsed
+        ? Center(child: Icon(widget.item.icon, size: iconSize, color: fg))
+        : Row(children: [
+            SizedBox(
+              width: 32,
+              child: Icon(widget.item.icon, size: iconSize, color: fg),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                widget.item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  height: 1.25,
+                  color: fg,
+                ),
+              ),
+            ),
+          ]);
+
+    Widget tile = MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          constraints: BoxConstraints(
+              minHeight:
+                  MediaQuery.textScalerOf(context).scale(AppTokens.sidebarItemHeight)),
+          padding: EdgeInsets.only(
+              left: widget.collapsed ? 0 : 14, right: widget.collapsed ? 0 : 12),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: content,
+        ),
+      ),
+    );
+    if (widget.collapsed) {
+      tile = Tooltip(message: widget.item.label, child: tile);
+    }
+    return Padding(padding: const EdgeInsets.only(bottom: 2), child: tile);
+  }
+}
+
+/// Avatar + name + role + chevron that opens the web's user dropdown.
+class _UserMenuButton extends StatelessWidget {
+  const _UserMenuButton({
+    required this.auth,
+    required this.showCopy,
+    this.onSync,
+  });
+
+  final AuthSession auth;
+  final bool showCopy;
+  final Future<void> Function()? onSync;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = auth.user?.name ?? 'User';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+    final roles = auth.user?.roles ?? const <String>[];
+    final role = roles.isNotEmpty ? roles.first.replaceAll('_', ' ') : 'Staff';
+    final can = auth.hasPermission;
+    final has = auth.hasCapability;
+
+    final entries = <PopupMenuEntry<String>>[
+      PopupMenuItem(
+          enabled: false,
+          height: 36,
+          child: Text(name,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, color: AppTokens.text1))),
+      PopupMenuItem(
+          enabled: false,
+          height: 32,
+          child: Text(auth.currentBranch?.name ?? 'Branch',
+              style: const TextStyle(fontSize: 12, color: AppTokens.text3))),
+      const PopupMenuDivider(),
+      if (auth.isSuperAdmin && can('shop.manage'))
+        _userItem('/settings', Icons.settings_outlined, 'Settings'),
+      if (auth.isSuperAdmin &&
+          can('emr.master_data.manage') &&
+          has('species_breeds')) ...[
+        _userItem('/settings/emr-master-data', Icons.list_alt_outlined,
+            'EMR Master Data'),
+        _userItem(
+            '/settings/species-breeds', Icons.pets_outlined, 'Species & Breeds'),
+      ],
+      if (auth.isSuperAdmin && can('users.view'))
+        _userItem('/settings/users', Icons.person_outline, 'Manage Users'),
+      if (auth.isSuperAdmin && can('branch.manage'))
+        _userItem(
+            '/settings/branches', Icons.business_outlined, 'Manage Branches'),
+      if (can('doctors.manage') && has('staff_management'))
+        _userItem('/settings/doctors', Icons.medical_information_outlined,
+            'Manage Doctors'),
+      if (auth.canAccessPrinterSettings)
+        _userItem('/settings/printer', Icons.print_outlined, 'Manage Printers'),
+      if (auth.isSuperAdmin)
+        _userItem('/settings/subscription', Icons.credit_card_outlined,
+            'Subscription & Plans'),
+      _userItem('/settings/security', Icons.shield_outlined, 'Account Security'),
+      if (onSync != null)
+        _userItem('sync', Icons.cloud_upload_outlined, 'Sync offline data'),
+      const PopupMenuDivider(),
+      _userItem('logout', Icons.logout_rounded, 'Logout'),
+    ];
+
+    return PopupMenuButton<String>(
+      tooltip: 'Account',
+      position: PopupMenuPosition.under,
+      offset: const Offset(0, 8),
+      itemBuilder: (_) => entries,
+      onSelected: (key) async {
+        if (key == 'logout') {
+          await auth.logout();
+          if (context.mounted) context.go('/');
+        } else if (key == 'sync') {
+          await onSync?.call();
+        } else {
+          context.go(key);
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 17,
+              backgroundColor: AppTokens.primary,
+              child: Text(initial,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600)),
+            ),
+            if (showCopy) ...[
+              const SizedBox(width: 10),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppTokens.text1)),
+                  const SizedBox(height: 2),
+                  Text(_capitalizeWords(role),
+                      style: const TextStyle(
+                          fontSize: 11, color: AppTokens.text3)),
+                ],
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.keyboard_arrow_down_rounded,
+                  size: 18, color: Color(0xFF63788E)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static PopupMenuItem<String> _userItem(
+      String value, IconData icon, String label) {
+    final danger = value == 'logout';
+    return PopupMenuItem<String>(
+      value: value,
+      height: 40,
+      child: Row(children: [
+        Icon(icon,
+            size: 18, color: danger ? AppTokens.error : AppTokens.menuIcon),
+        const SizedBox(width: 10),
+        Text(label,
+            style: TextStyle(
+                fontSize: 14,
+                color: danger ? AppTokens.error : AppTokens.text1)),
+      ]),
+    );
+  }
+}
+
+String _capitalizeWords(String s) => s
+    .split(' ')
+    .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+    .join(' ');
+
+/// Web `n-tag type="warning"` "Offline" marker; hidden while online.
+class _OfflineTag extends StatelessWidget {
+  const _OfflineTag({required this.connectivity});
+
+  final ConnectivityNotifier connectivity;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: connectivity,
+      builder: (context, _) {
+        if (connectivity.isOnline) return const SizedBox.shrink();
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF3C7),
+            border: Border.all(color: const Color(0xFFFCD34D)),
+            borderRadius: BorderRadius.circular(AppTokens.radiusXs),
+          ),
+          child: const Text('Offline',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFFB45309))),
+        );
+      },
+    );
+  }
 }
 
 String _titleForPath(String path) {
   if (path.startsWith('/ipd')) return 'IPD Admissions';
   if (path.startsWith('/pos')) return 'Point of Sale';
   if (path.startsWith('/invoices')) return 'Invoices';
+  if (path.startsWith('/products/datasheet')) return 'Product Datasheet';
   if (path.startsWith('/products')) return 'Products';
+  if (path.startsWith('/categories')) return 'Categories';
+  if (path.startsWith('/brands')) return 'Brands';
   if (path.startsWith('/inventory')) return 'Inventory';
   if (path.startsWith('/stock-alerts')) return 'Stock Alerts';
   if (path.startsWith('/stock-ageing')) return 'Stock Ageing';
   if (path.startsWith('/stock-transfers')) return 'Stock Transfers';
   if (path.startsWith('/purchases')) return 'Purchases';
-  if (path.startsWith('/purchase-returns')) return 'Supplier Returns';
+  if (path.startsWith('/purchase-returns')) return 'Purchase Returns';
   if (path.startsWith('/suppliers')) return 'Suppliers';
   if (path.startsWith('/customers')) return 'Customers';
   if (path.startsWith('/patients')) return 'Patient List';
@@ -1432,8 +1462,10 @@ String _titleForPath(String path) {
   if (path.startsWith('/reports/visits')) return 'Visit Report';
   if (path.startsWith('/reports/day-close')) return 'Day Close Report';
   if (path.startsWith('/settings/doctors')) return 'Doctors';
-  if (path.startsWith('/settings/catalog')) return 'Catalog';
+  if (path.startsWith('/settings/catalog')) return 'Categories';
+  if (path.startsWith('/settings/subscription')) return 'Subscription & Plans';
   if (path.startsWith('/settings/emr-master-data')) return 'EMR Master Data';
+  if (path.startsWith('/settings/procedure-kits')) return 'Procedure Kits';
   if (path.startsWith('/settings/species-breeds')) return 'Species & Breeds';
   if (path.startsWith('/settings/security')) return 'Account Security';
   if (path.startsWith('/settings/printer')) return 'Printers';
@@ -1450,9 +1482,9 @@ bool _menuPathSelected(String location, String menuPath) {
   final menu = Uri.tryParse(
       menuPath.startsWith('/') ? 'app://local$menuPath' : menuPath);
   if (loc == null || menu == null) return location == menuPath;
-  if (loc.path != menu.path) {
-    return location == menuPath || location.startsWith('$menuPath/');
-  }
+  // Sidebar entries are independent: a menu only highlights when its route
+  // exactly matches the current page. No parent/child menu selection is used.
+  if (loc.path != menu.path) return false;
   final menuTab = menu.queryParameters['tab'];
   final locTab = loc.queryParameters['tab'];
   if (menuTab != null && menuTab.isNotEmpty) {
@@ -1659,244 +1691,116 @@ class _MobileShellState extends State<_MobileShell> {
             : null,
         title: Text(
           _titleForPath(widget.location),
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
+              color: AppTokens.text1),
         ),
         actions: [
-          if (auth.isSuperAdmin)
-            IconButton(
-              tooltip: auth.currentBranch?.name ?? 'Switch Branch',
-              onPressed: _loadingBranches ? null : _showBranchPicker,
-              icon: _loadingBranches
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.account_tree_outlined),
-            ),
-          // Network indicator
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: widget.connectivity.isOnline
-                  ? AppTheme.accent
-                  : AppTheme.danger,
-              shape: BoxShape.circle,
-            ),
-          ),
+          _OfflineTag(connectivity: widget.connectivity),
           IconButton(
-            tooltip: 'Sync Offline Data',
+            tooltip: 'Sync offline data',
             onPressed: widget.onSync,
-            icon: const Icon(Icons.cloud_upload_outlined),
+            icon: const Icon(Icons.cloud_upload_outlined, size: 20),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: _UserMenuButton(auth: auth, showCopy: false),
           ),
         ],
       ),
       drawer: Drawer(
-        backgroundColor: Colors.white,
+        width: math.min(MediaQuery.sizeOf(context).width * 0.84, 300),
+        backgroundColor: _kSiderBg,
+        shape: const RoundedRectangleBorder(),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Drawer Header
-            DrawerHeader(
+            SizedBox(height: MediaQuery.paddingOf(context).top),
+            const _SidebarBrand(collapsed: false),
+            Expanded(
+              child: _SidebarMenu(
+                items: items,
+                location: widget.location,
+                collapsed: false,
+                onSelect: (p) {
+                  Navigator.pop(context);
+                  context.go(p);
+                },
+              ),
+            ),
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
               decoration: BoxDecoration(
-                color: AppTheme.primary.withValues(alpha: 0.08),
-                border: const Border(
-                  bottom: BorderSide(color: Color(0xFFE2E8F0)),
-                ),
+                color: const Color(0x14FFFFFF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0x26FFFFFF)),
               ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   CircleAvatar(
-                    radius: 28,
-                    backgroundColor: AppTheme.primary,
-                    child: Text(
-                      userInitials,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold),
-                    ),
+                    radius: 18,
+                    backgroundColor: _kSiderActive,
+                    child: Text(userInitials,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600)),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          userName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          auth.isSuperAdmin
-                              ? (auth.currentBranch?.name ?? 'Super Admin')
-                              : 'Store Manager',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
+                        Text(userName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white)),
+                        Text(auth.currentBranch?.name ?? 'Branch',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 11, color: _kSiderGroup)),
                       ],
                     ),
-                  )
+                  ),
+                  if (auth.isSuperAdmin)
+                    IconButton(
+                      tooltip: 'Switch branch',
+                      onPressed: _loadingBranches ? null : _showBranchPicker,
+                      icon: const Icon(Icons.account_tree_outlined,
+                          size: 18, color: _kSiderItemText),
+                    ),
+                  IconButton(
+                    tooltip: 'Account Security',
+                    onPressed: () {
+                      Navigator.pop(context);
+                      context.go('/settings/security');
+                    },
+                    icon: const Icon(Icons.shield_outlined,
+                        size: 18, color: _kSiderItemText),
+                  ),
+                  IconButton(
+                    tooltip: 'Logout',
+                    onPressed: () async {
+                      await auth.logout();
+                      if (context.mounted) context.go('/');
+                    },
+                    icon: const Icon(Icons.logout_rounded,
+                        size: 18, color: Color(0xFFFCA5A5)),
+                  ),
                 ],
               ),
             ),
-            // Menu Items
-            Expanded(
-              child: ListView.builder(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                itemCount: items.length,
-                itemBuilder: (context, idx) {
-                  final m = items[idx];
-                  if (m.isHeader) {
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 6),
-                      child: Text(
-                        m.label,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.6,
-                          color: Color(0xFF94A3B8),
-                        ),
-                      ),
-                    );
-                  }
-                  if (m.path == null) return const SizedBox.shrink();
-
-                  final isSelected =
-                      _menuPathSelected(widget.location, m.path!);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: ListTile(
-                      dense: true,
-                      leading: Icon(
-                        m.icon,
-                        color: isSelected
-                            ? AppTheme.primary
-                            : AppTheme.textSecondary,
-                        size: 20,
-                      ),
-                      title: Text(
-                        m.label,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight:
-                              isSelected ? FontWeight.w600 : FontWeight.w500,
-                          color: isSelected
-                              ? AppTheme.primary
-                              : AppTheme.textSecondary,
-                        ),
-                      ),
-                      selected: isSelected,
-                      selectedTileColor: AppTheme.primary.withOpacity(0.08),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        context.go(m.path!);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-            if (auth.isSuperAdmin) ...[
-              const Divider(height: 1),
-              ListTile(
-                dense: true,
-                leading: _loadingBranches
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(
-                        Icons.account_tree_outlined,
-                        color: AppTheme.primary,
-                        size: 20,
-                      ),
-                title: const Text(
-                  'Switch Branch',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                subtitle: Text(
-                  auth.currentBranch?.name ?? 'Choose active branch',
-                  style: const TextStyle(
-                      fontSize: 12, color: AppTheme.textSecondary),
-                ),
-                onTap: _loadingBranches ? null : _showBranchPicker,
-              ),
-            ],
-            const Divider(height: 1),
-            ListTile(
-              dense: true,
-              leading: const Icon(
-                Icons.shield_outlined,
-                color: AppTheme.primary,
-                size: 20,
-              ),
-              title: const Text(
-                'Account Security',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              subtitle: const Text(
-                'Change password & PIN',
-                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                context.go('/settings/security');
-              },
-            ),
-            // Drawer Footer Logout Button
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.logout_rounded,
-                    color: AppTheme.danger, size: 20),
-                title: const Text(
-                  'Logout',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.danger,
-                  ),
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                tileColor: AppTheme.danger.withValues(alpha: 0.05),
-                onTap: () async {
-                  await auth.logout();
-                  if (context.mounted) context.go('/');
-                },
-              ),
-            ),
-            const PoweredByFooter(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+            PoweredByFooter(
+              light: true,
+              padding: EdgeInsets.fromLTRB(
+                  16, 0, 16, 10 + MediaQuery.paddingOf(context).bottom),
             ),
           ],
         ),

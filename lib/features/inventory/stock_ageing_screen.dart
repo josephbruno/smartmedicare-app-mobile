@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../core/widgets/web_page.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -209,20 +211,15 @@ class _StockAgeingScreenState extends State<StockAgeingScreen> {
       ],
     );
 
-    if (padded) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: Color(0xFFE2E8F0)),
-          ),
-          child: body,
-        ),
-      );
-    }
-    return body;
+    // Web page frame: breadcrumbs + header + content card.
+    return WebPageScaffold(
+      title: 'Daily Stock Count',
+      subtitle:
+          'End-of-day stock count for each product${context.read<AuthSession>().currentBranch != null ? ' · ${context.read<AuthSession>().currentBranch!.name}' : ''}',
+      icon: Icons.hourglass_bottom_outlined,
+      breadcrumbs: const [Crumb('Inventory'), Crumb('Stock Ageing')],
+      body: body,
+    );
   }
 
   Widget _buildHeader({required bool compact}) {

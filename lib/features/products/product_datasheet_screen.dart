@@ -912,6 +912,10 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
     e.productType = type;
     e.isService = type == 'service';
     e.isMedicine = type == 'medicine';
+    final cat = _categories.where((c) => c.id == e.categoryId).firstOrNull;
+    if (cat != null && cat.productType != null && cat.productType != type) {
+      e.categoryId = null;
+    }
     if (type == 'service') {
       e.hasBatch = false;
       e.stock.clear();
@@ -1920,9 +1924,12 @@ class _ProductDatasheetScreenState extends State<ProductDatasheetScreen> {
             tint: tint,
             width: 150,
             value: _categories.any((c) => c.id == e.categoryId) ? e.categoryId : null,
+            // Categories of the row's product type only (plus the one on the row).
             items: [
               const DropdownMenuItem<int?>(value: null, child: Text('')),
-              ..._categories.map(
+              ..._categories
+                  .where((c) => c.productType == null || c.productType == e.productType || c.id == e.categoryId)
+                  .map(
                 (c) => DropdownMenuItem<int?>(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis)),
               ),
             ],

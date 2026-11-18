@@ -7,6 +7,7 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_config.dart';
+import '../../core/services/whatsapp_wallet.dart';
 import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/services/receipt_branch_store.dart';
@@ -41,6 +42,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => WhatsAppWalletState.refresh(context));
     _future = context.read<AppServices>().billing.get(widget.id);
   }
 
@@ -115,6 +117,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   }
 
   Future<void> _handleWhatsApp(Invoice inv) async {
+    if (!WhatsAppWalletState.ensureCanSend(context)) return;
     final services = context.read<AppServices>();
     final phoneController = TextEditingController(text: inv.customer?.phone ?? '');
     bool sending = false;
@@ -127,7 +130,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Send WhatsApp Invoice'),
+              title: ValueListenableBuilder<int?>(
+                valueListenable: WhatsAppWalletState.balance,
+                builder: (_, b, __) => Text('Send WhatsApp Invoice${b != null ? ' · $b pts' : ''}'),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -186,6 +192,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                               );
                             }
                           } catch (e) {
+                            if (ctx.mounted && WhatsAppWalletState.handleSendError(ctx, e)) {
+                              Navigator.pop(ctx);
+                              return;
+                            }
                             if (context.mounted) {
                               AppMessenger.show(
                                 context,
@@ -193,7 +203,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                               );
                             }
                           } finally {
-                            setDialogState(() => sending = false);
+                            if (ctx.mounted) setDialogState(() => sending = false);
                           }
                         },
                         child: const Text('Send'),

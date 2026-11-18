@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import '../reports/widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
@@ -120,8 +122,13 @@ class _BranchesScreenState extends State<BranchesScreen> {
     final columns = _gridColumns(width);
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        group: 'Admin',
+        title: 'Branch Management',
+        subtitle: 'Manage multiple clinic branches, view details and switch between branches easily.',
+        icon: Icons.business_outlined,
+        child: Column(
         children: [
           if (_loading) const LinearProgressIndicator(minHeight: 2),
           Expanded(
@@ -230,6 +237,7 @@ class _BranchesScreenState extends State<BranchesScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

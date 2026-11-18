@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -125,7 +126,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen>
               );
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         title: const Text('Stock Alerts'),
         actions: [
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),

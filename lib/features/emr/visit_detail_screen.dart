@@ -3,6 +3,7 @@ import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/services/whatsapp_wallet.dart';
 import '../../app_services.dart';
 import '../../core/app_config.dart';
 import '../../core/desktop/desktop_prefs.dart';
@@ -31,11 +32,68 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
   late Future<PetVisit> _future;
   bool _billing = false;
   bool _routeSubscribed = false;
+  bool _sendingWhatsApp = false;
 
   @override
   void initState() {
     super.initState();
     _reload();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await WhatsAppWalletState.refresh(context);
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// Share the visit record (PDF + public link) with the owner on WhatsApp.
+  /// Mirrors `shareOnWhatsApp` in PetVisitDetailPage.vue.
+  Future<void> _shareOnWhatsApp(PetVisit v) async {
+    if (!WhatsAppWalletState.ensureCanSend(context)) return;
+    var phone = v.pet?.customerPhone ?? v.pet?.phone;
+    if (phone == null || phone.trim().isEmpty) {
+      final ctrl = TextEditingController();
+      phone = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Enter Phone Number'),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('This owner has no phone number on file. Enter a number to send the visit record on WhatsApp:'),
+            const SizedBox(height: 10),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(hintText: 'e.g. 9787159476'),
+            ),
+          ]),
+          actions: [
+            OutlinedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () {
+                if (ctrl.text.trim().isEmpty) {
+                  AppMessenger.error(ctx, 'Phone number cannot be empty.');
+                  return;
+                }
+                Navigator.pop(ctx, ctrl.text.trim());
+              },
+              child: const Text('Send Message'),
+            ),
+          ],
+        ),
+      );
+      if (phone == null || !mounted) return;
+    }
+    setState(() => _sendingWhatsApp = true);
+    try {
+      final data = await context.read<AppServices>().emr.sendVisitWhatsApp(v.id, phone: phone);
+      WhatsAppWalletState.noteBalance(data);
+      if (mounted) AppMessenger.success(context, 'Visit record sent on WhatsApp!');
+    } catch (e) {
+      if (!mounted) return;
+      if (WhatsAppWalletState.handleSendError(context, e)) return;
+      AppMessenger.error(context, 'Could not send the visit record on WhatsApp. $e');
+    } finally {
+      if (mounted) setState(() => _sendingWhatsApp = false);
+    }
   }
 
   @override
@@ -329,6 +387,10 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
                           }
                         }
                       },
+                      onWhatsApp: _sendingWhatsApp ? null : () => _shareOnWhatsApp(v),
+                      whatsAppLabel: _sendingWhatsApp
+                          ? 'Sending…'
+                          : 'WhatsApp${WhatsAppWalletState.balance.value != null ? ' · ${WhatsAppWalletState.balance.value} pts' : ''}',
                       onDownload: () async {
                         try {
                           final visit = await _freshVisit();
@@ -473,14 +535,21 @@ class _VisitDetailScreenState extends State<VisitDetailScreen> with RouteAware {
             children: [
               for (var i = 0; i < v.investigationItems.length; i++) ...[
                 if (i > 0) const Divider(height: 20),
-                Text(
-                  v.investigationItems[i].name,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+                Row(children: [
+                  Expanded(
+                    child: Text(
+                      v.investigationItems[i].name,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
                   ),
-                ),
+                  if (v.investigationItems[i].unitPrice > 0)
+                    Text('₹${v.investigationItems[i].unitPrice.toStringAsFixed(2)}',
+                        style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF047857))),
+                ]),
                 if (v.investigationItems[i].notes.trim().isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
@@ -768,8 +837,13 @@ class _HeaderCard extends StatelessWidget {
     required this.onDownload,
     this.onEdit,
     this.primaryAction,
+    this.onWhatsApp,
+    this.whatsAppLabel = 'WhatsApp',
   });
 
+  /// Share the visit record on WhatsApp (1 point).
+  final VoidCallback? onWhatsApp;
+  final String whatsAppLabel;
   final PetVisit visit;
   final Color statusColor;
   final String statusLabel;
@@ -937,6 +1011,12 @@ class _HeaderCard extends StatelessWidget {
                       label: 'Download',
                       onPressed: onDownload,
                     ),
+                    if (onWhatsApp != null)
+                      _ActionChipButton(
+                        icon: Icons.chat_outlined,
+                        label: whatsAppLabel,
+                        onPressed: onWhatsApp!,
+                      ),
                     if (onEdit != null)
                       _ActionChipButton(
                         icon: Icons.edit_outlined,

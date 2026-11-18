@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import 'widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -130,8 +132,12 @@ class _ShiftSummaryReportScreenState extends State<ShiftSummaryReportScreen> {
     final crossCount = isMobile ? 2 : (width >= 1200 ? 5 : 3);
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        title: 'Shift Summary',
+        subtitle: 'Cashier shift totals and drawer reconciliation.',
+        icon: Icons.timer_outlined,
+        child: Column(
         children: [
           _Toolbar(
             preset: _preset,
@@ -197,6 +203,7 @@ class _ShiftSummaryReportScreenState extends State<ShiftSummaryReportScreen> {
                           ),
           ),
         ],
+      ),
       ),
     );
   }

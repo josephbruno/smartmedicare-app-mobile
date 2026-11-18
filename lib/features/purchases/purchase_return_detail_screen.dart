@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -113,9 +114,9 @@ class _PurchaseReturnDetailScreenState
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         automaticallyImplyLeading: false,
-        title: Text(r?.returnNumber ?? 'Supplier Return'),
+        title: Text(r?.returnNumber ?? 'Purchase Return'),
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.textPrimary,
         surfaceTintColor: Colors.white,

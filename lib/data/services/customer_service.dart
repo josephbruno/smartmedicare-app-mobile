@@ -24,14 +24,37 @@ class CustomerService {
     int page = 1,
     int perPage = 50,
     String? search,
+    Map<String, dynamic> filters = const {},
+    bool withStats = false,
   }) async {
     try {
       final res = await _client.get('/customers', queryParameters: {
         'page': page,
         'per_page': perPage,
         if (search != null && search.isNotEmpty) 'search': search,
+        for (final e in filters.entries)
+          if (e.value != null && e.value.toString().isNotEmpty) e.key: e.value,
+        if (withStats) 'with_stats': 1,
       });
       return parseEnvelopeList(res, Customer.fromJson);
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  /// Adds a patient-ledger note (`POST /pets/{id}/notes`).
+  Future<void> addPetNote(int petId, {required String type, required String note}) async {
+    try {
+      await _client.post('/pets/$petId/notes', data: {'type': type, 'note': note});
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  /// Records a vaccination for a pet (`POST /pets/{id}/vaccinations`).
+  Future<void> addPetVaccination(int petId, Map<String, dynamic> body) async {
+    try {
+      await _client.post('/pets/$petId/vaccinations', data: body);
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }

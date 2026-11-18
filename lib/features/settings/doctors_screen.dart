@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import '../reports/widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
@@ -106,8 +108,13 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
     final services = context.read<AppServices>();
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        group: 'Admin',
+        title: 'Doctor Management',
+        subtitle: 'Manage doctors and their clinic profiles',
+        icon: Icons.medical_information_outlined,
+        child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -178,8 +185,6 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
               emptyMessage: _appliedSearch.isNotEmpty
                   ? 'No doctors match your search.'
                   : 'No doctors found.',
-              headerFontSize: 9,
-              cellFontSize: 12,
               loadPage: ({required page, required perPage}) async {
                 final query = <String, dynamic>{};
                 if (_appliedSearch.isNotEmpty) query['search'] = _appliedSearch;
@@ -214,6 +219,7 @@ class _DoctorsScreenState extends State<DoctorsScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

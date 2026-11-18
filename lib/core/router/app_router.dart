@@ -67,7 +67,7 @@ import '../../features/reports/summary_report_screen.dart';
 import '../../features/reports/visit_report_screen.dart';
 import '../../features/settings/account_security_screen.dart';
 import '../../features/settings/branches_screen.dart';
-import '../../features/settings/catalog_master_data_screen.dart';
+import '../../features/products/catalog_master_screen.dart';
 import '../../features/settings/doctors_screen.dart';
 import '../../features/settings/emr_master_data_screen.dart';
 import '../../features/settings/pet_species_breed_master_screen.dart';
@@ -399,8 +399,11 @@ GoRouter createAppRouter({
             builder: (c, s) {
               final q = s.uri.queryParameters;
               return InvoiceListScreen(
+                // Remount when the query changes (e.g. "View Billing").
+                key: ValueKey(s.uri.query),
                 initialDateFrom: q['date_from'],
                 initialDateTo: q['date_to'],
+                initialSearch: q['search'],
               );
             },
           ),
@@ -509,7 +512,9 @@ GoRouter createAppRouter({
           GoRoute(
             path: '/purchase-returns/new',
             name: 'PurchaseReturnNew',
-            builder: (c, s) => const PurchaseReturnFormScreen(),
+            builder: (c, s) => PurchaseReturnFormScreen(
+              initialSupplierId: int.tryParse(s.uri.queryParameters['supplier_id'] ?? ''),
+            ),
           ),
           GoRoute(
             path: '/purchase-returns/:id',
@@ -533,6 +538,16 @@ GoRouter createAppRouter({
             path: '/customers/new',
             name: 'CustomerNew',
             builder: (c, s) => const CustomerFormScreen(),
+          ),
+          GoRoute(
+            path: '/customers/:id/edit',
+            name: 'CustomerEdit',
+            builder: (c, s) => PermissionGuard(
+              permission: AppPermissions.customersEdit,
+              child: CustomerFormScreen(
+                customerId: int.tryParse(s.pathParameters['id'] ?? ''),
+              ),
+            ),
           ),
           GoRoute(
             path: '/customers/:id',
@@ -794,6 +809,14 @@ GoRouter createAppRouter({
             ),
           ),
           GoRoute(
+            path: '/settings/procedure-kits',
+            name: 'ProcedureKits',
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.emrMasterDataManage,
+              child: EmrMasterDataScreen(initialTabKey: 'service_kits'),
+            ),
+          ),
+          GoRoute(
             path: '/settings/species-breeds',
             name: 'PetSpeciesBreeds',
             builder: (c, s) => const PermissionGuard(
@@ -802,12 +825,26 @@ GoRouter createAppRouter({
             ),
           ),
           GoRoute(
+            path: '/categories',
+            name: 'Categories',
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.categoriesView,
+              child: CatalogMasterScreen(kind: CatalogKind.categories),
+            ),
+          ),
+          GoRoute(
+            path: '/brands',
+            name: 'Brands',
+            builder: (c, s) => const PermissionGuard(
+              permission: AppPermissions.brandsView,
+              child: CatalogMasterScreen(kind: CatalogKind.brands),
+            ),
+          ),
+          // Old app path for the categories screen.
+          GoRoute(
             path: '/settings/catalog',
             name: 'Catalog',
-            builder: (c, s) => const PermissionGuard(
-              permission: AppPermissions.productsEdit,
-              child: CatalogMasterDataScreen(),
-            ),
+            redirect: (c, s) => '/categories',
           ),
           GoRoute(
             path: '/settings/branches',

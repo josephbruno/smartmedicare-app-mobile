@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -134,7 +135,7 @@ class _PurchaseDetailScreenState extends State<PurchaseDetailScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         automaticallyImplyLeading: false,
         title: Text(p?.purchaseNumber ?? 'Purchase Detail'),
         backgroundColor: Colors.white,

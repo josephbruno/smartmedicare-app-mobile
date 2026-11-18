@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/services/whatsapp_wallet.dart';
 import '../json_helpers.dart';
 import '../models/api_response.dart';
 import '../models/invoice.dart';
@@ -44,10 +45,16 @@ class BillingService {
     String? paymentMode,
     int? customerId,
     int? branchId,
+    String? sortBy,
+    bool sortAsc = false,
+    bool withStats = false,
   }) async {
     final query = <String, dynamic>{
       'page': page,
       'per_page': perPage,
+      if (sortBy != null) 'sort_by': sortBy,
+      if (sortBy != null) 'sort_dir': sortAsc ? 'asc' : 'desc',
+      if (withStats) 'with_stats': 1,
       // Needed for per-invoice cash received / change columns on the list.
       'with_payments': true,
       if (customerId != null) 'customer_id': customerId,
@@ -225,6 +232,7 @@ class BillingService {
           await _client.post('/invoices/$id/send-whatsapp', data: payload);
       final map = res.data;
       if (map is Map) {
+        WhatsAppWalletState.noteBalance(map['data']);
         return map['success'] == true;
       }
       return false;

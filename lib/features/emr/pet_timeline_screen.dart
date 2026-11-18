@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -124,7 +125,7 @@ class _PetTimelineScreenState extends State<PetTimelineScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Pet timeline')),
+      appBar: WebPageAppBar(automaticallyImplyLeading: false, title: const Text('Pet Timeline')),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

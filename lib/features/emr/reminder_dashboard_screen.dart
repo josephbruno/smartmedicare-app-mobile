@@ -3,6 +3,9 @@ import 'package:intl/intl.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/services/whatsapp_wallet.dart';
+import '../../core/utils/ist.dart';
+import '../../core/widgets/web_page.dart';
 import '../../app_services.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/emr.dart';
@@ -38,6 +41,7 @@ class _ReminderDashboardScreenState extends State<ReminderDashboardScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => WhatsAppWalletState.refresh(context));
     _reload();
   }
 
@@ -81,20 +85,42 @@ class _ReminderDashboardScreenState extends State<ReminderDashboardScreen> {
     }).toList();
   }
 
+  int? _sendingId;
+
+  /// Why [r] can't go out on WhatsApp right now (null = it can). Mirrors
+  /// `sendBlockedReason` in ReminderDashboardPage.vue.
+  String? _sendBlockedReason(PetReminder r) {
+    final today = todayIst();
+    if (r.status == 'cancelled') return 'This reminder was dismissed';
+    if (r.dueDate.isNotEmpty && r.dueDate.compareTo(today) < 0) {
+      return "The date has passed, so it can't be sent";
+    }
+    if (r.lastWhatsappSentOn == today) return 'Already sent today. You can send it again tomorrow';
+    return null;
+  }
+
+  String _sendLabel(PetReminder r) {
+    if (_sendingId == r.id) return 'Sending…';
+    if (r.lastWhatsappSentOn == todayIst()) return 'Sent today';
+    return r.status == 'sent' ? 'Send again' : 'Send Now';
+  }
+
   Future<void> _sendNow(PetReminder r) async {
+    if (_sendBlockedReason(r) != null || !WhatsAppWalletState.ensureCanSend(context)) return;
+    setState(() => _sendingId = r.id);
     try {
-      await context.read<AppServices>().emr.sendReminderNow(r.id);
+      final data = await context.read<AppServices>().emr.sendReminderNow(r.id);
+      WhatsAppWalletState.noteBalance(data);
       if (mounted) {
-        AppMessenger.show(
-          context,
-          const SnackBar(content: Text('Reminder sent')),
-        );
+        AppMessenger.success(context, 'Reminder sent on WhatsApp');
         setState(_reload);
       }
     } catch (e) {
-      if (mounted) {
-        AppMessenger.show(context, SnackBar(content: Text('$e')));
-      }
+      if (!mounted) return;
+      if (WhatsAppWalletState.handleSendError(context, e)) return;
+      AppMessenger.error(context, '$e');
+    } finally {
+      if (mounted) setState(() => _sendingId = null);
     }
   }
 
@@ -124,25 +150,15 @@ class _ReminderDashboardScreenState extends State<ReminderDashboardScreen> {
       body: RefreshIndicator(
         onRefresh: () async => setState(_reload),
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+          padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 768 ? 12 : 16),
           children: [
-            Text(
-              'Reminders',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.textPrimary,
-                    letterSpacing: -0.4,
-                  ),
+            if (MediaQuery.sizeOf(context).width >= 768)
+              const PageBreadcrumbs(items: [Crumb('Medical Records'), Crumb('Reminders')]),
+            const PageHeader(
+              title: 'Reminders',
+              subtitle: 'Manage upcoming pet health reminders and send them on WhatsApp',
+              icon: Icons.notifications_outlined,
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Vaccination, deworming, and follow-up alerts',
-              style: TextStyle(
-                color: AppTheme.textSecondary,
-                fontSize: 13.5,
-              ),
-            ),
-            const SizedBox(height: 20),
             FutureBuilder<ReminderSummary>(
               future: _summaryFuture,
               builder: (context, snap) {
@@ -162,7 +178,7 @@ class _ReminderDashboardScreenState extends State<ReminderDashboardScreen> {
                   builder: (context, constraints) {
                     final gap = 12.0;
                     final cols = constraints.maxWidth >= 1100
-                        ? 5
+                        ? 4
                         : constraints.maxWidth >= 760
                             ? 3
                             : 2;
@@ -219,21 +235,6 @@ class _ReminderDashboardScreenState extends State<ReminderDashboardScreen> {
                               type: _typeFilter == 'followup'
                                   ? 'all'
                                   : 'followup',
-                              status: 'pending',
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: w,
-                          child: _SummaryCard(
-                            label: 'Overdue',
-                            count: s.overdue,
-                            caption: 'Due',
-                            icon: Icons.warning_amber_rounded,
-                            color: const Color(0xFFEF4444),
-                            selected: false,
-                            onTap: () => _applyFilters(
-                              type: 'all',
                               status: 'pending',
                             ),
                           ),
@@ -326,8 +327,11 @@ class _ReminderDashboardScreenState extends State<ReminderDashboardScreen> {
                     for (final r in items) ...[
                       _ReminderCard(
                         reminder: r,
-                        onSend:
-                            r.status == 'pending' ? () => _sendNow(r) : null,
+                        sendLabel: _sendLabel(r),
+                        sendBlockedReason: _sendBlockedReason(r),
+                        onSend: _sendBlockedReason(r) == null && _sendingId != r.id
+                            ? () => _sendNow(r)
+                            : null,
                         onDismiss:
                             r.status == 'pending' ? () => _dismiss(r) : null,
                       ),
@@ -648,10 +652,16 @@ class _ReminderCard extends StatelessWidget {
     required this.reminder,
     this.onSend,
     this.onDismiss,
+    this.sendLabel = 'Send Now',
+    this.sendBlockedReason,
   });
 
   final PetReminder reminder;
+
+  /// Null while the send is blocked; the button then shows [sendBlockedReason].
   final VoidCallback? onSend;
+  final String sendLabel;
+  final String? sendBlockedReason;
   final VoidCallback? onDismiss;
 
   @override
@@ -784,11 +794,13 @@ class _ReminderCard extends StatelessWidget {
     final actions = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (onSend != null)
-          FilledButton.icon(
+        if (reminder.status != 'cancelled')
+          Tooltip(
+           message: sendBlockedReason ?? 'Send this reminder on WhatsApp (1 point)',
+           child: FilledButton.icon(
             onPressed: onSend,
             icon: const Icon(Icons.send_rounded, size: 14),
-            label: const Text('Send now', style: TextStyle(fontSize: 12.5)),
+            label: Text(sendLabel, style: const TextStyle(fontSize: 12.5)),
             style: FilledButton.styleFrom(
               minimumSize: const Size(120, 44),
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -797,8 +809,9 @@ class _ReminderCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
+           ),
           ),
-        if (onSend != null && onDismiss != null) const SizedBox(height: 6),
+        if (reminder.status != 'cancelled' && onDismiss != null) const SizedBox(height: 6),
         if (onDismiss != null)
           OutlinedButton.icon(
             onPressed: onDismiss,
@@ -846,16 +859,16 @@ class _ReminderCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(children: [left]),
-                if (onSend != null || onDismiss != null) ...[
+                if (reminder.status != 'cancelled' || onDismiss != null) ...[
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      if (onSend != null)
+                      if (reminder.status != 'cancelled')
                         Expanded(
                           child: FilledButton.icon(
                             onPressed: onSend,
                             icon: const Icon(Icons.send_rounded, size: 16),
-                            label: const Text('Send now'),
+                            label: Text(sendLabel),
                             style: FilledButton.styleFrom(
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(4),

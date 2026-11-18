@@ -1,3 +1,4 @@
+import 'whatsapp_points_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,27 +12,28 @@ import 'subscription_actions.dart';
 String _normalizedBillingCycle(String? value) =>
     value == 'yearly' ? 'yearly' : 'monthly';
 
+double _monthlyEquivalent(num amount, String cycle) =>
+    cycle == 'yearly' ? amount / 12 : amount.toDouble();
+
+/// Upgrade or downgrade is decided by price per month, so yearly and monthly
+/// plans compare fairly (mirrors `actionFor` in MySubscriptionPage.vue).
 String _planActionLabel({
-  required String planName,
+  required PlanCatalogItem plan,
+  required PlanCatalogItem? currentPlan,
   required bool isSamePlan,
-  required int candidateIndex,
-  required int currentIndex,
+  required bool isTrial,
   required String activeCycle,
   required String selectedCycle,
 }) {
-  if (isSamePlan) {
-    if (activeCycle == selectedCycle) return 'Current Plan';
-    return selectedCycle == 'yearly'
-        ? 'Upgrade to Yearly'
-        : 'Downgrade to Monthly';
-  }
-  if (currentIndex >= 0 && candidateIndex > currentIndex) {
-    return 'Upgrade to $planName';
-  }
-  if (currentIndex >= 0 && candidateIndex < currentIndex) {
-    return 'Downgrade to $planName';
-  }
-  return 'Switch to $planName';
+  if (isTrial) return isSamePlan ? 'Current Plan' : 'Choose ${plan.name}';
+  if (isSamePlan && activeCycle == selectedCycle) return 'Current Plan';
+  final target = _monthlyEquivalent(plan.priceFor(selectedCycle), selectedCycle);
+  final now = currentPlan == null
+      ? 0.0
+      : _monthlyEquivalent(currentPlan.priceFor(activeCycle), activeCycle);
+  if (target > now + 0.005) return 'Upgrade to ${plan.name}';
+  if (target < now - 0.005) return 'Downgrade to ${plan.name}';
+  return 'Choose ${plan.name}';
 }
 
 bool _isUpgradeAction(String action) => action.startsWith('Upgrade');
@@ -135,9 +137,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           final state = s.liveState;
           final color = _stateColor(state);
           final current = catalog?.current;
-          final currentIndex =
-              catalog?.plans.indexWhere((p) => p.slug == catalog.currentSlug) ??
-                  -1;
 
           if (MediaQuery.sizeOf(context).width >= 1100) {
             return _DesktopSubscriptionPage(
@@ -343,10 +342,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   final isSamePlan = plan.slug == catalog.currentSlug;
                   final isCurrent = isSamePlan && _cycle == activeCycle;
                   final label = _planActionLabel(
-                    planName: plan.name,
+                    plan: plan,
+                    currentPlan: current,
                     isSamePlan: isSamePlan,
-                    candidateIndex: entry.key,
-                    currentIndex: currentIndex,
+                    isTrial: state == 'trial' || s.status == 'trial',
                     activeCycle: activeCycle,
                     selectedCycle: _cycle,
                   );
@@ -428,10 +427,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 const SizedBox(height: 8),
                 const Text(
                   'Payment opens in your browser, already signed in, with the plan selected. '
+                  'Upgrades start today and are charged in full (unused days are not credited); '
+                  'downgrades take effect when your current period ends. '
                   'After paying, come back and pull down to refresh.',
                   style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                 ),
               ],
+              const SizedBox(height: 16),
+              const WhatsAppPointsPanel(),
             ],
           );
         },
@@ -767,7 +770,6 @@ class _DesktopSubscriptionPage extends StatelessWidget {
     final activeCycle = _normalizedBillingCycle(
       subscription.billingCycle ?? catalog?.billingCycle,
     );
-    final currentIndex = plans.indexWhere((plan) => plan.slug == currentSlug);
     final current = catalog?.current;
     final included = current != null && current.features.isNotEmpty
         ? current.features
@@ -892,10 +894,10 @@ class _DesktopSubscriptionPage extends StatelessWidget {
                     isCurrent: plans[index].slug == currentSlug &&
                         cycle == activeCycle,
                     actionLabel: _planActionLabel(
-                      planName: plans[index].name,
+                      plan: plans[index],
+                      currentPlan: current,
                       isSamePlan: plans[index].slug == currentSlug,
-                      candidateIndex: index,
-                      currentIndex: currentIndex,
+                      isTrial: state == 'trial' || subscription.status == 'trial',
                       activeCycle: activeCycle,
                       selectedCycle: cycle,
                     ),
@@ -903,13 +905,13 @@ class _DesktopSubscriptionPage extends StatelessWidget {
                     onSelected: () => onPlanSelected(
                       plans[index],
                       _planActionLabel(
-                        planName: plans[index].name,
-                        isSamePlan: plans[index].slug == currentSlug,
-                        candidateIndex: index,
-                        currentIndex: currentIndex,
-                        activeCycle: activeCycle,
-                        selectedCycle: cycle,
-                      ),
+                      plan: plans[index],
+                      currentPlan: current,
+                      isSamePlan: plans[index].slug == currentSlug,
+                      isTrial: state == 'trial' || subscription.status == 'trial',
+                      activeCycle: activeCycle,
+                      selectedCycle: cycle,
+                    ),
                     ),
                   ),
                 ),
@@ -953,12 +955,16 @@ class _DesktopSubscriptionPage extends StatelessWidget {
               Icon(Icons.info_outline, size: 17, color: AppTheme.primary),
               SizedBox(width: 8),
               Text(
-                  'Payment opens in your browser with the selected plan. After paying, return here and refresh.',
+                  'Payment opens in your browser with the selected plan. Upgrades start today and are charged in full '
+                  '(unused days are not credited); downgrades take effect when your current period ends. '
+                  'After paying, return here and refresh.',
                   style:
                       TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
             ],
           ),
         ),
+        const SizedBox(height: 16),
+        const WhatsAppPointsPanel(),
       ],
     );
   }

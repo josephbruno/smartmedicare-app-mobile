@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class AppTheme {
-  // Brand colors
-  static const Color primary = Color(0xFF0B5ED7); // Matches the web app
-  static const Color primaryDark = Color(0xFF084298);
-  static const Color accent = Color(0xFF16A34A); // Web success color
-  static const Color warning = Color(0xFFF59E0B); // Amber
-  static const Color danger = Color(0xFFEF4444); // Red
-  static const Color background = Color(0xFFF5F8FC); // Web background
-  static const Color surface = Colors.white;
-  static const Color textPrimary = Color(0xFF0F172A); // Slate 900
-  static const Color textSecondary = Color(0xFF64748B); // Slate 500
+import 'app_tokens.dart';
 
-  /// Inter — primary typeface for POS, dashboards, and admin UI.
+/// Material theme that mirrors the web app's Naive UI theme overrides
+/// (`frontend/src/App.vue`). Raw values live in [AppTokens].
+class AppTheme {
+  // Brand colors (kept as aliases so existing screens keep compiling).
+  static const Color primary = AppTokens.primary;
+  static const Color primaryDark = AppTokens.primaryHover;
+  static const Color accent = AppTokens.success;
+  static const Color warning = AppTokens.warning;
+  static const Color danger = AppTokens.error;
+  static const Color background = AppTokens.bgSecondary;
+  static const Color surface = AppTokens.bgPrimary;
+  static const Color textPrimary = AppTokens.text1;
+  static const Color textSecondary = AppTokens.text3;
+
+  /// Inter — the web's `--font-family-sans`.
   static String get fontFamily => GoogleFonts.inter().fontFamily!;
 
   static TextStyle _inter({
@@ -32,9 +36,15 @@ class AppTheme {
     );
   }
 
-  /// Builds the light theme. When [desktop] is true (web & native desktop),
-  /// default icon sizes and dialog widths are enlarged. Font sizes are left
-  /// unchanged here; text scaling is applied globally via `MediaQuery.textScaler`.
+  static OutlineInputBorder _inputBorder(Color color, [double width = 1]) =>
+      OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTokens.radiusMd),
+        borderSide: BorderSide(color: color, width: width),
+      );
+
+  /// Builds the light theme. [desktop] is true on web & native desktop.
+  /// Sizes match the web at 100% zoom; the width-based zoom tiers from the
+  /// web are applied globally via `MediaQuery.textScaler`.
   static ThemeData light({bool desktop = false}) {
     final base = ThemeData(
       useMaterial3: true,
@@ -47,45 +57,59 @@ class AppTheme {
         secondary: accent,
         onSecondary: Colors.white,
         error: danger,
-        background: background,
         surface: surface,
+        outline: AppTokens.border,
+        outlineVariant: AppTokens.borderSubtle,
       ),
       scaffoldBackgroundColor: background,
+      dividerColor: AppTokens.borderSubtle,
     );
 
-    // Default icon size: 24 on mobile, larger on web & desktop for legibility.
-    final double defaultIconSize = desktop ? 30 : 24;
-    final double appBarIconSize = desktop ? 30 : 22;
+    final double defaultIconSize = desktop ? 20 : 22;
+    final double appBarIconSize = desktop ? 20 : 22;
 
     return base.copyWith(
+      dividerTheme: const DividerThemeData(
+        color: AppTokens.borderSubtle,
+        thickness: 1,
+        space: 1,
+      ),
       dialogTheme: DialogThemeData(
         alignment: Alignment.center,
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         backgroundColor: surface,
         surfaceTintColor: surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        elevation: 8,
+        shadowColor: const Color(0x1A0F172A),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTokens.radiusModal)),
+        titleTextStyle: _inter(
+            color: textPrimary,
+            fontSize: AppTokens.fontLg,
+            fontWeight: FontWeight.w600),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: surface,
         surfaceTintColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(AppTokens.radiusModal)),
         ),
         showDragHandle: false,
       ),
-      iconTheme: IconThemeData(color: textPrimary, size: defaultIconSize),
+      iconTheme: IconThemeData(color: AppTokens.menuIcon, size: defaultIconSize),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
         backgroundColor: surface,
         surfaceTintColor: surface,
         scrolledUnderElevation: 0,
+        shape: const Border(bottom: BorderSide(color: AppTokens.border)),
         iconTheme: IconThemeData(color: textPrimary, size: appBarIconSize),
-        // Headings: SemiBold (600–700)
         titleTextStyle: _inter(
           color: textPrimary,
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
+          fontSize: AppTokens.fontLg,
+          fontWeight: FontWeight.w600,
         ),
       ),
       cardTheme: CardThemeData(
@@ -93,113 +117,188 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side:
-              const BorderSide(color: Color(0xFFE2E8F0), width: 1), // Slate 200
+          borderRadius: BorderRadius.circular(AppTokens.radiusLg),
+          side: const BorderSide(color: AppTokens.border, width: 1),
         ),
         clipBehavior: Clip.antiAlias,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: surface,
+        isDense: true,
         floatingLabelBehavior: FloatingLabelBehavior.always,
         alignLabelWithHint: true,
-        contentPadding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-        // Body: Regular (400) / Medium (500)
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         hintStyle: _inter(
-            color: textSecondary, fontSize: 14, fontWeight: FontWeight.w400),
+            color: AppTokens.placeholder,
+            fontSize: AppTokens.fontBase,
+            fontWeight: FontWeight.w400),
         labelStyle: _inter(
-            color: textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+            color: AppTokens.text2,
+            fontSize: AppTokens.fontBase,
+            fontWeight: FontWeight.w500),
         floatingLabelStyle: _inter(
-            color: textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: primary, width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: danger, width: 1),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: danger, width: 2),
-        ),
+            color: AppTokens.text2,
+            fontSize: AppTokens.fontBase,
+            fontWeight: FontWeight.w500),
+        prefixIconColor: AppTokens.placeholder,
+        suffixIconColor: AppTokens.placeholder,
+        border: _inputBorder(AppTokens.border),
+        enabledBorder: _inputBorder(AppTokens.border),
+        disabledBorder: _inputBorder(AppTokens.borderSubtle),
+        focusedBorder: _inputBorder(primary, 1.5),
+        errorBorder: _inputBorder(danger),
+        focusedErrorBorder: _inputBorder(danger, 1.5),
       ),
-      // Shared across Elevated / Filled / Outlined so buttons stay tappable and
-      // never look undersized. Padding is at least 8dp on every side.
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style:
-            _primaryButtonStyle(background: primary, foreground: Colors.white),
+        style: _buttonStyle(background: primary, foreground: Colors.white),
       ),
       filledButtonTheme: FilledButtonThemeData(
-        style:
-            _primaryButtonStyle(background: primary, foreground: Colors.white),
+        style: _buttonStyle(background: primary, foreground: Colors.white),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: _primaryButtonStyle(
-          foreground: primary,
-        ).copyWith(
-          side: const WidgetStatePropertyAll(
-            BorderSide(color: primary, width: 1.5),
-          ),
-          backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
+        // Naive "default" button: white, grey border, dark text.
+        style: _buttonStyle(foreground: AppTokens.text2).copyWith(
+          side: WidgetStateProperty.resolveWith((states) => BorderSide(
+                color: states.contains(WidgetState.hovered) ||
+                        states.contains(WidgetState.focused)
+                    ? primary
+                    : AppTokens.border,
+              )),
+          foregroundColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.hovered) ||
+                      states.contains(WidgetState.focused)
+                  ? primary
+                  : AppTokens.text2),
+          backgroundColor: const WidgetStatePropertyAll(surface),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primary,
-          minimumSize: const Size(48, 40),
-          padding: const EdgeInsets.all(8),
+          minimumSize: const Size(48, AppTokens.heightSmall),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTokens.radiusMd)),
           textStyle: _inter(
-            fontSize: 14,
+            fontSize: AppTokens.fontControl,
             fontWeight: FontWeight.w600,
           ),
         ),
       ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: AppTokens.menuIcon,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTokens.radiusMd)),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppTokens.bgTertiary,
+        side: const BorderSide(color: AppTokens.border),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTokens.radiusXs)),
+        labelStyle: _inter(
+            color: AppTokens.text2,
+            fontSize: AppTokens.fontSm,
+            fontWeight: FontWeight.w500),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: primary,
+        unselectedLabelColor: AppTokens.text2,
+        indicatorColor: primary,
+        dividerColor: AppTokens.border,
+        labelStyle: _inter(
+            fontSize: AppTokens.fontBase, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: _inter(
+            fontSize: AppTokens.fontBase, fontWeight: FontWeight.w500),
+      ),
+      dataTableTheme: DataTableThemeData(
+        headingRowColor: const WidgetStatePropertyAll(AppTokens.bgTertiary),
+        headingTextStyle: _inter(
+            color: AppTokens.text2,
+            fontSize: AppTokens.fontControl,
+            fontWeight: FontWeight.w600),
+        dataTextStyle: _inter(
+            color: AppTokens.text1,
+            fontSize: AppTokens.fontControl,
+            fontWeight: FontWeight.w400),
+        dividerThickness: 1,
+        headingRowHeight: AppTokens.heightMedium + 4,
+      ),
+      checkboxTheme: CheckboxThemeData(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTokens.radiusXs)),
+        side: const BorderSide(color: AppTokens.inputBorder, width: 1.2),
+      ),
+      switchTheme: SwitchThemeData(
+        trackColor: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected) ? primary : AppTokens.inputBorder),
+        thumbColor: const WidgetStatePropertyAll(Colors.white),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: surface,
+        surfaceTintColor: surface,
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radiusMd),
+          side: const BorderSide(color: AppTokens.border),
+        ),
+        textStyle: _inter(color: AppTokens.text1, fontSize: AppTokens.fontBase),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: AppTokens.text1,
+          borderRadius: BorderRadius.circular(AppTokens.radiusSm),
+        ),
+        textStyle: _inter(color: Colors.white, fontSize: AppTokens.fontSm),
+      ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTokens.radiusMd)),
         contentTextStyle: _inter(
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          fontSize: AppTokens.fontBase,
         ),
       ),
-      // Inter text scale:
-      // Headings → SemiBold/Bold (600–700)
-      // Body → Regular/Medium (400–500)
+      listTileTheme: ListTileThemeData(
+        iconColor: AppTokens.menuIcon,
+        textColor: AppTokens.text1,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTokens.radiusMd)),
+      ),
+      // Web typography: Typography h1 28 / h2 22 / h3 18, body 13–14.
       textTheme: GoogleFonts.interTextTheme(base.textTheme).copyWith(
         displayLarge: _inter(
-            color: textPrimary, fontSize: 57, fontWeight: FontWeight.w700),
+            color: textPrimary, fontSize: 48, fontWeight: FontWeight.w700),
         displayMedium: _inter(
-            color: textPrimary, fontSize: 45, fontWeight: FontWeight.w700),
+            color: textPrimary, fontSize: 40, fontWeight: FontWeight.w700),
         displaySmall: _inter(
-            color: textPrimary, fontSize: 36, fontWeight: FontWeight.w700),
-        headlineLarge: _inter(
             color: textPrimary, fontSize: 32, fontWeight: FontWeight.w700),
+        headlineLarge: _inter(
+            color: textPrimary, fontSize: 28, fontWeight: FontWeight.w700),
         headlineMedium: _inter(
-            color: textPrimary, fontSize: 28, fontWeight: FontWeight.w600),
+            color: textPrimary,
+            fontSize: AppTokens.font3xl,
+            fontWeight: FontWeight.w700),
         headlineSmall: _inter(
-            color: textPrimary, fontSize: 24, fontWeight: FontWeight.w600),
+            color: textPrimary,
+            fontSize: AppTokens.font2xl,
+            fontWeight: FontWeight.w600),
         titleLarge: _inter(
           color: textPrimary,
           fontSize: 22,
           fontWeight: FontWeight.w700,
-          letterSpacing: -0.5,
+          letterSpacing: -0.3,
         ),
         titleMedium: _inter(
           color: textPrimary,
-          fontSize: 18,
+          fontSize: AppTokens.fontLg,
           fontWeight: FontWeight.w600,
-          letterSpacing: -0.2,
         ),
         titleSmall: _inter(
           color: textPrimary,
@@ -208,64 +307,75 @@ class AppTheme {
         ),
         bodyLarge: _inter(
           color: textPrimary,
-          fontSize: 15,
+          fontSize: AppTokens.fontBase,
           fontWeight: FontWeight.w400,
+          height: 1.5,
         ),
         bodyMedium: _inter(
-          color: textSecondary,
-          fontSize: 13.5,
+          color: AppTokens.text2,
+          fontSize: AppTokens.fontControl,
           fontWeight: FontWeight.w400,
-          height: 1.4,
+          height: 1.5,
         ),
         bodySmall: _inter(
           color: textSecondary,
-          fontSize: 12,
+          fontSize: AppTokens.fontSm,
           fontWeight: FontWeight.w400,
         ),
         labelLarge: _inter(
           color: textPrimary,
-          fontSize: 14,
+          fontSize: AppTokens.fontBase,
           fontWeight: FontWeight.w500,
         ),
         labelMedium: _inter(
           color: textSecondary,
-          fontSize: 12,
+          fontSize: AppTokens.fontSm,
           fontWeight: FontWeight.w500,
-          letterSpacing: 0.5,
         ),
         labelSmall: _inter(
           color: textSecondary,
-          fontSize: 11,
+          fontSize: AppTokens.fontXs,
           fontWeight: FontWeight.w500,
         ),
       ),
     );
   }
 
-  /// Primary action button look (Filled / Elevated). Min height keeps buttons
-  /// comfortable; [padding] is at least 8dp on every side app-wide.
-  static ButtonStyle _primaryButtonStyle({
+  /// Naive UI button look: 40px tall, radius 8, 13px semibold label.
+  static ButtonStyle _buttonStyle({
     Color? background,
     required Color foreground,
   }) {
     return ButtonStyle(
       elevation: const WidgetStatePropertyAll(0),
-      backgroundColor:
-          background != null ? WidgetStatePropertyAll(background) : null,
+      backgroundColor: background != null
+          ? WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return background.withValues(alpha: 0.5);
+              }
+              if (states.contains(WidgetState.pressed)) {
+                return AppTokens.primaryPressed;
+              }
+              if (states.contains(WidgetState.hovered)) {
+                return AppTokens.primaryHover;
+              }
+              return background;
+            })
+          : null,
       foregroundColor: WidgetStatePropertyAll(foreground),
+      overlayColor: const WidgetStatePropertyAll(Colors.transparent),
       // Avoid Size.fromHeight — infinite width breaks buttons in a Row.
-      minimumSize: const WidgetStatePropertyAll(Size(64, 52)),
-      padding: const WidgetStatePropertyAll(EdgeInsets.all(8)),
+      minimumSize: const WidgetStatePropertyAll(Size(64, AppTokens.heightMedium)),
+      padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 16, vertical: 8)),
       shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTokens.radiusMd)),
       ),
       textStyle: WidgetStatePropertyAll(
-        _inter(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.2,
-        ),
+        _inter(fontSize: AppTokens.fontControl, fontWeight: FontWeight.w600),
       ),
+      iconSize: const WidgetStatePropertyAll(18),
       visualDensity: VisualDensity.standard,
       tapTargetSize: MaterialTapTargetSize.padded,
     );

@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -159,7 +160,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     final canUpload = context.watch<AuthSession>().hasPermission(AppPermissions.emrDocumentsUpload);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         automaticallyImplyLeading: false,
         title: const Text('Documents'),
         actions: [

@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -29,7 +30,10 @@ class _LineItem {
 }
 
 class PurchaseReturnFormScreen extends StatefulWidget {
-  const PurchaseReturnFormScreen({super.key});
+  const PurchaseReturnFormScreen({super.key, this.initialSupplierId});
+
+  /// Preselected supplier (`?supplier_id=` from purchase / return lists).
+  final int? initialSupplierId;
 
   @override
   State<PurchaseReturnFormScreen> createState() => _PurchaseReturnFormScreenState();
@@ -66,6 +70,7 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
   void initState() {
     super.initState();
     _items.add(_LineItem());
+    _supplierId = widget.initialSupplierId;
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
@@ -388,12 +393,12 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         automaticallyImplyLeading: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('New Supplier Return'),
+            const Text('New Purchase Return'),
             if (subtitle != null && subtitle.isNotEmpty)
               Text(
                 subtitle,
@@ -533,7 +538,9 @@ class _PurchaseReturnFormScreenState extends State<PurchaseReturnFormScreen> {
       decoration: _fieldDec('Supplier *'),
       options: [
         for (final s in _suppliers)
-          AppSearchableOption(value: s.id, label: s.name),
+          AppSearchableOption(
+              value: s.id,
+              label: (s.companyName ?? '').isNotEmpty ? '${s.name} — ${s.companyName}' : s.name),
       ],
       onChanged: (v) => setState(() => _supplierId = v),
     );

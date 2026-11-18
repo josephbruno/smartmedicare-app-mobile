@@ -5,6 +5,8 @@
 /// the Upgrade screen; the API refuses the same data with PLAN_UPGRADE_REQUIRED.
 const Map<String, List<String>> _planCapabilitiesByPrefix = {
   '/products': ['inventory'], // Products page (POS / visit lookups use the API directly)
+  '/categories': ['inventory'],
+  '/brands': ['inventory'],
   '/inventory': ['inventory'],
   '/stock-alerts': ['inventory'],
   '/stock-ageing': ['inventory', 'advanced_reports'],

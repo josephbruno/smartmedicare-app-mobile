@@ -227,11 +227,12 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
           if (!AppConfig.usesLargeUiScale) {
             return built;
           }
-          // Scale up all text on web & native desktop.
+          // Same per-width zoom tiers as the web app (main.css).
           final mq = MediaQuery.of(context);
           return MediaQuery(
             data: mq.copyWith(
-              textScaler: TextScaler.linear(AppConfig.desktopTextScale),
+              textScaler:
+                  TextScaler.linear(AppConfig.uiZoomFor(mq.size.width)),
             ),
             child: built,
           );

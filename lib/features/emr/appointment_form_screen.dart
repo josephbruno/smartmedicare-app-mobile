@@ -7,8 +7,11 @@ import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/web_page.dart';
 import '../../data/models/emr.dart';
 import '../../core/widgets/app_dropdown.dart';
+
 class AppointmentFormScreen extends StatefulWidget {
   const AppointmentFormScreen({super.key, this.appointmentId});
 
@@ -59,12 +62,14 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     setState(() => _loading = true);
     final auth = context.read<AuthSession>();
     try {
-      final isAdmin =
-          auth.hasRole(AppRoles.superAdmin) || auth.hasRole(AppRoles.branchManager);
+      final isAdmin = auth.hasRole(AppRoles.superAdmin) ||
+          auth.hasRole(AppRoles.branchManager);
 
       if (_isEdit) {
-        final appt =
-            await context.read<AppServices>().emr.getAppointment(widget.appointmentId!);
+        final appt = await context
+            .read<AppServices>()
+            .emr
+            .getAppointment(widget.appointmentId!);
         _applyAppointment(appt);
       }
 
@@ -79,7 +84,9 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           final me = fromList ??
               DoctorLite(
                 id: user.id,
-                name: user.name.trim().isNotEmpty ? user.name : 'Doctor #${user.id}',
+                name: user.name.trim().isNotEmpty
+                    ? user.name
+                    : 'Doctor #${user.id}',
               );
           _doctors = [me];
           _selectedDoctor = me;
@@ -87,7 +94,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
       }
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context,SnackBar(content: Text('$e')));
+        AppMessenger.show(context, SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -134,7 +141,8 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
 
   Future<void> _save() async {
     if (_selectedPet == null) {
-      AppMessenger.show(context,
+      AppMessenger.show(
+        context,
         const SnackBar(content: Text('Please select a patient')),
       );
       return;
@@ -155,7 +163,8 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
       'appointment_time': timeStr,
       'duration_minutes': _duration,
       'status': _status,
-      if (_complaint.text.trim().isNotEmpty) 'chief_complaint': _complaint.text.trim(),
+      if (_complaint.text.trim().isNotEmpty)
+        'chief_complaint': _complaint.text.trim(),
       if (_notes.text.trim().isNotEmpty) 'notes': _notes.text.trim(),
     };
 
@@ -166,14 +175,17 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
         await emr.createAppointment(body);
       }
       if (mounted) {
-        AppMessenger.show(context,
-          SnackBar(content: Text(_isEdit ? 'Appointment updated' : 'Appointment created')),
+        AppMessenger.show(
+          context,
+          SnackBar(
+              content: Text(
+                  _isEdit ? 'Appointment updated' : 'Appointment created')),
         );
         context.go('/emr/appointments');
       }
     } catch (e) {
       if (mounted) {
-        AppMessenger.show(context,SnackBar(content: Text('$e')));
+        AppMessenger.show(context, SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -193,213 +205,275 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final title = _isEdit ? 'Edit Appointment' : 'New Appointment';
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: Text(_isEdit ? 'Edit appointment' : 'New appointment'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (_selectedPet == null) ...[
-            TextField(
-              decoration: InputDecoration(
-                labelText: 'Search patient',
-                suffixIcon: _searchingPets
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : const Icon(Icons.search),
-              ),
-              onChanged: _searchPets,
-            ),
-            ..._petResults.map(
-              (p) => ListTile(
-                title: Text(p.displayLabel),
-                onTap: () => setState(() {
-                  _selectedPet = p;
-                  _petResults = [];
-                }),
-              ),
-            ),
-          ] else
-            Card(
-              color: AppTheme.primary.withValues(alpha: 0.06),
-              child: ListTile(
-                leading: const Icon(Icons.pets, color: AppTheme.primary),
-                title: Text(_selectedPet!.name),
-                subtitle: Text(_selectedPet!.displayLabel),
-                trailing: _isEdit
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => setState(() => _selectedPet = null),
-                      ),
-              ),
-            ),
-          const SizedBox(height: 12),
-          AppDropdownButtonFormField<String>(
-            value: _appointmentType,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Appointment type'),
-            items: _types
-                .map(
-                  (t) => DropdownMenuItem(
-                    value: t,
-                    child: Text(t, overflow: TextOverflow.ellipsis, maxLines: 1),
-                  ),
-                )
-                .toList(),
-            onChanged: (v) => setState(() => _appointmentType = v ?? 'consultation'),
-          ),
-          if (_isEdit) ...[
-            const SizedBox(height: 12),
-            AppDropdownButtonFormField<String>(
-              value: _status,
-              isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Status'),
-              items: const [
-                DropdownMenuItem(value: 'scheduled', child: Text('Scheduled')),
-                DropdownMenuItem(value: 'confirmed', child: Text('Confirmed')),
-                DropdownMenuItem(value: 'in_progress', child: Text('In progress')),
-                DropdownMenuItem(value: 'completed', child: Text('Completed')),
-                DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
-                DropdownMenuItem(value: 'no_show', child: Text('No show')),
-              ],
-              onChanged: (v) => setState(() => _status = v ?? 'scheduled'),
-            ),
-          ],
-          const SizedBox(height: 12),
-          if (_doctors.isNotEmpty || _selectedDoctor != null)
-            Builder(
-              builder: (context) {
-                final auth = context.watch<AuthSession>();
-                final isAdmin = auth.hasRole(AppRoles.superAdmin) ||
-                    auth.hasRole(AppRoles.branchManager);
-                if (isAdmin) return const SizedBox.shrink();
-                final locked = auth.hasRole(AppRoles.doctor) &&
-                    auth.user != null &&
-                    _selectedDoctor?.id == auth.user!.id &&
-                    _doctors.length == 1;
-                if (locked) {
-                  return InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Doctor',
-                      suffixIcon: Icon(Icons.lock_outline, size: 18),
-                    ),
-                    child: Text(
-                      _selectedDoctor?.name ?? '',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                  );
-                }
-                return AppDropdownButtonFormField<int>(
-                  value: _selectedDoctor?.id,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Doctor'),
-                  selectedItemBuilder: (context) => [
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('— None —', overflow: TextOverflow.ellipsis, maxLines: 1),
-                    ),
-                    ..._doctors.map(
-                      (d) => Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          d.displayLabel,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ),
-                  ],
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('— None —')),
-                    ..._doctors.map(
-                      (d) => DropdownMenuItem(
-                        value: d.id,
-                        child: Text(
-                          d.displayLabel,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ),
-                  ],
-                  onChanged: (id) => setState(() {
-                    _selectedDoctor =
-                        id == null ? null : _doctors.firstWhere((d) => d.id == id);
-                  }),
-                );
-              },
-            ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final d = await showDatePicker(
-                      context: context,
-                      initialDate: _date,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2100),
-                    );
-                    if (d != null) setState(() => _date = d);
-                  },
-                  icon: const Icon(Icons.calendar_today, size: 18),
-                  label: Text(
-                    '${_date.year.toString().padLeft(4, '0')}-'
-                    '${_date.month.toString().padLeft(2, '0')}-'
-                    '${_date.day.toString().padLeft(2, '0')}',
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final t = await showTimePicker(context: context, initialTime: _time);
-                    if (t != null) setState(() => _time = t);
-                  },
-                  icon: const Icon(Icons.access_time, size: 18),
-                  label: Text(_time.format(context)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _complaint,
-            decoration: const InputDecoration(labelText: 'Chief complaint'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _notes,
-            maxLines: 3,
-            decoration: const InputDecoration(labelText: 'Notes'),
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            child: _saving
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(_isEdit ? 'Update' : 'Create appointment'),
-          ),
+      backgroundColor: AppTokens.bgSecondary,
+      body: WebPageScaffold(
+        scrollable: true,
+        title: title,
+        subtitle: 'Schedule a medical consultation for a patient.',
+        icon: Icons.event_outlined,
+        breadcrumbs: [
+          const Crumb('Appointments', path: '/emr/appointments'),
+          Crumb(title)
         ],
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: WebCard(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_selectedPet == null) ...[
+                    TextField(
+                      decoration: InputDecoration(
+                        labelText: 'Search patient',
+                        suffixIcon: _searchingPets
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              )
+                            : const Icon(Icons.search),
+                      ),
+                      onChanged: _searchPets,
+                    ),
+                    ..._petResults.map(
+                      (p) => ListTile(
+                        title: Text(p.displayLabel),
+                        onTap: () => setState(() {
+                          _selectedPet = p;
+                          _petResults = [];
+                        }),
+                      ),
+                    ),
+                  ] else
+                    Card(
+                      color: AppTheme.primary.withValues(alpha: 0.06),
+                      child: ListTile(
+                        leading:
+                            const Icon(Icons.pets, color: AppTheme.primary),
+                        title: Text(_selectedPet!.name),
+                        subtitle: Text(_selectedPet!.displayLabel),
+                        trailing: _isEdit
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () =>
+                                    setState(() => _selectedPet = null),
+                              ),
+                      ),
+                    ),
+                  // Owner is derived from the selected patient and locked (web parity).
+                  if (!_isEdit) ...[
+                    const SizedBox(height: 12),
+                    FieldLabel(
+                      'Owner (Customer)',
+                      child: InputDecorator(
+                        isEmpty: _selectedPet == null,
+                        decoration: InputDecoration(
+                          enabled: false,
+                          prefixIcon: const Icon(Icons.lock_outline, size: 16),
+                          hintText: _selectedPet == null
+                              ? 'Select a patient first'
+                              : 'Auto-filled from patient',
+                        ),
+                        child: _selectedPet == null
+                            ? null
+                            : Text(
+                                (_selectedPet!.customerName ?? '').isNotEmpty
+                                    ? _selectedPet!.customerName!
+                                    : 'Customer #${_selectedPet!.customerId}',
+                                style: const TextStyle(color: AppTokens.text1),
+                              ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  AppDropdownButtonFormField<String>(
+                    value: _appointmentType,
+                    isExpanded: true,
+                    decoration:
+                        const InputDecoration(labelText: 'Appointment type'),
+                    items: _types
+                        .map(
+                          (t) => DropdownMenuItem(
+                            value: t,
+                            child: Text(t,
+                                overflow: TextOverflow.ellipsis, maxLines: 1),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) =>
+                        setState(() => _appointmentType = v ?? 'consultation'),
+                  ),
+                  if (_isEdit) ...[
+                    const SizedBox(height: 12),
+                    AppDropdownButtonFormField<String>(
+                      value: _status,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Status'),
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'scheduled', child: Text('Scheduled')),
+                        DropdownMenuItem(
+                            value: 'confirmed', child: Text('Confirmed')),
+                        DropdownMenuItem(
+                            value: 'in_progress', child: Text('In progress')),
+                        DropdownMenuItem(
+                            value: 'completed', child: Text('Completed')),
+                        DropdownMenuItem(
+                            value: 'cancelled', child: Text('Cancelled')),
+                        DropdownMenuItem(
+                            value: 'no_show', child: Text('No show')),
+                      ],
+                      onChanged: (v) =>
+                          setState(() => _status = v ?? 'scheduled'),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  if (_doctors.isNotEmpty || _selectedDoctor != null)
+                    Builder(
+                      builder: (context) {
+                        final auth = context.watch<AuthSession>();
+                        final isAdmin = auth.hasRole(AppRoles.superAdmin) ||
+                            auth.hasRole(AppRoles.branchManager);
+                        if (isAdmin) return const SizedBox.shrink();
+                        final locked = auth.hasRole(AppRoles.doctor) &&
+                            auth.user != null &&
+                            _selectedDoctor?.id == auth.user!.id &&
+                            _doctors.length == 1;
+                        if (locked) {
+                          return InputDecorator(
+                            decoration: const InputDecoration(
+                              labelText: 'Doctor',
+                              suffixIcon: Icon(Icons.lock_outline, size: 18),
+                            ),
+                            child: Text(
+                              _selectedDoctor?.name ?? '',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                          );
+                        }
+                        return AppDropdownButtonFormField<int>(
+                          value: _selectedDoctor?.id,
+                          isExpanded: true,
+                          decoration:
+                              const InputDecoration(labelText: 'Doctor'),
+                          selectedItemBuilder: (context) => [
+                            const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text('— None —',
+                                  overflow: TextOverflow.ellipsis, maxLines: 1),
+                            ),
+                            ..._doctors.map(
+                              (d) => Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  d.displayLabel,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ),
+                          ],
+                          items: [
+                            const DropdownMenuItem(
+                                value: null, child: Text('— None —')),
+                            ..._doctors.map(
+                              (d) => DropdownMenuItem(
+                                value: d.id,
+                                child: Text(
+                                  d.displayLabel,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (id) => setState(() {
+                            _selectedDoctor = id == null
+                                ? null
+                                : _doctors.firstWhere((d) => d.id == id);
+                          }),
+                        );
+                      },
+                    ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final d = await showDatePicker(
+                              context: context,
+                              initialDate: _date,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+                            if (d != null) setState(() => _date = d);
+                          },
+                          icon: const Icon(Icons.calendar_today, size: 18),
+                          label: Text(
+                            '${_date.year.toString().padLeft(4, '0')}-'
+                            '${_date.month.toString().padLeft(2, '0')}-'
+                            '${_date.day.toString().padLeft(2, '0')}',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final t = await showTimePicker(
+                                context: context, initialTime: _time);
+                            if (t != null) setState(() => _time = t);
+                          },
+                          icon: const Icon(Icons.access_time, size: 18),
+                          label: Text(_time.format(context)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _complaint,
+                    decoration:
+                        const InputDecoration(labelText: 'Chief complaint'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _notes,
+                    maxLines: 3,
+                    decoration: const InputDecoration(labelText: 'Notes'),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _saving ? null : _save,
+                    child: _saving
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(_isEdit
+                            ? 'Update Appointment'
+                            : 'Create Appointment'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

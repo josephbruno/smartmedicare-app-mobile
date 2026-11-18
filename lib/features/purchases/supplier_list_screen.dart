@@ -1,9 +1,16 @@
+import 'dart:async';
+
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/web_page.dart';
+import '../../data/models/api_response.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/widgets/app_form_dialog.dart';
@@ -19,7 +26,6 @@ class SupplierListScreen extends StatefulWidget {
 }
 
 class _SupplierListScreenState extends State<SupplierListScreen> {
-  final _tableKey = GlobalKey<AppPaginatedTableState<Supplier>>();
 
   Future<void> _openForm({Supplier? supplier}) async {
     final isEdit = supplier != null;
@@ -190,7 +196,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
           content: Text(isEdit ? 'Supplier updated' : 'Supplier created'),
         ),
       );
-      await _tableKey.currentState?.refresh();
+      _reload();
     } catch (e) {
       if (mounted) {
         AppMessenger.show(context, SnackBar(content: Text('$e')));
@@ -198,66 +204,265 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
     }
   }
 
+  // ── list state (mirrors SupplierListPage.vue) ───────────────────────
+  final _search = TextEditingController();
+  Timer? _debounce;
+  String _appliedSearch = '';
+  String? _status;
+  String? _creditLimit;
+  String? _creditDays;
+  String _sortBy = 'name';
+  bool _sortAsc = true;
+  int _reloadToken = 0;
+  PaginationMetaView _meta = const PaginationMetaView();
+
+  static const _statusOptions = {'active': 'Active', 'inactive': 'Inactive'};
+  static const _creditLimitOptions = {
+    'none': 'No credit (₹0)',
+    'upto_25000': 'Up to ₹25,000',
+    '25001_50000': '₹25,001 – ₹50,000',
+    'above_50000': 'Above ₹50,000',
+  };
+  static const _creditDaysOptions = {
+    'none': 'No credit (0 days)',
+    '1_15': '1 – 15 days',
+    '16_30': '16 – 30 days',
+    '31_45': '31 – 45 days',
+    'above_45': 'Above 45 days',
+  };
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _reload() => setState(() => _reloadToken++);
+
+  bool get _hasFilters =>
+      _appliedSearch.isNotEmpty || _status != null || _creditLimit != null || _creditDays != null;
+
+  void _onSort(String key) {
+    if (_sortBy == key) {
+      _sortAsc = !_sortAsc;
+    } else {
+      _sortBy = key;
+      _sortAsc = key == 'name';
+    }
+    _reload();
+  }
+
+  Future<void> _rowMenu(String key, Supplier s) async {
+    final digits = s.phone.replaceAll(RegExp(r'\D'), '');
+    final svc = context.read<AppServices>().suppliers;
+    switch (key) {
+      case 'call':
+        launchUrl(Uri.parse('tel:${s.phone}'));
+      case 'whatsapp':
+        launchUrl(Uri.parse('https://wa.me/${digits.length == 10 ? '91$digits' : digits}'),
+            mode: LaunchMode.externalApplication);
+      case 'email':
+        launchUrl(Uri.parse('mailto:${s.email}'));
+      case 'toggle':
+        try {
+          await svc.update(s.id, {'is_active': !s.isActive});
+          if (mounted) AppMessenger.success(context, 'Supplier updated');
+          _reload();
+        } catch (e) {
+          if (mounted) AppMessenger.error(context, 'Failed to update supplier: $e');
+        }
+      case 'delete':
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Delete supplier'),
+            content: Text('Delete "${s.name}"? This cannot be undone.'),
+            actions: [
+              OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AppTokens.error),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+        if (ok != true) return;
+        try {
+          await svc.delete(s.id);
+          if (mounted) AppMessenger.success(context, 'Supplier deleted');
+          _reload();
+        } catch (e) {
+          if (mounted) AppMessenger.error(context, 'Failed to delete supplier: $e');
+        }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final services = context.read<AppServices>();
-    final canCreate =
-        context.watch<AuthSession>().hasPermission(AppPermissions.suppliersCreate);
-    final canEdit =
-        context.watch<AuthSession>().hasPermission(AppPermissions.suppliersEdit);
+    final auth = context.watch<AuthSession>();
+    final canCreate = auth.hasPermission(AppPermissions.suppliersCreate);
+    final canEdit = auth.hasPermission(AppPermissions.suppliersEdit);
+    final canDelete = auth.hasPermission('suppliers.delete');
+    String money(double? v) => '₹${NumberFormat.decimalPattern('en_IN').format((v ?? 0).round())}';
+    int st(String k) => _meta.stat(k).toInt();
 
     return Scaffold(
-      body: Column(
-        children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Suppliers',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                if (canCreate)
-                  FilledButton.icon(
-                    onPressed: () => _openForm(),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add Supplier'),
-                  ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: AppPaginatedTable<Supplier>(
-              key: _tableKey,
-              loadPage: ({required page, required perPage}) =>
-                  services.suppliers.listPaginated(page: page, perPage: perPage),
-              onRowTap: canEdit ? (s) => _openForm(supplier: s) : null,
-              columns: const [
-                TableColumnDef(label: 'Name', flex: 2, cellBuilder: _nameCell),
-                TableColumnDef(label: 'Phone', flex: 1.2, cellBuilder: _phoneCell),
-                TableColumnDef(label: 'Email', flex: 1.5, cellBuilder: _emailCell),
-                TableColumnDef(label: 'GSTIN', flex: 1.2, cellBuilder: _gstinCell),
-              ],
-            ),
-          ),
+      backgroundColor: AppTokens.bgSecondary,
+      body: WebPageScaffold(
+        title: 'Suppliers',
+        subtitle: 'Manage your suppliers, contact details, credit terms and status',
+        icon: Icons.local_shipping_outlined,
+        breadcrumbs: const [Crumb('Billing'), Crumb('Suppliers')],
+        actions: [
+          if (canCreate) FilledButton(onPressed: () => _openForm(), child: const Text('Add Supplier')),
         ],
+        kpis: [
+          KpiData(label: 'Total Suppliers', value: '${st('total')}', icon: Icons.people),
+          KpiData(label: 'Active Suppliers', value: '${st('active')}', icon: Icons.person, tone: KpiTone.green),
+          KpiData(label: 'Inactive Suppliers', value: '${st('inactive')}', icon: Icons.person_off_outlined, tone: KpiTone.red),
+          KpiData(label: 'On Credit', value: '${st('on_credit')}', icon: Icons.account_balance_wallet, tone: KpiTone.orange),
+        ],
+        filters: FilterCard(
+          searchController: _search,
+          searchHint: 'Search suppliers by name, phone, email or GSTIN...',
+          onSearchChanged: (v) {
+            _debounce?.cancel();
+            _debounce = Timer(const Duration(milliseconds: 400), () {
+              if (!mounted) return;
+              _appliedSearch = v.trim();
+              _reload();
+            });
+          },
+          filters: [
+            FilterSelect<String>(hint: 'All Status', options: _statusOptions, value: _status, onChanged: (v) {
+              _status = v;
+              _reload();
+            }),
+            FilterSelect<String>(hint: 'Any Credit Limit', options: _creditLimitOptions, value: _creditLimit, onChanged: (v) {
+              _creditLimit = v;
+              _reload();
+            }),
+            FilterSelect<String>(hint: 'Any Credit Days', options: _creditDaysOptions, value: _creditDays, onChanged: (v) {
+              _creditDays = v;
+              _reload();
+            }),
+          ],
+          onReset: () {
+            _search.clear();
+            _appliedSearch = '';
+            _status = null;
+            _creditLimit = null;
+            _creditDays = null;
+            _reload();
+          },
+          resetEnabled: _hasFilters,
+        ),
+        body: AppPaginatedTable<Supplier>(
+          key: ValueKey('suppliers-$_reloadToken'),
+          perPage: 10,
+          emptyMessage: 'No suppliers found',
+          loadPage: ({required page, required perPage}) => services.suppliers.listPaginated(
+            page: page,
+            perPage: perPage,
+            search: _appliedSearch,
+            filters: {
+              'status': _status,
+              'credit_limit': _creditLimit,
+              'credit_days': _creditDays,
+              'sort_by': _sortBy,
+              'sort_dir': _sortAsc ? 'asc' : 'desc',
+            },
+            withStats: true,
+          ),
+          onLoaded: (m) {
+            if (mounted) setState(() => _meta = PaginationMetaView(m));
+          },
+          sortKey: _sortBy,
+          sortAsc: _sortAsc,
+          onSort: _onSort,
+          onRowTap: canEdit ? (s) => _openForm(supplier: s) : null,
+          columns: [
+            TableColumnDef(
+              label: 'Supplier',
+              flex: 2.2,
+              minWidth: 210,
+              sortKey: 'name',
+              cellBuilder: (_, s) => Row(children: [
+                InitialsAvatar(s.name),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                    Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    if ((s.companyName ?? '').isNotEmpty)
+                      Text(s.companyName!, style: const TextStyle(fontSize: 12, color: AppTokens.text3)),
+                  ]),
+                ),
+              ]),
+            ),
+            TableColumnDef(label: 'Phone', flex: 1.2, minWidth: 120, sortKey: 'phone', cellBuilder: (_, s) => Text(s.phone.isEmpty ? '—' : s.phone)),
+            TableColumnDef(
+                label: 'Email',
+                flex: 1.6,
+                minWidth: 160,
+                sortKey: 'email',
+                cellBuilder: (_, s) => Text(s.email ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis)),
+            TableColumnDef(label: 'GSTIN', flex: 1.3, minWidth: 140, sortKey: 'gstin', cellBuilder: (_, s) => Text(s.gstin ?? '—')),
+            TableColumnDef(
+                label: 'Credit Limit',
+                flex: 1,
+                minWidth: 110,
+                sortKey: 'credit_limit',
+                cellBuilder: (_, s) => Text(money(s.creditLimit), style: const TextStyle(fontWeight: FontWeight.w600))),
+            TableColumnDef(
+                label: 'Credit Days',
+                flex: 0.9,
+                minWidth: 100,
+                cellBuilder: (_, s) => Text(s.creditDays == null ? '—' : '${s.creditDays} days')),
+            TableColumnDef(
+              label: 'Status',
+              flex: 0.9,
+              minWidth: 100,
+              sortKey: 'is_active',
+              cellBuilder: (_, s) => s.isActive
+                  ? const StatusPill('Active', tone: PillTone.green)
+                  : const StatusPill('Inactive', tone: PillTone.red),
+            ),
+            TableColumnDef(
+              label: 'Actions',
+              flex: 1,
+              minWidth: 110,
+              cellBuilder: (_, s) => Row(mainAxisSize: MainAxisSize.min, children: [
+                if (canEdit) TableIconButton(icon: Icons.edit_outlined, tooltip: 'Edit', onPressed: () => _openForm(supplier: s)),
+                const SizedBox(width: 8),
+                PopupMenuButton<String>(
+                  tooltip: 'More',
+                  onSelected: (k) => _rowMenu(k, s),
+                  itemBuilder: (_) => [
+                    if (s.phone.isNotEmpty) ...[
+                      const PopupMenuItem(value: 'call', child: Text('Call')),
+                      const PopupMenuItem(value: 'whatsapp', child: Text('WhatsApp')),
+                    ],
+                    if ((s.email ?? '').isNotEmpty) const PopupMenuItem(value: 'email', child: Text('Send email')),
+                    if (canEdit) ...[
+                      const PopupMenuDivider(),
+                      PopupMenuItem(value: 'toggle', child: Text(s.isActive ? 'Mark as inactive' : 'Mark as active')),
+                    ],
+                    if (canDelete) ...[
+                      const PopupMenuDivider(),
+                      const PopupMenuItem(
+                          value: 'delete', child: Text('Delete supplier', style: TextStyle(color: AppTokens.error))),
+                    ],
+                  ],
+                  child: const TableIconButton(icon: Icons.more_vert, plain: true, onPressed: null),
+                ),
+              ]),
+            ),
+          ],
+        ),
       ),
     );
   }
-
-  static Widget _nameCell(BuildContext context, Supplier s) => Text(
-        s.name,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      );
-
-  static Widget _phoneCell(BuildContext context, Supplier s) => Text(s.phone);
-
-  static Widget _emailCell(BuildContext context, Supplier s) =>
-      Text(s.email ?? '—');
-
-  static Widget _gstinCell(BuildContext context, Supplier s) =>
-      Text(s.gstin ?? '—');
 }

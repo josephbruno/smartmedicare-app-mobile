@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -423,7 +424,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         automaticallyImplyLeading: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -592,7 +593,13 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       decoration: _fieldDec('Supplier *'),
       items: [
         for (final s in _suppliers)
-          DropdownMenuItem(value: s.id, child: Text(s.name, overflow: TextOverflow.ellipsis)),
+          DropdownMenuItem(
+            value: s.id,
+            child: Text(
+              (s.companyName ?? '').isNotEmpty ? '${s.name} — ${s.companyName}' : s.name,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
       ],
       onChanged: (v) => setState(() => _supplierId = v),
     );

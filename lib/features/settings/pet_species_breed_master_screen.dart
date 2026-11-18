@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import '../reports/widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
@@ -368,9 +370,12 @@ class _PetSpeciesBreedMasterScreenState extends State<PetSpeciesBreedMasterScree
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: const Text('Species & Breeds'),
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        group: 'Admin',
+        title: 'Species & Breeds',
+        subtitle: 'Manage pet species and their breed master data used in customer pet forms.',
+        icon: Icons.pets_outlined,
         actions: [
           IconButton(
             tooltip: 'Add',
@@ -378,13 +383,15 @@ class _PetSpeciesBreedMasterScreenState extends State<PetSpeciesBreedMasterScree
             icon: const Icon(Icons.add),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabs,
-          tabs: _tabLabels.map((l) => Tab(text: l)).toList(),
-        ),
-      ),
-      body: Column(
+        child: Column(
         children: [
+          Material(
+            color: Colors.white,
+            child: TabBar(
+              controller: _tabs,
+              tabs: _tabLabels.map((l) => Tab(text: l)).toList(),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: Row(
@@ -440,6 +447,7 @@ class _PetSpeciesBreedMasterScreenState extends State<PetSpeciesBreedMasterScree
                     : _buildSpeciesList(),
           ),
         ],
+      ),
       ),
     );
   }

@@ -22,13 +22,37 @@ class PurchaseService {
   Future<({List<Purchase> items, PaginationMeta? meta})> listPaginated({
     int page = 1,
     int perPage = 20,
+    String? search,
+    Map<String, dynamic> filters = const {},
+    bool withStats = false,
   }) async {
     try {
       final res = await _client.get('/purchases', queryParameters: {
         'page': page,
         'per_page': perPage,
+        if (search != null && search.isNotEmpty) 'search': search,
+        for (final e in filters.entries)
+          if (e.value != null && e.value.toString().isNotEmpty && e.value != 'all') e.key: e.value,
+        if (withStats) 'with_stats': 1,
       });
       return parseEnvelopeList(res, Purchase.fromJson);
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  /// Receives stock for a purchase into inventory.
+  Future<void> receive(int id) async {
+    try {
+      await _client.post('/purchases/$id/receive');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> deletePurchase(int id) async {
+    try {
+      await _client.delete('/purchases/$id');
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -131,13 +155,28 @@ class SupplierService {
   Future<({List<Supplier> items, PaginationMeta? meta})> listPaginated({
     int page = 1,
     int perPage = 20,
+    String? search,
+    Map<String, dynamic> filters = const {},
+    bool withStats = false,
   }) async {
     try {
       final res = await _client.get('/suppliers', queryParameters: {
         'page': page,
         'per_page': perPage,
+        if (search != null && search.isNotEmpty) 'search': search,
+        for (final e in filters.entries)
+          if (e.value != null && e.value.toString().isNotEmpty && e.value != 'all') e.key: e.value,
+        if (withStats) 'with_stats': 1,
       });
       return parseEnvelopeList(res, Supplier.fromJson);
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> delete(int id) async {
+    try {
+      await _client.delete('/suppliers/$id');
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }
@@ -176,11 +215,18 @@ class PurchaseReturnService {
   Future<({List<PurchaseReturn> items, PaginationMeta? meta})> listPaginated({
     int page = 1,
     int perPage = 20,
+    String? search,
+    Map<String, dynamic> filters = const {},
+    bool withStats = false,
   }) async {
     try {
       final res = await _client.get('/purchase-returns', queryParameters: {
         'page': page,
         'per_page': perPage,
+        if (search != null && search.isNotEmpty) 'search': search,
+        for (final e in filters.entries)
+          if (e.value != null && e.value.toString().isNotEmpty && e.value != 'all') e.key: e.value,
+        if (withStats) 'with_stats': 1,
       });
       return parseEnvelopeList(res, PurchaseReturn.fromJson);
     } on DioException catch (e) {

@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import '../reports/widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
@@ -282,8 +284,13 @@ class _UsersScreenState extends State<UsersScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: AppPaginatedTable<User>(
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        group: 'Admin',
+        title: 'User Management',
+        subtitle: 'Manage system users, roles and access for your clinic',
+        icon: Icons.person_outline,
+        child: AppPaginatedTable<User>(
         key: _tableKey,
         loadPage: ({required page, required perPage}) =>
             services.users.listPaginated(page: page, perPage: perPage),
@@ -353,6 +360,7 @@ class _UsersScreenState extends State<UsersScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

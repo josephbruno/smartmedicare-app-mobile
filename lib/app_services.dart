@@ -1,3 +1,4 @@
+import 'data/services/whatsapp_service.dart';
 import 'core/network/api_client.dart';
 import 'data/services/device_token_service.dart';
 import 'data/services/auth_service.dart';
@@ -40,9 +41,11 @@ class AppServices {
         branches = BranchService(api),
         users = UsersService(api),
         subscription = SubscriptionService(api),
-        deviceTokens = DeviceTokenService(api);
+        deviceTokens = DeviceTokenService(api),
+        whatsapp = WhatsAppService(api);
 
   final ApiClient api;
+  final WhatsAppService whatsapp;
   final AuthService auth;
   final BillingService billing;
   final CashierCashSessionService cashierCash;

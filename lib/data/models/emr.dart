@@ -38,6 +38,15 @@ class PetSearchResult {
     this.gender,
     this.customerName,
     this.customerPhone,
+    this.weight,
+    this.color,
+    this.age,
+    this.isActive = true,
+    this.onTreatment = false,
+    this.imageUrl,
+    this.medicalNotes,
+    this.notesCount,
+    this.latestNote,
   });
 
   final int id;
@@ -52,6 +61,17 @@ class PetSearchResult {
   final String? gender;
   final String? customerName;
   final String? customerPhone;
+  final double? weight;
+  final String? color;
+  final String? age;
+  final bool isActive;
+  final bool onTreatment;
+  final String? imageUrl;
+  final String? medicalNotes;
+  final int? notesCount;
+
+  /// Most recent patient-ledger note text (from embedded `notes`).
+  final String? latestNote;
 
   String get displayLabel {
     final owner = customerName ?? 'Owner';
@@ -75,6 +95,15 @@ class PetSearchResult {
       gender: gender,
       customerName: customerName ?? customer.name,
       customerPhone: customerPhone ?? customer.phone,
+      weight: weight,
+      color: color,
+      age: age,
+      isActive: isActive,
+      onTreatment: onTreatment,
+      imageUrl: imageUrl,
+      medicalNotes: medicalNotes,
+      notesCount: notesCount,
+      latestNote: latestNote,
     );
   }
 
@@ -84,6 +113,14 @@ class PetSearchResult {
   }) {
     final customer =
         customerOverride ?? CustomerLite.fromJson(mapOrNull(j['customer']));
+    String? latest;
+    int? notesLen;
+    if (j['notes'] is List) {
+      final notes = (j['notes'] as List).whereType<Map>().toList()
+        ..sort((a, b) => (intOrNull(b['id']) ?? 0).compareTo(intOrNull(a['id']) ?? 0));
+      notesLen = notes.length;
+      if (notes.isNotEmpty) latest = notes.first['note']?.toString();
+    }
     return PetSearchResult(
       id: intOrNull(j['id']) ?? 0,
       customerId: intOrNull(j['customer_id']) ?? customer.id,
@@ -97,6 +134,15 @@ class PetSearchResult {
       gender: j['gender']?.toString(),
       customerName: customer.name.isNotEmpty ? customer.name : null,
       customerPhone: customer.phone,
+      weight: numOrNull(j['weight']),
+      color: j['color']?.toString(),
+      age: j['age']?.toString(),
+      isActive: j['is_active'] != false,
+      onTreatment: j['on_treatment'] == true,
+      imageUrl: j['image_url']?.toString(),
+      medicalNotes: j['medical_notes']?.toString(),
+      notesCount: intOrNull(j['notes_count']) ?? notesLen,
+      latestNote: latest,
     );
   }
 }
@@ -289,10 +335,23 @@ class PatientAppointment {
 /// Stored in [PetVisit.investigation] as one item per line:
 /// `Name` or `Name | notes`. Legacy comma-separated names (no notes) still parse.
 class VisitInvestigationItem {
-  const VisitInvestigationItem({required this.name, this.notes = ''});
+  const VisitInvestigationItem({required this.name, this.notes = '', this.unitPrice = 0, this.productId});
 
   final String name;
   final String notes;
+
+  /// Billing price from the investigation master (API `investigation_items`).
+  final double unitPrice;
+
+  /// Catalog product billed for this investigation (when priced).
+  final int? productId;
+
+  static VisitInvestigationItem fromApi(Map<String, dynamic> j) => VisitInvestigationItem(
+        name: (j['investigation_name'] ?? j['name'] ?? '').toString(),
+        notes: j['notes']?.toString() ?? '',
+        unitPrice: numOrNull(j['unit_price']) ?? 0,
+        productId: intOrNull(j['product_id']),
+      );
 
   static const _noteSep = ' | ';
 
@@ -403,6 +462,7 @@ class PetVisit {
     this.dewormings,
     this.surgeries,
     this.invoice,
+    this.apiInvestigationItems,
   });
 
   final int id;
@@ -445,8 +505,14 @@ class PetVisit {
   final List<PetSurgery>? surgeries;
   final Map<String, dynamic>? invoice;
 
+  /// Structured items (with price) when the API sends `investigation_items`,
+  /// otherwise parsed from the legacy [investigation] text.
   List<VisitInvestigationItem> get investigationItems =>
-      VisitInvestigationItem.parse(investigation);
+      (apiInvestigationItems != null && apiInvestigationItems!.isNotEmpty)
+          ? apiInvestigationItems!
+          : VisitInvestigationItem.parse(investigation);
+
+  final List<VisitInvestigationItem>? apiInvestigationItems;
 
   /// Notes shown on visit detail, summary, and PDF.
   /// Prefers `clinical_notes`; falls back to legacy `observation`.
@@ -510,6 +576,9 @@ class PetVisit {
       respiratoryRate: intOrNull(j['respiratory_rate']),
       clinicalNotes: j['clinical_notes']?.toString(),
       observation: j['observation']?.toString(),
+      apiInvestigationItems: j['investigation_items'] is List
+          ? (j['investigation_items'] as List).whereType<Map>().map((e) => VisitInvestigationItem.fromApi(Map<String, dynamic>.from(e))).toList()
+          : null,
       investigation: j['investigation']?.toString(),
       followUpDate: formatApiDate(j['follow_up_date']?.toString()),
       followUpNotes: j['follow_up_notes']?.toString(),
@@ -595,6 +664,7 @@ class PetReminder {
     this.pet,
     this.customer,
     this.createdAt,
+    this.lastWhatsappSentOn,
   });
 
   final int id;
@@ -606,6 +676,9 @@ class PetReminder {
   final PetSearchResult? pet;
   final CustomerLite? customer;
   final DateTime? createdAt;
+
+  /// IST day (`yyyy-MM-dd`) of the last WhatsApp send — once per day.
+  final String? lastWhatsappSentOn;
 
   String get displayDueDate => formatApiDate(dueDate);
 
@@ -623,6 +696,7 @@ class PetReminder {
       dueDate: formatApiDate(j['due_date']?.toString()),
       title: j['title']?.toString() ?? '',
       message: j['message']?.toString() ?? '',
+      lastWhatsappSentOn: j['last_whatsapp_sent_on']?.toString(),
       status: j['status']?.toString() ?? 'pending',
       pet: petMap != null
           ? PetSearchResult.fromJson(petMap, customerOverride: customer)

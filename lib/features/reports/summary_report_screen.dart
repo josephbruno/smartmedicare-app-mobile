@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import 'widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -144,8 +146,12 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
     final crossCount = isMobile ? 2 : (width >= 1200 ? 5 : 3);
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        title: 'Summary Report',
+        subtitle: 'Invoice count, total, cash, UPI and pending · Super admin',
+        icon: Icons.insights_outlined,
+        child: Column(
         children: [
           _Toolbar(
             preset: _preset,
@@ -221,6 +227,7 @@ class _SummaryReportScreenState extends State<SummaryReportScreen> {
                           ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -396,47 +403,17 @@ class _Toolbar extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final wide = constraints.maxWidth >= 1080;
-          final title = const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'REPORTS',
-                style: TextStyle(
-                  fontSize: 10,
-                  letterSpacing: 0.8,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.primary,
-                ),
-              ),
-              SizedBox(height: 3),
-              Text(
-                'Summary Report',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              SizedBox(height: 3),
-              Text(
-                'Invoice count, total, cash, UPI and pending · Super admin',
-                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-              ),
-            ],
-          );
           if (!wide) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [title, const SizedBox(height: 14), controls],
+              // Title lives in the page header (ReportFrame).
+              children: [controls],
             );
           }
           return Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Expanded(
-                  child: Align(
-                      alignment: Alignment.centerLeft, child: _ToolbarTitle())),
-              const SizedBox(width: 24),
+              const Spacer(),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1080),
                 child: Align(alignment: Alignment.centerRight, child: controls),
@@ -456,32 +433,6 @@ class _Toolbar extends StatelessWidget {
         'year' => 'Year',
         _ => key,
       };
-}
-
-class _ToolbarTitle extends StatelessWidget {
-  const _ToolbarTitle();
-
-  @override
-  Widget build(BuildContext context) => const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('REPORTS',
-              style: TextStyle(
-                  fontSize: 10,
-                  letterSpacing: 0.8,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.primary)),
-          SizedBox(height: 3),
-          Text('Summary Report',
-              style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textPrimary)),
-          SizedBox(height: 3),
-          Text('Invoice count, total, cash, UPI and pending · Super admin',
-              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-        ],
-      );
 }
 
 class _PeriodChart extends StatelessWidget {

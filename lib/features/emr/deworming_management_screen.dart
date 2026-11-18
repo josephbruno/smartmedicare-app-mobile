@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
@@ -150,7 +151,7 @@ class _DewormingManagementScreenState extends State<DewormingManagementScreen> {
         context.watch<AuthSession>().hasPermission(AppPermissions.emrDewormingCreate);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         automaticallyImplyLeading: false,
         title: const Text('Deworming'),
         actions: [

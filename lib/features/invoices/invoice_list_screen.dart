@@ -1,803 +1,609 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:maran/core/messaging/app_messenger.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_services.dart';
+import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/app_tokens.dart';
+import '../../core/utils/ist.dart';
+import '../../core/utils/save_file.dart';
 import '../../core/widgets/app_date_range_picker.dart';
-import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
+import '../../core/widgets/web_page.dart';
+import '../../data/models/api_response.dart';
 import '../../data/models/invoice.dart';
-import '../../data/models/shop.dart';
-import '../reports/report_date_range.dart';
-import '../reports/report_formatters.dart';
 
+/// Invoice list — mirrors `frontend/src/pages/billing/InvoiceListPage.vue`:
+/// KPIs (total / paid / due / count), search + status + date range, sortable
+/// table with payment-mode lines and cash change under Paid, CSV export.
 class InvoiceListScreen extends StatefulWidget {
   const InvoiceListScreen({
     super.key,
     this.initialDateFrom,
     this.initialDateTo,
+    this.initialSearch,
   });
 
   /// Optional `YYYY-MM-DD` from payment report day drill-down.
   final String? initialDateFrom;
   final String? initialDateTo;
 
+  /// Prefilled search (customer detail → "View Billing").
+  final String? initialSearch;
+
   @override
   State<InvoiceListScreen> createState() => _InvoiceListScreenState();
 }
 
 class _InvoiceListScreenState extends State<InvoiceListScreen> {
-  static final _dayFmt = DateFormat('d MMM yyyy');
-  static final _monthFmt = DateFormat('MMM yyyy');
-
-  String _selectedFilter = 'all';
-  String _paymentFilter = 'all';
-  String _period = 'all';
   final _search = TextEditingController();
-  DateTime? _dateFrom;
-  DateTime? _dateTo;
-  List<Branch> _branches = [];
-  int? _selectedBranchId;
+  Timer? _debounce;
+  String _appliedSearch = '';
+  String _status = 'all';
+  String? _dateFrom;
+  String? _dateTo;
+  String? _sortBy;
+  bool _sortAsc = false;
+  int _reloadToken = 0;
+  PaginationMetaView _meta = const PaginationMetaView();
+  bool _exporting = false;
+
+  static const _statusOptions = {
+    'paid': 'Paid',
+    'partial': 'Partial',
+    'confirmed': 'Confirmed',
+    'draft': 'Draft',
+    'on_hold': 'On Hold',
+    'cancelled': 'Cancelled',
+  };
+  static const _modeLabels = {
+    'cash': 'Cash',
+    'upi': 'UPI',
+    'advance': 'Advance',
+    'card': 'Card',
+    'bank_transfer': 'Bank',
+    'cheque': 'Cheque',
+    'loyalty_points': 'Points',
+    'credit': 'Credit',
+    'other': 'Other',
+  };
+
+  static final _inr = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2);
+  static final _inrCompact = NumberFormat.compactCurrency(locale: 'en_IN', symbol: '₹', decimalDigits: 1);
 
   @override
   void initState() {
     super.initState();
-    _dateFrom = DateTime.tryParse(widget.initialDateFrom ?? '');
-    _dateTo = DateTime.tryParse(widget.initialDateTo ?? '');
-    _period = _periodFromDates(_dateFrom, _dateTo);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadBranches());
+    _dateFrom = widget.initialDateFrom;
+    _dateTo = widget.initialDateTo;
+    _appliedSearch = widget.initialSearch?.trim() ?? '';
+    _search.text = _appliedSearch;
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _search.dispose();
     super.dispose();
   }
 
-  Future<void> _loadBranches() async {
-    final auth = context.read<AuthSession>();
-    if (!auth.isSuperAdmin) return;
-    try {
-      final branches = await context.read<AppServices>().branches.list();
+  void _reload() => setState(() => _reloadToken++);
+
+  void _onSearch(String v) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
-      setState(() {
-        _branches = branches.where((branch) => branch.isActive).toList()
-          ..sort((a, b) => a.name.compareTo(b.name));
-      });
-    } catch (_) {
-      // The invoice list remains usable if branches cannot be loaded.
-    }
-  }
-
-  String _periodFromDates(DateTime? from, DateTime? to) {
-    if (from == null || to == null) return 'all';
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final a = DateTime(from.year, from.month, from.day);
-    final b = DateTime(to.year, to.month, to.day);
-    if (a == today && b == today) return 'today';
-    final monthStart = DateTime(now.year, now.month, 1);
-    if (a == monthStart &&
-        (b == today || b == DateTime(now.year, now.month + 1, 0))) {
-      return 'month';
-    }
-    if (a.day == 1 &&
-        b == DateTime(a.year, a.month + 1, 0) &&
-        a != monthStart) {
-      return 'month_pick';
-    }
-    if (a == b) return 'date';
-    return 'custom';
-  }
-
-  void _applyPeriod(String key) {
-    final range = switch (key) {
-      'today' => ReportDateRange.preset('today'),
-      'month' => ReportDateRange.preset('month'),
-      'last_month' => ReportDateRange.preset('last_month'),
-      _ => null,
-    };
-    setState(() {
-      _period = key;
-      if (key == 'all') {
-        _dateFrom = null;
-        _dateTo = null;
-      } else if (range != null) {
-        _dateFrom = range.from;
-        _dateTo = range.to;
-      }
+      _appliedSearch = v.trim();
+      _reload();
     });
   }
 
-  Future<void> _onPeriodChanged(String? value) async {
-    if (value == null) return;
-    switch (value) {
-      case 'date':
-        await _pickSingleDate();
-        return;
-      case 'month_pick':
-        await _pickMonth();
-        return;
-      case 'custom':
-        await _pickDateRange();
-        return;
-      default:
-        _applyPeriod(value);
+  bool get _hasFilters =>
+      _appliedSearch.isNotEmpty || _status != 'all' || _dateFrom != null || _sortBy != null;
+
+  void _reset() {
+    _search.clear();
+    _appliedSearch = '';
+    _status = 'all';
+    _dateFrom = null;
+    _dateTo = null;
+    _sortBy = null;
+    _sortAsc = false;
+    _reload();
+  }
+
+  void _onSort(String key) {
+    if (_sortBy == key) {
+      _sortAsc = !_sortAsc;
+    } else {
+      _sortBy = key;
+      _sortAsc = false;
     }
+    _reload();
   }
 
-  Future<void> _pickSingleDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dateFrom ?? now,
-      firstDate: DateTime(2020),
-      lastDate: now,
-      helpText: 'Filter by date',
-    );
-    if (picked == null || !mounted) return;
-    setState(() {
-      _period = 'date';
-      _dateFrom = DateTime(picked.year, picked.month, picked.day);
-      _dateTo = _dateFrom;
-    });
-  }
-
-  Future<void> _pickMonth() async {
-    final picked = await showDialog<DateTime>(
-      context: context,
-      builder: (ctx) =>
-          _MonthPickerDialog(initial: _dateFrom ?? DateTime.now()),
-    );
-    if (picked == null || !mounted) return;
-    setState(() {
-      _period = 'month_pick';
-      _dateFrom = DateTime(picked.year, picked.month, 1);
-      _dateTo = DateTime(picked.year, picked.month + 1, 0);
-    });
-  }
-
-  Future<void> _pickDateRange() async {
-    final now = DateTime.now();
+  Future<void> _pickRange() async {
+    final today = nowIst();
     final range = await showAppDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
-      lastDate: now.add(const Duration(days: 365)),
-      initialDateRange: _dateFrom != null && _dateTo != null
-          ? DateTimeRange(start: _dateFrom!, end: _dateTo!)
-          : DateTimeRange(
-              start: DateTime(now.year, now.month, 1),
-              end: now,
-            ),
+      lastDate: DateTime(today.year, today.month, today.day),
+      initialDateRange: _dateFrom == null
+          ? null
+          : DateTimeRange(start: DateTime.parse(_dateFrom!), end: DateTime.parse(_dateTo ?? _dateFrom!)),
     );
-    if (range == null || !mounted) return;
-    setState(() {
-      _period = 'custom';
-      _dateFrom = range.start;
-      _dateTo = range.end;
-    });
+    if (range == null) return;
+    final f = DateFormat('yyyy-MM-dd');
+    _dateFrom = f.format(range.start);
+    _dateTo = f.format(range.end);
+    _reload();
   }
 
-  void _clearDates() {
-    setState(() {
-      _period = 'all';
-      _dateFrom = null;
-      _dateTo = null;
-    });
+  void _onMore(String key) {
+    switch (key) {
+      case 'due':
+        _status = 'partial';
+      case 'today':
+        _dateFrom = todayIst();
+        _dateTo = todayIst();
+      case 'refresh':
+        break;
+    }
+    _reload();
   }
 
-  String? get _dateFromStr => _ymd(_dateFrom);
-
-  String? get _dateToStr => _ymd(_dateTo);
-
-  String? _ymd(DateTime? d) {
-    if (d == null) return null;
-    return DateFormat('yyyy-MM-dd').format(DateTime(d.year, d.month, d.day));
-  }
-
-  InputDecoration _filterDec(String label) => InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(fontSize: 12),
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      );
-
-  Widget _filterDropdown<T>({
-    required double width,
-    required T value,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
-    required String label,
+  Future<({List<Invoice> items, PaginationMeta? meta})> _load({
+    required int page,
+    required int perPage,
+    bool withStats = true,
   }) {
-    return SizedBox(
-      width: width,
-      child: AppDropdownButtonFormField<T>(
-        value: value,
-        isDense: true,
-        style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary),
-        decoration: _filterDec(label),
-        items: items,
-        onChanged: onChanged,
-      ),
-    );
+    final auth = context.read<AuthSession>();
+    return context.read<AppServices>().billing.listPaginated(
+          page: page,
+          perPage: perPage,
+          status: _status,
+          search: _appliedSearch,
+          dateFrom: _dateFrom,
+          dateTo: _dateTo,
+          branchId: auth.currentBranchId,
+          sortBy: _sortBy,
+          sortAsc: _sortAsc,
+          withStats: withStats,
+        );
   }
 
-  Widget? _periodSummaryButton() {
-    if (_dateFrom == null || _dateTo == null) return null;
-    if (_period == 'today' || _period == 'month' || _period == 'last_month') {
-      return null;
-    }
-    final VoidCallback onPressed;
-    final String label;
-    if (_period == 'date' || _dateFromStr == _dateToStr) {
-      onPressed = _pickSingleDate;
-      label = _dayFmt.format(_dateFrom!);
-    } else if (_period == 'month_pick') {
-      onPressed = _pickMonth;
-      label = _monthFmt.format(_dateFrom!);
-    } else {
-      onPressed = _pickDateRange;
-      label = '${_dayFmt.format(_dateFrom!)} – ${_dayFmt.format(_dateTo!)}';
-    }
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: const Icon(Icons.date_range_outlined, size: 16),
-      label: Text(label, style: const TextStyle(fontSize: 12.5)),
-      style: OutlinedButton.styleFrom(
-        visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-      ),
-    );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'paid':
-        return AppTheme.accent;
-      case 'pending':
-      case 'unpaid':
-        return AppTheme.warning;
-      case 'cancelled':
-        return AppTheme.danger;
-      default:
-        return AppTheme.textSecondary;
-    }
-  }
-
-  Color _paymentModeColor(String mode) {
-    switch (mode.toLowerCase().trim()) {
-      case 'cash':
-        return AppTheme.primary;
-      case 'upi':
-        return const Color(0xFFEA580C);
-      default:
-        return AppTheme.textPrimary;
-    }
-  }
-
-  Widget _buildPaymentsCell(Invoice inv) {
-    if (inv.isCancelled) {
-      return const Text(
-        'Cancelled',
-        style: TextStyle(
-          color: AppTheme.danger,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    }
-    final map = inv.paymentsByMode;
-    if (map.isEmpty) {
-      return const Text(
-        '—',
-        style: TextStyle(
-          color: AppTheme.textSecondary,
-          fontSize: 12,
-        ),
-      );
-    }
-
-    String money(double v) =>
-        v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
-
-    final entries = map.entries.toList();
-    final spans = <InlineSpan>[];
-    for (var i = 0; i < entries.length; i++) {
-      final mode = entries[i].key;
-      if (i > 0) {
-        spans.add(const TextSpan(
-          text: ' · ',
-          style: TextStyle(color: AppTheme.textSecondary),
-        ));
+  Future<void> _export() async {
+    setState(() => _exporting = true);
+    try {
+      final res = await _load(page: 1, perPage: 1000, withStats: false);
+      if (res.items.isEmpty) {
+        if (mounted) AppMessenger.error(context, 'Nothing to export');
+        return;
       }
-      spans.add(TextSpan(
-        text: '${paymentModeLabel(mode)} ₹${money(entries[i].value)}',
-        style: TextStyle(
-          color: _paymentModeColor(mode),
-          fontWeight: FontWeight.w600,
-          fontSize: 10,
-        ),
-      ));
+      final saved = await saveCsv(
+        'invoices-${todayIst()}.csv',
+        const ['Invoice #', 'Date', 'Customer', 'Phone', 'Type', 'Amount', 'Paid', 'Due', 'Status'],
+        res.items.map((i) => [
+              i.invoiceNumber,
+              i.invoiceDate.length >= 10 ? i.invoiceDate.substring(0, 10) : i.invoiceDate,
+              i.customer?.name ?? 'Walk-in',
+              i.customer?.phone,
+              _title(i.type),
+              i.totalAmount.toStringAsFixed(2),
+              i.paidAmount.toStringAsFixed(2),
+              i.dueAmount.toStringAsFixed(2),
+              _title(i.status),
+            ]),
+      );
+      if (mounted && saved != null) AppMessenger.success(context, 'Exported ${res.items.length} invoices');
+    } catch (e) {
+      if (mounted) AppMessenger.error(context, 'Export failed: $e');
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _printPdf(Invoice inv) async {
+    try {
+      final bytes = await context.read<AppServices>().billing.getPdfBytes(inv.id);
+      if (bytes.isEmpty) throw Exception('empty PDF');
+      await Printing.layoutPdf(
+        name: inv.invoiceNumber,
+        onLayout: (_) async => Uint8List.fromList(bytes),
+      );
+    } catch (e) {
+      if (mounted) AppMessenger.error(context, 'Could not load the invoice PDF: $e');
+    }
+  }
+
+  void _rowMenu(String key, Invoice inv) {
+    switch (key) {
+      case 'return':
+        context.push('/invoices/${inv.id}/return');
+      case 'pdf':
+        _printPdf(inv);
+      case 'call':
+        launchUrl(Uri.parse('tel:${inv.customer?.phone}'));
+      case 'customer':
+        context.push('/customers/${inv.customer?.id}');
+      default:
+        context.go('/invoices/${inv.id}');
+    }
+  }
+
+  static String _title(String s) => s
+      .replaceAll('_', ' ')
+      .split(' ')
+      .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+      .join(' ');
+
+  /// One line per payment mode (merged), with cash change-return.
+  List<({String label, double change})> _paymentLines(Invoice inv) {
+    final byMode = <String, double>{};
+    for (final p in inv.payments ?? const <InvoicePayment>[]) {
+      if (p.status == 'cancelled') continue;
+      byMode[p.paymentMode] = (byMode[p.paymentMode] ?? 0) + (p.changeReturn ?? 0);
+    }
+    return [
+      for (final e in byMode.entries) (label: _modeLabels[e.key] ?? _title(e.key), change: e.value),
+    ];
+  }
+
+  List<KpiData> _kpis() {
+    final total = _meta.summaryNum('total_amount');
+    final paid = _meta.summaryNum('paid_amount', fallback: 'total_paid');
+    final due = _meta.summaryNum('due_amount', fallback: 'total_outstanding');
+    int pct(double part) => total == 0 ? 0 : (part / total * 100).round();
+    String change(String k) {
+      final c = _meta.change(k);
+      return c == null ? '— vs last month' : '${c >= 0 ? '▲' : '▼'} ${c.abs()}% vs last month';
     }
 
-    return Text.rich(
-      TextSpan(children: spans),
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-    );
+    return [
+      KpiData(
+          label: 'Total Amount',
+          value: _inrCompact.format(total),
+          icon: Icons.shopping_bag_outlined,
+          tone: KpiTone.purple,
+          sub: change('total'),
+          subUp: (_meta.change('total') ?? 0) > 0,
+          series: _meta.series('total', last: 7)),
+      KpiData(
+          label: 'Paid Amount',
+          value: _inrCompact.format(paid),
+          icon: Icons.event_available_outlined,
+          tone: KpiTone.green,
+          sub: '${pct(paid)}% of total amount',
+          series: _meta.series('paid')),
+      KpiData(
+          label: 'Due Amount',
+          value: _inrCompact.format(due),
+          icon: Icons.schedule_outlined,
+          tone: KpiTone.orange,
+          sub: '${pct(due)}% of total amount',
+          series: _meta.series('due')),
+      KpiData(
+          label: 'Total Invoices',
+          value: '${_meta.total}',
+          icon: Icons.description,
+          tone: KpiTone.blue,
+          sub: change('invoices'),
+          subUp: (_meta.change('invoices') ?? 0) > 0,
+          series: _meta.series('invoices', last: 7)),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
-    final services = context.read<AppServices>();
-    final isSuperAdmin = context.watch<AuthSession>().isSuperAdmin;
-    final periodSummary = _periodSummaryButton();
-    final branchValue =
-        _branches.any((branch) => branch.id == _selectedBranchId)
-            ? _selectedBranchId
-            : null;
+    final auth = context.watch<AuthSession>();
+    final canCreate = auth.hasPermission(AppPermissions.invoicesCreate);
+    final rangeLabel = _dateFrom == null
+        ? 'Start Date → End Date'
+        : '${formatDateIst(_dateFrom)} → ${formatDateIst(_dateTo ?? _dateFrom)}';
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
-        children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _search,
-                        style: const TextStyle(fontSize: 13),
-                        decoration: const InputDecoration(
-                          hintText:
-                              'Search invoice #, customer name or mobile…',
-                          hintStyle: TextStyle(fontSize: 13),
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          prefixIcon: Icon(Icons.search, size: 18),
-                        ),
-                        textInputAction: TextInputAction.search,
-                        onSubmitted: (_) => setState(() {}),
-                        onChanged: (_) {
-                          if (_search.text.trim().isEmpty) setState(() {});
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: () => setState(() {}),
-                      style: FilledButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      child: const Text('Search',
-                          style: TextStyle(fontSize: 12.5)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (isSuperAdmin && _branches.isNotEmpty)
-                      _filterDropdown<int?>(
-                        width: 190,
-                        label: 'Branch',
-                        value: branchValue,
-                        items: [
-                          const DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text('All branches'),
-                          ),
-                          ..._branches.map(
-                            (branch) => DropdownMenuItem<int?>(
-                              value: branch.id,
-                              child: Text(
-                                branch.name,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setState(() => _selectedBranchId = value);
-                        },
-                      ),
-                    _filterDropdown<String>(
-                      width: 130,
-                      label: 'Status',
-                      value: _selectedFilter,
-                      items: const [
-                        DropdownMenuItem(value: 'all', child: Text('All')),
-                        DropdownMenuItem(value: 'paid', child: Text('Paid')),
-                        DropdownMenuItem(
-                            value: 'unpaid', child: Text('Unpaid')),
-                        DropdownMenuItem(
-                            value: 'cancelled', child: Text('Cancelled')),
-                      ],
-                      onChanged: (v) {
-                        if (v == null) return;
-                        setState(() => _selectedFilter = v);
-                      },
-                    ),
-                    _filterDropdown<String>(
-                      width: 120,
-                      label: 'Payment',
-                      value: _paymentFilter,
-                      items: const [
-                        DropdownMenuItem(value: 'all', child: Text('All')),
-                        DropdownMenuItem(value: 'cash', child: Text('Cash')),
-                        DropdownMenuItem(value: 'upi', child: Text('UPI')),
-                      ],
-                      onChanged: (v) {
-                        if (v == null) return;
-                        setState(() => _paymentFilter = v);
-                      },
-                    ),
-                    _filterDropdown<String>(
-                      width: 150,
-                      label: 'Period',
-                      value: _period,
-                      items: const [
-                        DropdownMenuItem(
-                            value: 'all', child: Text('All dates')),
-                        DropdownMenuItem(value: 'today', child: Text('Today')),
-                        DropdownMenuItem(
-                            value: 'month', child: Text('This month')),
-                        DropdownMenuItem(
-                            value: 'last_month', child: Text('Last month')),
-                        DropdownMenuItem(
-                            value: 'date', child: Text('Pick date')),
-                        DropdownMenuItem(
-                            value: 'month_pick', child: Text('Pick month')),
-                        DropdownMenuItem(
-                            value: 'custom', child: Text('Custom range')),
-                      ],
-                      onChanged: _onPeriodChanged,
-                    ),
-                    if (periodSummary != null) periodSummary,
-                    if (_dateFrom != null)
-                      IconButton(
-                        tooltip: 'Clear dates',
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        constraints:
-                            const BoxConstraints(minWidth: 32, minHeight: 32),
-                        onPressed: _clearDates,
-                        icon: const Icon(Icons.clear, size: 18),
-                      ),
-                  ],
-                ),
-              ],
-            ),
+      backgroundColor: AppTokens.bgSecondary,
+      body: WebPageScaffold(
+        title: 'Invoices',
+        subtitle:
+            'Manage and track all clinic invoices · ${auth.currentShop?.name ?? 'Clinic'} - ${auth.currentBranch?.name ?? 'Main Branch'}',
+        icon: Icons.description_outlined,
+        actions: [
+          OutlinedButton.icon(
+            onPressed: _exporting ? null : _export,
+            icon: const Icon(Icons.download_outlined, size: 18),
+            label: Text(_exporting ? 'Exporting…' : 'Export'),
           ),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-          Expanded(
-            child: AppPaginatedTable<Invoice>(
-              key: ValueKey(
-                '$_selectedBranchId-$_selectedFilter-$_paymentFilter-$_period-${_search.text}-$_dateFromStr-$_dateToStr',
-              ),
-              emptyMessage: 'No invoices found for this filter.',
-              headerFontSize: 9,
-              cellFontSize: 12,
-              loadPage: ({required page, required perPage}) =>
-                  services.billing.listPaginated(
-                page: page,
-                perPage: perPage,
-                status: _selectedFilter,
-                search:
-                    _search.text.trim().isNotEmpty ? _search.text.trim() : null,
-                dateFrom: _dateFromStr,
-                dateTo: _dateToStr,
-                paymentMode: _paymentFilter,
-                branchId: isSuperAdmin ? branchValue : null,
-              ),
-              onRowTap: (inv) => context.go('/invoices/${inv.id}'),
-              columns: [
-                TableColumnDef(
-                  label: 'Invoice #',
-                  flex: 1.2,
-                  cellBuilder: (c, inv) => Text(
-                    inv.displayInvoiceNumber,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
+          if (canCreate) FilledButton(onPressed: () => context.go('/pos'), child: const Text('New Invoice')),
+        ],
+        kpis: _kpis(),
+        filters: FilterCard(
+          searchController: _search,
+          searchHint: 'Search invoice #, customer name or phone...',
+          onSearchChanged: _onSearch,
+          filters: [
+            FilterSelect<String>(
+              hint: 'All Status',
+              options: _statusOptions,
+              value: _status == 'all' ? null : _status,
+              onChanged: (v) {
+                _status = v ?? 'all';
+                _reload();
+              },
+            ),
+          ],
+          trailing: [
+            SizedBox(
+              width: 260,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: _pickRange,
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.date_range_outlined, size: 18),
+                    suffixIcon: _dateFrom == null
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close, size: 16),
+                            onPressed: () {
+                              _dateFrom = null;
+                              _dateTo = null;
+                              _reload();
+                            },
+                          ),
                   ),
-                ),
-                TableColumnDef(
-                  label: 'Customer',
-                  flex: 1.4,
-                  cellBuilder: (c, inv) => Text(
-                    inv.customer?.name ?? 'Walk-in',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                if (isSuperAdmin)
-                  TableColumnDef(
-                    label: 'Branch',
-                    flex: 1.3,
-                    cellBuilder: (c, inv) => Text(
-                      inv.branchName,
+                  child: Text(rangeLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                TableColumnDef(
-                  label: 'Date',
-                  flex: 1,
-                  cellBuilder: (c, inv) => Text(
-                    inv.displayDate,
-                    style: const TextStyle(fontSize: 12),
-                  ),
+                      style: TextStyle(
+                          fontSize: 14, color: _dateFrom == null ? AppTokens.placeholder : AppTokens.text1)),
                 ),
-                TableColumnDef(
-                  label: 'Status',
-                  flex: 0.9,
-                  align: TextAlign.center,
-                  cellBuilder: (c, inv) {
-                    final color = _getStatusColor(inv.status);
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        inv.status.toUpperCase(),
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                TableColumnDef(
-                  label: 'Amount',
-                  flex: 1,
-                  align: TextAlign.right,
-                  cellBuilder: (c, inv) => Text(
-                    '₹${inv.totalAmount.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                TableColumnDef(
-                  label: 'Payments',
-                  flex: 1.5,
-                  cellBuilder: (c, inv) => _buildPaymentsCell(inv),
-                ),
-                TableColumnDef(
-                  label: 'Cash recv',
-                  flex: 1,
-                  align: TextAlign.right,
-                  cellBuilder: (c, inv) {
-                    final cash = inv.cashReceivedTotal;
-                    if (cash == null || cash <= 0.009) {
-                      return const Text(
-                        '',
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 12,
-                        ),
-                      );
-                    }
-                    return Text(
-                      '₹${cash.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    );
-                  },
-                ),
-                TableColumnDef(
-                  label: 'Change',
-                  flex: 0.9,
-                  align: TextAlign.right,
-                  cellBuilder: (c, inv) {
-                    final change = inv.changeReturnTotal;
-                    if (change == null || change <= 0.009) {
-                      return const Text(
-                        '',
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 12,
-                        ),
-                      );
-                    }
-                    return Text(
-                      '₹${change.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.accent,
-                        fontSize: 12,
-                      ),
-                    );
-                  },
-                ),
-                TableColumnDef(
-                  label: 'Balance due',
-                  flex: 1,
-                  align: TextAlign.right,
-                  cellBuilder: (c, inv) {
-                    if (!inv.hasBalanceDue) {
-                      return const Text(
-                        '',
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 12,
-                        ),
-                      );
-                    }
-                    return Text(
-                      '₹${inv.dueAmount.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.warning,
-                        fontSize: 12,
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MonthPickerDialog extends StatefulWidget {
-  const _MonthPickerDialog({required this.initial});
-
-  final DateTime initial;
-
-  @override
-  State<_MonthPickerDialog> createState() => _MonthPickerDialogState();
-}
-
-class _MonthPickerDialogState extends State<_MonthPickerDialog> {
-  static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  late int _year;
-  late int _month;
-
-  @override
-  void initState() {
-    super.initState();
-    _year = widget.initial.year;
-    _month = widget.initial.month;
-  }
-
-  bool _isFuture(int month) {
-    final now = DateTime.now();
-    return DateTime(_year, month, 1).isAfter(DateTime(now.year, now.month, 1));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Filter by month'),
-      content: SizedBox(
-        width: 320,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  tooltip: 'Previous year',
-                  onPressed:
-                      _year <= 2020 ? null : () => setState(() => _year--),
-                  icon: const Icon(Icons.chevron_left),
-                ),
-                Expanded(
-                  child: Text(
-                    '$_year',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Next year',
-                  onPressed: _year >= DateTime.now().year
-                      ? null
-                      : () => setState(() => _year++),
-                  icon: const Icon(Icons.chevron_right),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            GridView.builder(
-              shrinkWrap: true,
-              itemCount: 12,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: 2.2,
               ),
-              itemBuilder: (context, i) {
-                final month = i + 1;
-                final selected = month == _month;
-                final disabled = _isFuture(month);
-                return OutlinedButton(
-                  onPressed:
-                      disabled ? null : () => setState(() => _month = month),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: selected
-                        ? AppTheme.primary.withValues(alpha: 0.12)
-                        : null,
-                    foregroundColor: selected ? AppTheme.primary : null,
-                    side: BorderSide(
-                      color:
-                          selected ? AppTheme.primary : const Color(0xFFCBD5E1),
-                    ),
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'More options',
+              onSelected: _onMore,
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'due', child: Text('Only unpaid / due')),
+                PopupMenuItem(value: 'today', child: Text('Only today')),
+                PopupMenuDivider(),
+                PopupMenuItem(value: 'refresh', child: Text('Refresh')),
+              ],
+              child: const TableIconButton(icon: Icons.more_vert, plain: true, onPressed: null),
+            ),
+          ],
+          onReset: _reset,
+          resetEnabled: _hasFilters,
+        ),
+        body: AppPaginatedTable<Invoice>(
+          key: ValueKey('invoices-$_reloadToken-${auth.currentBranchId}'),
+          perPage: 10,
+          emptyMessage: 'No invoices found',
+          loadPage: ({required page, required perPage}) => _load(page: page, perPage: perPage),
+          onLoaded: (m) {
+            if (mounted) setState(() => _meta = PaginationMetaView(m));
+          },
+          sortKey: _sortBy,
+          sortAsc: _sortAsc,
+          onSort: _onSort,
+          onRowTap: (inv) => context.go('/invoices/${inv.id}'),
+          mobileItemBuilder: (context, inv) => _InvoiceTile(
+            invoice: inv,
+            money: _inr.format,
+            onTap: () => context.go('/invoices/${inv.id}'),
+          ),
+          columns: [
+            TableColumnDef(
+              label: 'Invoice #',
+              flex: 1.4,
+              minWidth: 140,
+              sortKey: 'invoice_number',
+              cellBuilder: (_, inv) => Text(inv.invoiceNumber,
+                  style: const TextStyle(color: AppTokens.primary, fontWeight: FontWeight.w600)),
+            ),
+            TableColumnDef(
+              label: 'Date',
+              flex: 1.1,
+              minWidth: 110,
+              sortKey: 'invoice_date',
+              cellBuilder: (_, inv) => Text(formatDateIst(inv.invoiceDate)),
+            ),
+            TableColumnDef(
+              label: 'Customer',
+              flex: 2,
+              minWidth: 190,
+              sortKey: 'customer',
+              cellBuilder: (_, inv) => Row(children: [
+                InitialsAvatar(inv.customer?.name ?? 'Walk In', size: 34),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(inv.customer?.name ?? 'Walk-in',
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      if ((inv.customer?.phone ?? '').isNotEmpty)
+                        Text(inv.customer!.phone, style: const TextStyle(fontSize: 12, color: AppTokens.text3)),
+                    ],
                   ),
-                  child: Text(_months[i]),
+                ),
+              ]),
+            ),
+            TableColumnDef(
+              label: 'Amount (₹)',
+              flex: 1.2,
+              minWidth: 120,
+              align: TextAlign.right,
+              sortKey: 'total_amount',
+              cellBuilder: (_, inv) =>
+                  Text(_inr.format(inv.totalAmount), style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            TableColumnDef(
+              label: 'Paid (₹)',
+              flex: 1.4,
+              minWidth: 140,
+              align: TextAlign.right,
+              sortKey: 'paid_amount',
+              cellBuilder: (_, inv) => Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_inr.format(inv.paidAmount),
+                      style: const TextStyle(color: AppTokens.success, fontWeight: FontWeight.w600)),
+                  for (final line in _paymentLines(inv))
+                    Text.rich(
+                      TextSpan(children: [
+                        TextSpan(text: line.label, style: const TextStyle(color: AppTokens.text3)),
+                        if (line.change > 0)
+                          TextSpan(
+                              text: '  Change ${_inr.format(line.change)}',
+                              style: const TextStyle(color: AppTokens.warning, fontWeight: FontWeight.w600)),
+                      ]),
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                ],
+              ),
+            ),
+            TableColumnDef(
+              label: 'Due (₹)',
+              flex: 1.1,
+              minWidth: 110,
+              align: TextAlign.right,
+              sortKey: 'due_amount',
+              cellBuilder: (_, inv) {
+                final cancelled = inv.status == 'cancelled';
+                return Text(
+                  cancelled ? '—' : _inr.format(inv.dueAmount),
+                  style: TextStyle(
+                    color: !cancelled && inv.dueAmount > 0 ? AppTokens.error : AppTokens.text3,
+                    fontWeight: FontWeight.w600,
+                  ),
                 );
               },
+            ),
+            TableColumnDef(
+              label: 'Status',
+              flex: 1.1,
+              minWidth: 120,
+              sortKey: 'status',
+              cellBuilder: (_, inv) => _statusPill(inv.status),
+            ),
+            TableColumnDef(
+              label: 'Actions',
+              flex: 1,
+              minWidth: 100,
+              cellBuilder: (_, inv) => Row(mainAxisSize: MainAxisSize.min, children: [
+                TableIconButton(
+                    icon: Icons.visibility_outlined, tooltip: 'View', onPressed: () => context.go('/invoices/${inv.id}')),
+                const SizedBox(width: 8),
+                PopupMenuButton<String>(
+                  tooltip: 'More actions for ${inv.invoiceNumber}',
+                  onSelected: (k) => _rowMenu(k, inv),
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'view', child: Text('View details')),
+                    if (inv.type == 'tax_invoice' &&
+                        const ['paid', 'partial', 'confirmed'].contains(inv.status) &&
+                        canCreate)
+                      const PopupMenuItem(value: 'return', child: Text('Sale return')),
+                    const PopupMenuItem(value: 'pdf', child: Text('Print / PDF')),
+                    if ((inv.customer?.phone ?? '').isNotEmpty) ...[
+                      const PopupMenuDivider(),
+                      const PopupMenuItem(value: 'call', child: Text('Call customer')),
+                    ],
+                    if (inv.customer != null) const PopupMenuItem(value: 'customer', child: Text('Open customer')),
+                  ],
+                  child: const TableIconButton(icon: Icons.more_vert, plain: true, onPressed: null),
+                ),
+              ]),
             ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+    );
+  }
+}
+
+Widget _statusPill(String status) {
+  final (tone, icon) = switch (status) {
+    'paid' => (PillTone.green, Icons.check_circle),
+    'partial' => (PillTone.amber, Icons.timelapse),
+    'confirmed' => (PillTone.blue, Icons.verified_outlined),
+    'cancelled' => (PillTone.red, Icons.cancel),
+    'on_hold' => (PillTone.purple, Icons.pause_circle_outline),
+    _ => (PillTone.grey, Icons.edit_note),
+  };
+  final label = status.replaceAll('_', ' ');
+  return StatusPill(label.isEmpty ? '—' : '${label[0].toUpperCase()}${label.substring(1)}', tone: tone, icon: icon);
+}
+
+class _InvoiceTile extends StatelessWidget {
+  const _InvoiceTile({required this.invoice, required this.money, required this.onTap});
+
+  final Invoice invoice;
+  final String Function(num) money;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final inv = invoice;
+    final cancelled = inv.status == 'cancelled';
+    Widget amount(String label, String value, Color color) => Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: const TextStyle(fontSize: 11, color: AppTokens.text3)),
+            Text(value, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: color)),
+          ]),
+        );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14), side: const BorderSide(color: AppTokens.border)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                Expanded(
+                  child: Text(inv.invoiceNumber,
+                      style: const TextStyle(color: AppTokens.primary, fontWeight: FontWeight.w700)),
+                ),
+                _statusPill(inv.status),
+              ]),
+              const SizedBox(height: 10),
+              Row(children: [
+                InitialsAvatar(inv.customer?.name ?? 'Walk In', size: 34),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(inv.customer?.name ?? 'Walk-in', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text(formatDateIst(inv.invoiceDate), style: const TextStyle(fontSize: 12, color: AppTokens.text3)),
+                  ]),
+                ),
+              ]),
+              const Divider(height: 20),
+              Row(children: [
+                amount('Amount', money(inv.totalAmount), AppTokens.text1),
+                amount('Paid', money(inv.paidAmount), AppTokens.success),
+                amount('Due', cancelled ? '—' : money(inv.dueAmount),
+                    !cancelled && inv.dueAmount > 0 ? AppTokens.error : AppTokens.text3),
+              ]),
+            ]),
+          ),
         ),
-        FilledButton(
-          onPressed: _isFuture(_month)
-              ? null
-              : () => Navigator.pop(context, DateTime(_year, _month, 1)),
-          child: const Text('Apply'),
-        ),
-      ],
+      ),
     );
   }
 }

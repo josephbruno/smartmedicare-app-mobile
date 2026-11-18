@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import 'widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -142,8 +144,12 @@ class _VisitReportScreenState extends State<VisitReportScreen> {
     final crossCount = isMobile ? 2 : 4;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        title: 'Visit Report',
+        subtitle: 'View visit statistics, doctor-wise details and recent visit history for your clinic.',
+        icon: Icons.medical_services_outlined,
+        child: Column(
         children: [
           _Toolbar(
             mode: _mode,
@@ -216,6 +222,7 @@ class _VisitReportScreenState extends State<VisitReportScreen> {
                           ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -880,8 +887,6 @@ class _VisitDetailTable extends StatelessWidget {
               height: 420,
               child: AppPaginatedTable<VisitReportVisitRow>(
                 emptyMessage: 'No visits',
-                headerFontSize: 9,
-                cellFontSize: 12,
                 loadPage: ({required page, required perPage}) async {
                   final pageData = paginateList(rows, page: page, perPage: perPage);
                   return (items: pageData.items, meta: pageData.meta);

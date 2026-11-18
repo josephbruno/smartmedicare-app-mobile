@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import 'widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -90,8 +92,12 @@ class _GstReportScreenState extends State<GstReportScreen> with SingleTickerProv
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        title: 'GST Report',
+        subtitle: 'View GST summary, tax breakdown and invoice-wise details for your clinic.',
+        icon: Icons.request_page_outlined,
+        child: Column(
         children: [
           _buildToolbar(),
           Expanded(
@@ -102,6 +108,7 @@ class _GstReportScreenState extends State<GstReportScreen> with SingleTickerProv
                     : _buildContent(context),
           ),
         ],
+      ),
       ),
     );
   }
@@ -128,7 +135,6 @@ class _GstReportScreenState extends State<GstReportScreen> with SingleTickerProv
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          const Text('GST Report', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           AppDropdownButton<String>(
             value: _preset,
             items: ReportDateRange.gstPresetOptions.entries

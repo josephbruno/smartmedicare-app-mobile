@@ -2,6 +2,8 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 
+import 'theme/app_tokens.dart';
+
 /// API base URL including `/api/v1` suffix.
 /// Override at build time: `flutter run --dart-define=API_BASE_URL=https://host/api/v1`
 class AppConfig {
@@ -59,11 +61,10 @@ class AppConfig {
   static bool get isNativeMobile =>
       !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
-  /// Global text scale applied on web & desktop for readability.
-  static const double desktopTextScale = 1.35;
-
-  /// Multiplier applied to icon sizes on web & desktop.
-  static const double desktopIconScale = 1.4;
+  /// Web-matching UI zoom on web & desktop for a window [width]
+  /// (same tiers as `frontend/src/assets/main.css`). Native mobile: 1.0.
+  static double uiZoomFor(double width) =>
+      usesLargeUiScale ? AppTokens.uiZoomForWidth(width) : 1.0;
 
   /// Wider [AlertDialog] / modal dialogs on web & desktop.
   static const double desktopDialogMaxWidth = 640;

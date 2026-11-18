@@ -1,4 +1,5 @@
 import '../json_helpers.dart';
+import 'emr.dart' show PetVaccination;
 
 class Pet {
   Pet({
@@ -17,6 +18,8 @@ class Pet {
     this.age,
     this.weight,
     this.color,
+    this.imageUrl,
+    this.vaccinations,
   });
 
   final int id;
@@ -34,6 +37,10 @@ class Pet {
   final String? age;
   final double? weight;
   final String? color;
+  final String? imageUrl;
+
+  /// Present when the API embeds vaccinations (customer detail).
+  final List<PetVaccination>? vaccinations;
 
   factory Pet.fromJson(Map<String, dynamic> j) => Pet(
         id: intOrNull(j['id']) ?? 0,
@@ -51,6 +58,10 @@ class Pet {
         age: j['age']?.toString(),
         weight: numOrNull(j['weight']),
         color: j['color']?.toString(),
+        imageUrl: j['image_url']?.toString(),
+        vaccinations: j['vaccinations'] is List
+            ? listFromData(j['vaccinations'], PetVaccination.fromJson)
+            : null,
       );
 }
 
@@ -138,10 +149,22 @@ class Customer {
     required this.isActive,
     this.outstandingBalance,
     this.pets,
+    this.customerCode,
+    this.customerType,
+    this.addressLine2,
+    this.petsCount,
+    this.createdAt,
   });
 
   final int id;
   final String name;
+  final String? customerCode;
+  final String? customerType;
+  final String? addressLine2;
+
+  /// `pets_count` from the list API (falls back to [pets] length).
+  final int? petsCount;
+  final String? createdAt;
   final String? email;
   final String phone;
   final String? alternatePhone;
@@ -190,6 +213,11 @@ class Customer {
       isActive: j['is_active'] as bool? ?? true,
       outstandingBalance: numOrNull(j['outstanding_balance']),
       pets: pets,
+      customerCode: j['customer_code']?.toString(),
+      customerType: j['customer_type']?.toString(),
+      addressLine2: j['address_line_2']?.toString(),
+      petsCount: intOrNull(j['pets_count']),
+      createdAt: j['created_at']?.toString(),
     );
   }
 
@@ -242,5 +270,10 @@ class Customer {
         isActive: isActive,
         outstandingBalance: outstandingBalance ?? this.outstandingBalance,
         pets: pets,
+        customerCode: customerCode,
+        customerType: customerType,
+        addressLine2: addressLine2,
+        petsCount: petsCount,
+        createdAt: createdAt,
       );
 }

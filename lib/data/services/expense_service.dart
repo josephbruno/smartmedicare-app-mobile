@@ -21,11 +21,16 @@ class ExpenseService {
   Future<({List<Expense> items, PaginationMeta? meta})> listPaginated({
     int page = 1,
     int perPage = 20,
+    String? search,
+    Map<String, dynamic> filters = const {},
   }) async {
     try {
       final res = await _client.get('/expenses', queryParameters: {
         'page': page,
         'per_page': perPage,
+        if (search != null && search.isNotEmpty) 'search': search,
+        for (final e in filters.entries)
+          if (e.value != null && e.value.toString().isNotEmpty) e.key: e.value,
       });
       return parseEnvelopeList(res, Expense.fromJson);
     } on DioException catch (e) {
@@ -84,6 +89,26 @@ class ExpenseService {
         res,
         (data) => Expense.fromJson(Map<String, dynamic>.from(data as Map)),
       );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<Expense> update(int id, Map<String, dynamic> body) async {
+    try {
+      final res = await _client.put('/expenses/$id', data: body);
+      return parseEnvelopeData(
+        res,
+        (data) => Expense.fromJson(Map<String, dynamic>.from(data as Map)),
+      );
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> delete(int id) async {
+    try {
+      await _client.delete('/expenses/$id');
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }

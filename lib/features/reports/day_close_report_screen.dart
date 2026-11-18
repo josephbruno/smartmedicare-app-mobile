@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import 'widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -161,8 +163,12 @@ class _DayCloseReportScreenState extends State<DayCloseReportScreen> {
     final totals = report?.totals;
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        title: 'Day Close Report',
+        subtitle: 'View cash closing summary, cashier sessions, drawer movements and recent day close history.',
+        icon: Icons.summarize_outlined,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _HeaderBar(
@@ -238,6 +244,7 @@ class _DayCloseReportScreenState extends State<DayCloseReportScreen> {
                           ),
           ),
         ],
+      ),
       ),
     );
   }

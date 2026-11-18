@@ -33,10 +33,18 @@ class Expense {
     this.description,
     this.vendorName,
     this.category,
+    this.paymentMode,
+    this.referenceNumber,
+    this.rawDate,
   });
 
   final int id;
   final String expenseNumber;
+  final String? paymentMode;
+  final String? referenceNumber;
+
+  /// API `expense_date` as sent (`yyyy-MM-dd…`), for edit forms.
+  final String? rawDate;
   final double amount;
   final String expenseDate;
   final String? description;
@@ -58,6 +66,9 @@ class Expense {
       description: j['description']?.toString(),
       vendorName: j['vendor_name']?.toString(),
       category: c,
+      paymentMode: j['payment_mode']?.toString(),
+      referenceNumber: j['reference_number']?.toString(),
+      rawDate: j['expense_date']?.toString(),
     );
   }
 }

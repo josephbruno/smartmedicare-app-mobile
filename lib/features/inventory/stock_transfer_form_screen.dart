@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:go_router/go_router.dart';
@@ -65,7 +66,7 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       setState(() {
         _branches = (results[0] as List<Branch>)
-            .where((b) => b.id != branchId)
+            .where((b) => b.id != branchId && b.isActive)
             .toList();
         _products = products;
         _loading = false;
@@ -201,9 +202,9 @@ class _StockTransferFormScreenState extends State<StockTransferFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         automaticallyImplyLeading: false,
-        title: const Text('New Stock Request'),
+        title: const Text('New Stock Transfer'),
         elevation: 1,
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.textPrimary,

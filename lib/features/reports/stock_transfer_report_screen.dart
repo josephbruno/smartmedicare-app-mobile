@@ -1,3 +1,5 @@
+import '../../core/theme/app_tokens.dart';
+import 'widgets/report_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -98,8 +100,12 @@ class _StockTransferReportScreenState extends State<StockTransferReportScreen> {
     final services = context.read<AppServices>();
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
+      backgroundColor: AppTokens.bgSecondary,
+      body: ReportFrame(
+        title: 'Stock Transfer Report',
+        subtitle: 'Stock moved between branches over a period.',
+        icon: Icons.compare_arrows_outlined,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildToolbar(),
@@ -218,6 +224,7 @@ class _StockTransferReportScreenState extends State<StockTransferReportScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

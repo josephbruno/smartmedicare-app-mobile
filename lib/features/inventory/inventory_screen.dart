@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,9 @@ import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/app_tokens.dart';
+import '../../core/widgets/web_page.dart';
+import '../../data/models/api_response.dart';
 import '../../core/widgets/app_dropdown.dart';
 import '../../core/widgets/paginated_data_table.dart';
 import '../../core/widgets/table_column_def.dart';
@@ -33,7 +37,8 @@ class _InventoryScreenState extends State<InventoryScreen>
   Timer? _logSearchDebounce;
 
   int? _categoryId;
-  String _stockFilter = 'all'; // all | low
+  String _stockFilter = 'all'; // all | ok | low | out
+  PaginationMetaView _meta = const PaginationMetaView();
   String _logTypeFilter = 'all'; // all | adjustment | damage | expiry
   List<Category> _categories = [];
 
@@ -261,14 +266,16 @@ class _InventoryScreenState extends State<InventoryScreen>
           ),
           const SizedBox(width: 10),
           SizedBox(
-            width: 140,
+            width: 170,
             child: AppDropdownButtonFormField<String>(
               value: _stockFilter,
               isDense: true,
               decoration: _filterDec.copyWith(labelText: 'Stock'),
               items: const [
-                DropdownMenuItem(value: 'all', child: Text('All stock')),
-                DropdownMenuItem(value: 'low', child: Text('Low stock')),
+                DropdownMenuItem(value: 'all', child: Text('All Stock Status')),
+                DropdownMenuItem(value: 'ok', child: Text('Adequate')),
+                DropdownMenuItem(value: 'low', child: Text('Low Stock')),
+                DropdownMenuItem(value: 'out', child: Text('Out of Stock')),
               ],
               onChanged: (v) {
                 if (v == null) return;
@@ -372,9 +379,50 @@ class _InventoryScreenState extends State<InventoryScreen>
         search.length >= 2 || _categoryId != null || _stockFilter != 'all';
     final hasLogFilters = logSearch.length >= 2 || _logTypeFilter != 'all';
 
+    final value = NumberFormat.decimalPattern('en_IN').format(_meta.stat('stock_value').round());
+    void setStock(String f) {
+      _stockFilter = f;
+      _tabs.animateTo(0);
+      _reloadStock();
+    }
+
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
+      backgroundColor: AppTokens.bgSecondary,
+      body: WebPageScaffold(
+        title: 'Inventory',
+        subtitle: 'Manage your products, stock levels and inventory value.',
+        icon: Icons.layers_outlined,
+        breadcrumbs: const [Crumb('Inventory'), Crumb('Inventory')],
+        actions: [
+          if (auth.hasPermission(AppPermissions.productsCreate))
+            FilledButton(onPressed: () => context.push('/products/new'), child: const Text('Add Product')),
+        ],
+        filters: Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: LayoutBuilder(builder: (context, c) {
+            final cols = c.maxWidth < 768 ? 2 : 4;
+            final w = (c.maxWidth - 12 * (cols - 1)) / cols;
+            final cards = <(KpiData, String?)>[
+              (KpiData(label: 'Total Products', value: '${_meta.stat('total').toInt()}', icon: Icons.inventory_2_outlined, sub: 'All stock-tracked products'), 'all'),
+              (KpiData(label: 'Low Stock', value: '${_meta.stat('low_stock').toInt()}', icon: Icons.layers_outlined, tone: KpiTone.green, sub: 'At or below reorder level'), 'low'),
+              (KpiData(label: 'Out of Stock', value: '${_meta.stat('out_of_stock').toInt()}', icon: Icons.warning_amber_outlined, tone: KpiTone.red, sub: 'Products unavailable'), 'out'),
+              (KpiData(label: 'Inventory Value', value: '₹ $value', icon: Icons.currency_rupee, tone: KpiTone.purple, sub: 'Total stock value (at purchase price)'), null),
+            ];
+            return Wrap(spacing: 12, runSpacing: 12, children: [
+              for (final (k, f) in cards)
+                SizedBox(
+                  width: w,
+                  child: f == null
+                      ? KpiCard(data: k)
+                      : MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(onTap: () => setStock(f), child: KpiCard(data: k)),
+                        ),
+                ),
+            ]);
+          }),
+        ),
+        body: Column(
         children: [
           Material(
             color: Colors.white,
@@ -403,16 +451,18 @@ class _InventoryScreenState extends State<InventoryScreen>
                         emptyMessage: hasStockFilters
                             ? 'No products match your filters.'
                             : 'No stockable products for this branch.',
-                        headerFontSize: 9,
-                        cellFontSize: 12,
                         loadPage: ({required page, required perPage}) =>
                             services.inventory.listPaginated(
                               page: page,
                               perPage: perPage,
                               search: search.length >= 2 ? search : null,
                               categoryId: _categoryId,
-                              lowStock: _stockFilter == 'low' ? true : null,
+                              stockStatus: _stockFilter == 'all' ? null : _stockFilter,
+                              withStats: true,
                             ),
+                        onLoaded: (m) {
+                          if (mounted && m?.stats != null) setState(() => _meta = PaginationMetaView(m));
+                        },
                         onRowTap: canAdjust ? _openAdjust : null,
                         columns: [
                           const TableColumnDef(label: 'Product', flex: 2, cellBuilder: _productCell),
@@ -472,8 +522,6 @@ class _InventoryScreenState extends State<InventoryScreen>
                         emptyMessage: hasLogFilters
                             ? 'No adjustment logs match your filters.'
                             : 'No stock adjustments logged yet.',
-                        headerFontSize: 9,
-                        cellFontSize: 12,
                         loadPage: ({required page, required perPage}) =>
                             services.inventory.movementsPaginated(
                               page: page,
@@ -503,6 +551,7 @@ class _InventoryScreenState extends State<InventoryScreen>
             ),
           ),
         ],
+      ),
       ),
     );
   }

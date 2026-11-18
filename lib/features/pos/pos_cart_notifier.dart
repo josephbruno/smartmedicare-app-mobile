@@ -420,6 +420,18 @@ class PosCartNotifier extends ChangeNotifier {
       );
     }
 
+    // Priced investigations are billed too (web POSPage / cart parity).
+    for (final inv in visit.apiInvestigationItems ?? const <VisitInvestigationItem>[]) {
+      if (inv.unitPrice <= 0) continue;
+      await addLine(
+        productId: inv.productId,
+        label: inv.name,
+        quantity: 1,
+        unitPrice: inv.unitPrice,
+        mergeExisting: false,
+      );
+    }
+
     for (final m in visit.medicines ?? const <VisitMedicine>[]) {
       await addLine(
         productId: m.productId,

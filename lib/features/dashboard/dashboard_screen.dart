@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/utils/ist.dart';
+import '../../core/theme/app_tokens.dart';
 import '../../app_services.dart';
 import '../../core/services/permission_service.dart';
 import '../../core/session/auth_session.dart';
@@ -502,6 +504,8 @@ class _ReferenceDesktopDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthSession>();
+    final firstName = (auth.user?.name ?? '').trim().split(RegExp(r'\s+')).first;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         Container(
@@ -513,21 +517,21 @@ class _ReferenceDesktopDashboard extends StatelessWidget {
             child: const Icon(Icons.dashboard_customize_outlined,
                 color: AppTheme.primary, size: 20)),
         const SizedBox(width: 12),
-        const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Dashboard',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-          SizedBox(height: 2),
-          Text('👋 Welcome back, Super!',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-          SizedBox(height: 2),
-          Text("Here’s what’s happening with your clinic today.",
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Dashboard',
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: AppTokens.text1)),
+          const SizedBox(height: 2),
+          Text('👋 Welcome back, ${firstName.isEmpty ? 'there' : firstName}!',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          const Text("Here’s what’s happening with your clinic today.",
               style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
         ]),
         const Spacer(),
         OutlinedButton.icon(
             onPressed: () {},
             icon: const Icon(Icons.calendar_month_outlined, size: 15),
-            label: Text(DateFormat('MMM d, y').format(DateTime.now())),
+            label: Text(DateFormat('MMM d, y').format(nowIst())),
             style: OutlinedButton.styleFrom(
                 minimumSize: const Size(0, 40),
                 foregroundColor: AppTheme.textPrimary,
@@ -542,14 +546,19 @@ class _ReferenceDesktopDashboard extends StatelessWidget {
             decoration: BoxDecoration(
                 color: AppTheme.primary,
                 borderRadius: BorderRadius.circular(24)),
-            child: const Text('All Branches Overview',
-                style: TextStyle(
+            child: Text(
+                auth.isSuperAdmin
+                    ? 'All Branches Overview'
+                    : (auth.currentBranch?.name ?? 'Branch Dashboard'),
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13,
                     fontWeight: FontWeight.w700))),
         const SizedBox(width: 16),
         Text(
-            data.branches != null && data.branches!.isNotEmpty
+            !auth.isSuperAdmin
+                ? 'Showing stats for the current branch'
+                : data.branches != null && data.branches!.isNotEmpty
                 ? 'Combined totals + per-branch chart (${data.branches!.length} branches)'
                 : 'Combined totals + per-branch chart',
             style: const TextStyle(color: Color(0xFF1D4ED8), fontSize: 13)),

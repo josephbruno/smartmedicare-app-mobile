@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -36,10 +37,15 @@ class SettingsScreen extends StatelessWidget {
         final loyalty = s.settings ?? ShopSettings();
 
         return ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 768 ? 12 : 16),
           children: [
-            Text(s.name, style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 8),
+            if (MediaQuery.sizeOf(context).width >= 768)
+              const PageBreadcrumbs(items: [Crumb('Admin'), Crumb('Settings')]),
+            PageHeader(
+              title: 'Settings',
+              subtitle: s.name,
+              icon: Icons.settings_outlined,
+            ),
             Card(
               child: Column(
                 children: [

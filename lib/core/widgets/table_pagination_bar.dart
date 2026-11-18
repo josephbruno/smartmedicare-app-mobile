@@ -31,49 +31,92 @@ class TablePaginationBar extends StatelessWidget {
     final to = total == 0 ? 0 : (from + perPage - 1).clamp(0, total);
     final compact = ResponsiveLayout.isMobile(context);
 
-    Widget pageBtn({
-      required String tooltip,
-      required IconData icon,
-      required VoidCallback? onPressed,
+    // Web pager (`cl-pager`): ‹ 1 … 4 5 6 … 12 ›, 34px boxes, active = blue.
+    Widget box({
+      required Widget child,
+      VoidCallback? onTap,
+      bool active = false,
+      String? tooltip,
     }) {
-      return IconButton(
-        tooltip: tooltip,
-        onPressed: onPressed,
-        visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-        iconSize: 18,
-        icon: Icon(icon),
-      );
-    }
-
-    final pageControls = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        pageBtn(
-          tooltip: 'Previous page',
-          icon: Icons.chevron_left_rounded,
-          onPressed: current > 1 ? () => onPageChanged(current - 1) : null,
+      final w = Material(
+        color: active ? AppTheme.primary : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+              color: active ? AppTheme.primary : const Color(0xFFE2E8F0)),
         ),
-        Text(
-          compact ? '$current / $last' : 'Page $current of $last',
-          style: TextStyle(
-            fontSize: compact ? 11 : 12,
-            fontWeight: FontWeight.w600,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+                minWidth: compact ? 30 : 34, minHeight: compact ? 30 : 34),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Center(
+                child: Opacity(
+                  opacity: onTap == null && !active ? 0.45 : 1,
+                  child: DefaultTextStyle.merge(
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: active ? Colors.white : const Color(0xFF334155),
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                    child: IconTheme.merge(
+                      data: const IconThemeData(
+                          size: 18, color: Color(0xFF334155)),
+                      child: child,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
-        pageBtn(
+      );
+      return tooltip == null ? w : Tooltip(message: tooltip, child: w);
+    }
+
+    // Window of page numbers around the current page.
+    final pages = <int?>[]; // null = gap
+    final window = compact ? 0 : 1;
+    for (var p = 1; p <= last; p++) {
+      if (p == 1 || p == last || (p - current).abs() <= window) {
+        pages.add(p);
+      } else if (pages.isNotEmpty && pages.last != null) {
+        pages.add(null);
+      }
+    }
+
+    final pageControls = Wrap(
+      spacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        box(
+          tooltip: 'Previous page',
+          onTap: current > 1 ? () => onPageChanged(current - 1) : null,
+          child: const Icon(Icons.chevron_left_rounded),
+        ),
+        for (final p in pages)
+          p == null
+              ? const Text('…', style: TextStyle(color: AppTheme.textSecondary))
+              : box(
+                  active: p == current,
+                  onTap: p == current ? null : () => onPageChanged(p),
+                  child: Text('$p'),
+                ),
+        box(
           tooltip: 'Next page',
-          icon: Icons.chevron_right_rounded,
-          onPressed: current < last ? () => onPageChanged(current + 1) : null,
+          onTap: current < last ? () => onPageChanged(current + 1) : null,
+          child: const Icon(Icons.chevron_right_rounded),
         ),
       ],
     );
 
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: compact ? 10 : 12,
-        vertical: 4,
+        horizontal: compact ? 10 : 14,
+        vertical: compact ? 8 : 12,
       ),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -89,9 +132,8 @@ class TablePaginationBar extends StatelessWidget {
                       ? '$from–$to of $total'
                       : 'Showing $from–$to of $total',
               style: TextStyle(
-                fontSize: compact ? 11 : 12,
-                color: AppTheme.textSecondary,
-                fontWeight: FontWeight.w500,
+                fontSize: compact ? 12 : 13,
+                color: const Color(0xFF475569),
               ),
             ),
           ),

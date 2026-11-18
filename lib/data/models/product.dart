@@ -160,6 +160,8 @@ class Category {
     this.parentId,
     required this.isActive,
     this.productsCount = 0,
+    this.productType,
+    this.description,
   });
 
   final int id;
@@ -169,6 +171,10 @@ class Category {
   final bool isActive;
   final int productsCount;
 
+  /// `product` / `medicine` / `service`, or null for all types.
+  final String? productType;
+  final String? description;
+
   factory Category.fromJson(Map<String, dynamic> j) => Category(
         id: intOrNull(j['id']) ?? 0,
         name: j['name']?.toString() ?? '',
@@ -176,6 +182,8 @@ class Category {
         parentId: intOrNull(j['parent_id']),
         isActive: j['is_active'] as bool? ?? true,
         productsCount: intOrNull(j['products_count']) ?? 0,
+        productType: j['product_type']?.toString(),
+        description: j['description']?.toString(),
       );
 }
 
@@ -185,18 +193,24 @@ class Brand {
     required this.name,
     this.slug,
     required this.isActive,
+    this.description,
+    this.productsCount = 0,
   });
 
   final int id;
   final String name;
   final String? slug;
   final bool isActive;
+  final String? description;
+  final int productsCount;
 
   factory Brand.fromJson(Map<String, dynamic> j) => Brand(
         id: intOrNull(j['id']) ?? 0,
         name: j['name']?.toString() ?? '',
         slug: j['slug']?.toString(),
         isActive: j['is_active'] as bool? ?? true,
+        description: j['description']?.toString(),
+        productsCount: intOrNull(j['products_count']) ?? 0,
       );
 }
 

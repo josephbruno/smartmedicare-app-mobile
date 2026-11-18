@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -37,9 +38,11 @@ class _ProductFormScreenState extends State<ProductFormScreen>
   final _reorder = TextEditingController(text: '5');
 
   int? _categoryId;
+  int? _brandId;
   int? _unitId;
   double _gstRate = 5;
-  String _gstType = 'exclusive';
+  // Web default (ProductFormPage.vue): prices include GST.
+  String _gstType = 'inclusive';
   bool _trackInventory = true;
   bool _hasBatch = false;
   bool _hasExpiry = false;
@@ -60,6 +63,9 @@ class _ProductFormScreenState extends State<ProductFormScreen>
     setState(() {
       _isService = type == 'service';
       _isMedicine = type == 'medicine';
+      // Categories belong to a product type; drop one that no longer fits.
+      final cat = _categories.where((c) => c.id == _categoryId).firstOrNull;
+      if (cat != null && cat.productType != null && cat.productType != type) _categoryId = null;
       if (_isService) {
         _trackInventory = false;
         _treatmentUnderCategory = null;
@@ -76,6 +82,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
   }
 
   List<Category> _categories = [];
+  List<Brand> _brands = [];
   List<Unit> _units = [];
   List<TreatmentUnderCategoryItem> _treatmentUnderCategories = [];
   List<InvestigationUnderCategoryItem> _investigationUnderCategories = [];
@@ -119,6 +126,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         _optionalList(products.listUnits()),
         _optionalList(emrMaster.listTreatmentUnderCategories()),
         _optionalList(emrMaster.listInvestigationUnderCategories()),
+        _optionalList(products.listBrands()),
       ]);
       if (!mounted) return;
       _categories = (results[0] as List<Category>).where((c) => c.isActive).toList();
@@ -126,6 +134,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       _treatmentUnderCategories = results[2] as List<TreatmentUnderCategoryItem>;
       _investigationUnderCategories =
           results[3] as List<InvestigationUnderCategoryItem>;
+      _brands = results[4] as List<Brand>;
 
       final id = widget.productId;
       if (id != null) {
@@ -154,6 +163,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
     _mrp.text = _fmtNum(p.mrp);
     _reorder.text = p.reorderLevel.toString();
     _categoryId = p.categoryId;
+    _brandId = p.brandId;
     _unitId = _nosUnitId ?? p.unitId;
     _gstRate = _gstRates.contains(p.gstRate) ? p.gstRate : 5;
     _gstType = p.gstType == 'inclusive' ? 'inclusive' : 'exclusive';
@@ -217,6 +227,11 @@ class _ProductFormScreenState extends State<ProductFormScreen>
     final purchase = double.tryParse(_purchase.text.trim());
     final selling = double.tryParse(_selling.text.trim());
     final mrp = double.tryParse(_mrp.text.trim());
+    if (_categoryId == null) {
+      AppMessenger.error(context, 'Category is required.');
+      _tabs.animateTo(0);
+      return;
+    }
     if (purchase == null || purchase < 0) {
       AppMessenger.error(context, 'Enter a valid purchase price.');
       _tabs.animateTo(1);
@@ -242,7 +257,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
         'hsn_code': _nullIfEmpty(_hsn.text),
         'description': _nullIfEmpty(_description.text),
         'category_id': _categoryId,
-        'brand_id': null,
+        'brand_id': _brandId,
         'unit_id': _nosUnitId ?? _unitId,
         'purchase_price': purchase,
         'selling_price': selling,
@@ -321,16 +336,30 @@ class _ProductFormScreenState extends State<ProductFormScreen>
       textInputAction: TextInputAction.next,
       decoration: _dec('HSN Code', hint: 'HSN code for GST'),
     );
+    // Only categories of the chosen product type (plus the saved one).
+    final typeCategories = _categories
+        .where((c) => c.productType == null || c.productType == _productType || c.id == _categoryId)
+        .toList();
     final categoryField = AppDropdownButtonFormField<int?>(
-      value: _categories.any((c) => c.id == _categoryId) ? _categoryId : null,
-      decoration: _dec('Category', hint: 'Select category'),
+      value: typeCategories.any((c) => c.id == _categoryId) ? _categoryId : null,
+      decoration: _dec('Category *', hint: 'Select category'),
       items: [
         const DropdownMenuItem<int?>(value: null, child: Text('Select category')),
-        ..._categories.map(
+        ...typeCategories.map(
           (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
         ),
       ],
       onChanged: (v) => setState(() => _categoryId = v),
+    );
+    final activeBrands = _brands.where((b) => b.isActive || b.id == _brandId).toList();
+    final brandField = AppDropdownButtonFormField<int?>(
+      value: activeBrands.any((b) => b.id == _brandId) ? _brandId : null,
+      decoration: _dec('Brand', hint: 'Select brand (optional)'),
+      items: [
+        const DropdownMenuItem<int?>(value: null, child: Text('No brand')),
+        ...activeBrands.map((b) => DropdownMenuItem(value: b.id, child: Text(b.name))),
+      ],
+      onChanged: (v) => setState(() => _brandId = v),
     );
     final descField = TextField(
       controller: _description,
@@ -348,6 +377,8 @@ class _ProductFormScreenState extends State<ProductFormScreen>
           _twoCol(skuField, barcodeField),
           const SizedBox(height: 12),
           _twoCol(hsnField, categoryField),
+          const SizedBox(height: 12),
+          _twoCol(brandField, const SizedBox.shrink()),
         ] else ...[
           skuField,
           const SizedBox(height: 12),
@@ -356,6 +387,8 @@ class _ProductFormScreenState extends State<ProductFormScreen>
           hsnField,
           const SizedBox(height: 12),
           categoryField,
+          const SizedBox(height: 12),
+          brandField,
         ],
         const SizedBox(height: 12),
         descField,
@@ -612,7 +645,7 @@ class _ProductFormScreenState extends State<ProductFormScreen>
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         automaticallyImplyLeading: false,
         title: Text(_isEdit ? 'Edit Product' : 'Add Product'),
         bottom: TabBar(

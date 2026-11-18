@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:maran/core/messaging/app_messenger.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app_services.dart';
 import '../../../core/services/permission_service.dart';
 import '../../../core/session/auth_session.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../../../core/utils/ist.dart';
+import '../../../core/widgets/web_page.dart';
 import '../../../data/models/customer.dart';
+import '../../../data/models/emr.dart' show PetVaccination;
 import '../../../data/models/invoice.dart';
-import '../../emr/emr_pet_hub.dart';
-import 'pet_form_sheet.dart';
 import 'advance_payment_sheet.dart';
 import 'collect_due_sheet.dart';
+import 'pet_form_sheet.dart';
 
-/// Reusable customer detail (list pane or full page).
+/// Customer detail — mirrors `frontend/src/pages/customers/CustomerDetailPage.vue`:
+/// header card, contact information, account balances, pets. The app also
+/// keeps the customer's invoices (with due collection) at the bottom.
 class CustomerDetailBody extends StatefulWidget {
   const CustomerDetailBody({super.key, required this.id, this.compact = false});
 
@@ -29,6 +35,7 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
   List<Invoice> _invoices = [];
   bool _invoicesLoading = false;
   String? _invoicesError;
+  final Set<int> _openVax = {};
 
   @override
   void initState() {
@@ -45,6 +52,11 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
   void _reload() {
     _future = context.read<AppServices>().customers.get(widget.id);
     _loadInvoices();
+  }
+
+  Future<void> _refresh() async {
+    setState(_reload);
+    await _future;
   }
 
   Future<void> _loadInvoices() async {
@@ -73,248 +85,205 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
   }
 
   Future<void> _openPetForm({Pet? pet}) async {
-    final saved = await showPetFormSheet(
-      context,
-      customerId: widget.id,
-      pet: pet,
-    );
-    if (saved && mounted) setState(_reload);
+    final saved = await showPetFormSheet(context, customerId: widget.id, pet: pet);
+    if (saved && mounted) await _refresh();
   }
 
-  String _petSubtitle(Pet p) {
-    final parts = <String>[
-      if (p.species != null && p.species!.isNotEmpty) p.species!,
-      if (p.breed != null && p.breed!.isNotEmpty) p.breed!,
-      if (p.gender.isNotEmpty) p.gender,
-      if (p.weight != null) '${p.weight} kg',
-      if (p.age != null && p.age!.isNotEmpty) p.age!,
-    ];
-    return parts.join(' · ');
-  }
-
-  String _addressLine(Customer c) {
-    return [
-      if (c.address != null && c.address!.isNotEmpty) c.address!,
-      if (c.city != null && c.city!.isNotEmpty) c.city!,
-      if (c.state != null && c.state!.isNotEmpty) c.state!,
-      if (c.pincode != null && c.pincode!.isNotEmpty) c.pincode!,
-    ].join(', ');
-  }
-
-  Color _invoiceStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'paid':
-        return AppTheme.accent;
-      case 'partial':
-      case 'confirmed':
-        return AppTheme.warning;
-      case 'cancelled':
-        return AppTheme.danger;
-      default:
-        return AppTheme.textSecondary;
-    }
-  }
-
-  int get _totalPointsEarned =>
-      _invoices.fold(0, (sum, i) => sum + i.loyaltyPointsEarned);
-
-  int get _totalPointsRedeemed =>
-      _invoices.fold(0, (sum, i) => sum + i.loyaltyPointsRedeemed);
-
-  Future<void> _openCollectDue({Invoice? invoice}) async {
-    final c = await _future;
+  Future<void> _openCollectDue(Customer c, {Invoice? invoice}) async {
     final open = _invoices.where((i) => i.dueAmount > 0.009).toList();
-    if (!mounted) return;
     final ok = await showCollectDueSheet(
       context,
       customer: c,
       openInvoices: open.isNotEmpty ? open : null,
       initialInvoice: invoice,
     );
-    if (ok && mounted) {
-      setState(_reload);
-      await _future;
-      await _loadInvoices();
+    if (ok && mounted) await _refresh();
+  }
+
+  Future<void> _toggleActive(Customer c) async {
+    final deactivating = c.isActive;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(deactivating ? 'Deactivate customer' : 'Activate customer'),
+        content: Text(deactivating
+            ? 'Are you sure you want to deactivate ${c.name}? They will be hidden from POS customer search.'
+            : 'Are you sure you want to activate ${c.name}? They will be available again for billing.'),
+        actions: [
+          OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(deactivating ? 'Deactivate' : 'Activate')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await context.read<AppServices>().customers.update(c.id, {'is_active': !deactivating});
+      if (!mounted) return;
+      AppMessenger.success(context, deactivating ? 'Customer deactivated' : 'Customer activated');
+      await _refresh();
+    } catch (e) {
+      if (mounted) AppMessenger.error(context, 'Failed to update customer status: $e');
     }
+  }
+
+  Future<void> _addVaccination(Pet pet) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => _VaccinationDialog(pet: pet),
+    );
+    if (ok == true && mounted) await _refresh();
+  }
+
+  String _address(Customer c) {
+    final parts = [c.address, c.addressLine2, c.city, c.state, c.pincode]
+        .where((p) => p != null && p.trim().isNotEmpty)
+        .cast<String>()
+        .toList();
+    return parts.isEmpty ? '—' : parts.join(', ');
+  }
+
+  static String _money(double v) {
+    final s = v.toStringAsFixed(2);
+    final parts = s.split('.');
+    final digits = parts[0];
+    // Indian grouping: 12,34,567.89
+    if (digits.length <= 3) return '$digits.${parts[1]}';
+    final last3 = digits.substring(digits.length - 3);
+    var rest = digits.substring(0, digits.length - 3);
+    final groups = <String>[];
+    while (rest.length > 2) {
+      groups.insert(0, rest.substring(rest.length - 2));
+      rest = rest.substring(0, rest.length - 2);
+    }
+    if (rest.isNotEmpty) groups.insert(0, rest);
+    return '${groups.join(',')},$last3.${parts[1]}';
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthSession>();
-    final canCreate = auth.hasPermission(AppPermissions.customersCreate);
     final canEdit = auth.hasPermission(AppPermissions.customersEdit);
-    final canCollect =
-        auth.hasPermission(AppPermissions.invoicesCreate) || canEdit;
+    final canCreate = auth.hasPermission(AppPermissions.customersCreate);
+    final canCollect = auth.hasPermission(AppPermissions.invoicesCreate) || canEdit;
+    final narrow = MediaQuery.sizeOf(context).width < AppTokens.bpTablet;
 
     return FutureBuilder<Customer>(
       future: _future,
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
+        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snap.hasError) {
-          return Center(child: Text('${snap.error}'));
-        }
-        if (!snap.hasData) {
-          return const Center(child: Text('Customer not found'));
-        }
+        if (snap.hasError) return Center(child: Text('${snap.error}'));
+        if (!snap.hasData) return const Center(child: Text('Customer not found'));
         final c = snap.data!;
-        final pets = c.pets ?? const <Pet>[];
         final openDues = _invoices.where((i) => i.dueAmount > 0.009).toList();
         final duesTotal = openDues.fold<double>(0, (s, i) => s + i.dueAmount);
-        final outstanding = (c.outstandingBalance != null &&
-                c.outstandingBalance! > 0.009)
-            ? c.outstandingBalance!
-            : duesTotal;
+        final outstanding =
+            (c.outstandingBalance ?? 0) > 0.009 ? c.outstandingBalance! : duesTotal;
 
         return RefreshIndicator(
-          onRefresh: () async {
-            setState(_reload);
-            await _future;
-            await _loadInvoices();
-          },
+          onRefresh: _refresh,
           child: ListView(
-            padding: EdgeInsets.all(widget.compact ? 12 : 16),
+            padding: EdgeInsets.all(narrow ? 12 : 16),
             children: [
-              Text(c.name, style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              SelectableText(c.phone),
-              if (c.alternatePhone != null && c.alternatePhone!.isNotEmpty)
-                SelectableText(
-                  'Alt: ${c.alternatePhone}',
-                  style: const TextStyle(color: AppTheme.textSecondary),
-                ),
-              if (c.email != null && c.email!.isNotEmpty) SelectableText(c.email!),
-              if (_addressLine(c).isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _addressLine(c),
-                  style: const TextStyle(color: AppTheme.textSecondary),
-                ),
-              ],
-              if (c.gstin != null && c.gstin!.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text('GSTIN: ${c.gstin}',
-                    style: const TextStyle(color: AppTheme.textSecondary)),
-              ],
-              if (outstanding > 0.009) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppTheme.warning.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppTheme.warning.withValues(alpha: 0.25),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.warning_amber_rounded,
-                        color: AppTheme.warning,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Balance due',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                color: AppTheme.warning,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '₹${outstanding.toStringAsFixed(2)}'
-                              '${openDues.isNotEmpty ? ' · ${openDues.length} open invoice${openDues.length == 1 ? '' : 's'}' : ''}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (canCollect)
-                        FilledButton(
-                          onPressed: () => _openCollectDue(),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.warning,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                          ),
-                          child: const Text('Receive'),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _StatChip(
-                    label: 'Advance',
-                    value: '₹${c.advanceBalance.toStringAsFixed(0)}',
-                    color: AppTheme.accent,
-                  ),
-                  _StatChip(
-                    label: 'Loyalty',
-                    value: '${c.loyaltyPoints} pts',
-                    color: AppTheme.warning,
-                  ),
-                  if ((c.creditLimit ?? 0) > 0)
-                    _StatChip(
-                      label: 'Credit limit',
-                      value: '₹${c.creditLimit!.toStringAsFixed(0)}',
-                      color: AppTheme.textSecondary,
-                    ),
-                ],
+              if (!narrow && !widget.compact)
+                PageBreadcrumbs(items: [
+                  Crumb(auth.responsiblePartiesLabel, path: '/customers'),
+                  const Crumb('Customer Details'),
+                ]),
+              _HeaderCard(
+                customer: c,
+                vet: auth.isVeterinary,
+                canEdit: canEdit,
+                canCreatePet: canCreate || canEdit,
+                onMore: (k) {
+                  if (k == 'toggle') _toggleActive(c);
+                  if (k == 'billing') {
+                    context.go(Uri(path: '/invoices', queryParameters: {
+                      'search': c.phone.isNotEmpty ? c.phone : c.name,
+                    }).toString());
+                  }
+                },
+                onAddPet: () => _openPetForm(),
+                onAdvance: () async {
+                  final ok = await showAdvancePaymentSheet(context, customer: c);
+                  if (ok && mounted) await _refresh();
+                },
+                onEdit: () async {
+                  await context.push('/customers/${c.id}/edit');
+                  if (mounted) await _refresh();
+                },
               ),
-              if (canEdit || canCollect) ...[
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (canEdit)
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          final ok =
-                              await showAdvancePaymentSheet(context, customer: c);
-                          if (ok && mounted) setState(_reload);
-                        },
-                        icon: const Icon(Icons.account_balance_wallet_outlined),
-                        label: const Text('Treatment Advance'),
-                      ),
-                    if (canCollect && (outstanding > 0.009 || openDues.isNotEmpty))
-                      OutlinedButton.icon(
-                        onPressed: () => _openCollectDue(),
-                        icon: const Icon(Icons.payments_outlined),
+              const SizedBox(height: 16),
+              _SectionCard(
+                icon: Icons.person_outline,
+                iconColor: const Color(0xFF2563EB),
+                title: 'Contact Information',
+                child: _ContactGrid(customer: c, address: _address(c)),
+              ),
+              const SizedBox(height: 16),
+              _SectionCard(
+                icon: Icons.account_balance_wallet_outlined,
+                iconColor: const Color(0xFF10B981),
+                title: 'Account Balances',
+                trailing: canCollect && outstanding > 0.009
+                    ? FilledButton.icon(
+                        style: FilledButton.styleFrom(backgroundColor: AppTokens.warning),
+                        onPressed: () => _openCollectDue(c),
+                        icon: const Icon(Icons.payments_outlined, size: 18),
                         label: const Text('Receive payment'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.warning,
-                          side: BorderSide(
-                            color: AppTheme.warning.withValues(alpha: 0.5),
-                          ),
-                        ),
-                      ),
+                      )
+                    : null,
+                child: FormGrid(
+                  columns: 4,
+                  gap: 12,
+                  minColumnWidth: 150, // 2 per row on phones
+                  children: [
+                    _BalanceCard(
+                        label: 'Treatment Advance',
+                        value: '₹${_money(c.advanceBalance)}',
+                        icon: Icons.payments_outlined,
+                        tone: KpiTone.green),
+                    _BalanceCard(
+                        label: 'Loyalty Points',
+                        value: '${c.loyaltyPoints} pts',
+                        icon: Icons.card_giftcard_outlined,
+                        tone: KpiTone.purple),
+                    _BalanceCard(
+                        label: 'Credit Limit',
+                        value: '₹${_money(c.creditLimit ?? 0)}',
+                        icon: Icons.credit_card_outlined,
+                        tone: KpiTone.blue),
+                    _BalanceCard(
+                        label: 'Outstanding',
+                        value: '₹${_money(outstanding)}',
+                        icon: Icons.receipt_outlined,
+                        tone: KpiTone.red),
                   ],
                 ),
+              ),
+              if (auth.isVeterinary) ...[
+                const SizedBox(height: 16),
+                _SectionCard(
+                  icon: Icons.pets_outlined,
+                  iconColor: const Color(0xFF8B5CF6),
+                  title: 'Pets',
+                  child: _petsBody(c, auth),
+                ),
               ],
-              const SizedBox(height: 20),
-              _petsSection(context, pets: pets, canCreate: canCreate, canEdit: canEdit),
-              const SizedBox(height: 20),
-              _invoicesSection(context, canCollect: canCollect),
+              const SizedBox(height: 16),
+              _SectionCard(
+                icon: Icons.receipt_long_outlined,
+                iconColor: AppTokens.primary,
+                title: 'Invoices',
+                trailing: _invoices.isEmpty
+                    ? null
+                    : Text('${_invoices.length}',
+                        style: const TextStyle(color: AppTokens.text3, fontWeight: FontWeight.w600)),
+                child: _invoicesBody(c, canCollect),
+              ),
             ],
           ),
         );
@@ -322,472 +291,730 @@ class _CustomerDetailBodyState extends State<CustomerDetailBody> {
     );
   }
 
-  Widget _sectionHeader(
-    BuildContext context, {
-    required String title,
-    String? trailing,
-    Widget? action,
-  }) {
-    return Row(
-      children: [
+  Widget _petsBody(Customer c, AuthSession auth) {
+    final pets = c.pets ?? const <Pet>[];
+    final banner = Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFFEFF6FF), Color(0xFFF5F3FF)]),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFDBEAFE)),
+      ),
+      child: const Row(children: [
+        Icon(Icons.health_and_safety_outlined, color: AppTokens.primary, size: 36),
+        SizedBox(width: 14),
         Expanded(
-          child: Row(
-            children: [
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
-              if (trailing != null) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    trailing,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ),
-              ],
-            ],
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text("Keep your pet's health records up to date",
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppTokens.text1)),
+            SizedBox(height: 4),
+            Text('Add visits, vaccinations, and lab reports to provide better care.',
+                style: TextStyle(fontSize: 13, color: AppTokens.text2)),
+          ]),
+        ),
+      ]),
+    );
+
+    if (pets.isEmpty) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(
+            child: Column(children: [
+              Icon(Icons.pets_outlined, size: 36, color: AppTokens.placeholder),
+              SizedBox(height: 8),
+              Text('No pets registered', style: TextStyle(color: AppTokens.text3)),
+            ]),
           ),
         ),
-        if (action != null) action,
-      ],
-    );
-  }
+        banner,
+      ]);
+    }
 
-  Widget _petsSection(
-    BuildContext context, {
-    required List<Pet> pets,
-    required bool canCreate,
-    required bool canEdit,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _sectionHeader(
-          context,
-          title: 'Pets',
-          trailing: pets.isEmpty ? null : '${pets.length}',
-          action: canCreate
-              ? TextButton.icon(
-                  onPressed: () => _openPetForm(),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add Pet'),
-                )
-              : null,
-        ),
-        const SizedBox(height: 8),
-        if (pets.isEmpty)
-          _EmptyBlock(
-            icon: Icons.pets_outlined,
-            message: 'No pets yet',
-            actionLabel: canCreate ? 'Add first pet' : null,
-            onAction: canCreate ? () => _openPetForm() : null,
-          )
-        else
-          ...pets.map((p) => _petCard(p, canEdit: canEdit)),
-      ],
-    );
-  }
-
-  Widget _petCard(Pet p, {required bool canEdit}) {
-    final subtitle = _petSubtitle(p);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.pets, color: AppTheme.primary, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        p.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      ),
-                      if (subtitle.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            height: 1.35,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (canEdit)
-                  IconButton(
-                    tooltip: 'Edit pet',
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.edit_outlined, size: 20),
-                    onPressed: () => _openPetForm(pet: p),
-                  ),
-              ],
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      FormGrid(
+        columns: 2,
+        gap: 14,
+        children: [
+          for (var i = 0; i < pets.length; i++)
+            _PetCard(
+              pet: pets[i],
+              index: i,
+              vaxOpen: _openVax.contains(pets[i].id),
+              onToggleVax: () => setState(() {
+                _openVax.contains(pets[i].id) ? _openVax.remove(pets[i].id) : _openVax.add(pets[i].id);
+              }),
+              onEdit: () => _openPetForm(pet: pets[i]),
+              onVaccination: () => _addVaccination(pets[i]),
+              auth: auth,
             ),
-            const SizedBox(height: 10),
-            const Divider(height: 1),
-            const SizedBox(height: 10),
-            EmrPetHub(petId: p.id),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _invoicesSection(BuildContext context, {required bool canCollect}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _sectionHeader(
-          context,
-          title: 'Invoices',
-          trailing: !_invoicesLoading && _invoices.isNotEmpty
-              ? '${_invoices.length}'
-              : null,
-        ),
-        if (!_invoicesLoading && _invoices.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          _LoyaltySummaryBar(
-            earned: _totalPointsEarned,
-            redeemed: _totalPointsRedeemed,
-          ),
         ],
-        const SizedBox(height: 10),
-        if (_invoicesLoading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-          )
-        else if (_invoicesError != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Column(
-              children: [
-                Text(
-                  _invoicesError!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppTheme.danger, fontSize: 13),
-                ),
-                TextButton(onPressed: _loadInvoices, child: const Text('Retry')),
-              ],
-            ),
-          )
-        else if (_invoices.isEmpty)
-          const _EmptyBlock(
-            icon: Icons.receipt_long_outlined,
-            message: 'No invoices for this customer yet.',
-          )
-        else
-          ..._invoices.map((inv) => _invoiceTile(inv, canCollect: canCollect)),
-      ],
-    );
+      ),
+      const SizedBox(height: 14),
+      banner,
+    ]);
   }
 
-  Widget _invoiceTile(Invoice inv, {required bool canCollect}) {
-    final statusColor = _invoiceStatusColor(inv.status);
-    final hasDue = inv.dueAmount > 0.009;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => context.push('/invoices/${inv.id}'),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.receipt_long_rounded, color: statusColor, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            inv.invoiceNumber.isNotEmpty
-                                ? inv.invoiceNumber
-                                : 'Invoice #${inv.id}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13.5,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            inv.status.toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                              color: statusColor,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      inv.displayDate.isNotEmpty ? inv.displayDate : '—',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text(
-                          '₹${inv.totalAmount.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
-                        ),
-                        if (hasDue) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            'Due ₹${inv.dueAmount.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.warning,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                        const Spacer(),
-                        Icon(
-                          Icons.stars_rounded,
-                          size: 14,
-                          color: AppTheme.warning.withValues(alpha: 0.9),
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          '+${inv.loyaltyPointsEarned}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.warning,
-                          ),
-                        ),
-                        if (inv.loyaltyPointsRedeemed > 0) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            '−${inv.loyaltyPointsRedeemed}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (canCollect && hasDue) ...[
-                      const SizedBox(height: 10),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _openCollectDue(invoice: inv),
-                          icon: const Icon(Icons.payments_outlined, size: 16),
-                          label: const Text('Collect due'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppTheme.warning,
-                            side: BorderSide(
-                              color: AppTheme.warning.withValues(alpha: 0.45),
-                            ),
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.only(left: 4, top: 10),
-                child: Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ],
-          ),
+  Widget _invoicesBody(Customer c, bool canCollect) {
+    if (_invoicesLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    if (_invoicesError != null) {
+      return Column(children: [
+        Text(_invoicesError!, style: const TextStyle(color: AppTokens.error, fontSize: 13)),
+        TextButton(onPressed: _loadInvoices, child: const Text('Retry')),
+      ]);
+    }
+    if (_invoices.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: Center(
+            child: Text('No invoices for this customer yet.', style: TextStyle(color: AppTokens.text3))),
+      );
+    }
+    return Column(children: [
+      for (final inv in _invoices)
+        _InvoiceRow(
+          invoice: inv,
+          money: _money,
+          onTap: () => context.push('/invoices/${inv.id}'),
+          onCollect: canCollect && inv.dueAmount > 0.009 ? () => _openCollectDue(c, invoice: inv) : null,
         ),
-      ),
-    );
+    ]);
   }
 }
 
-class _LoyaltySummaryBar extends StatelessWidget {
-  const _LoyaltySummaryBar({required this.earned, required this.redeemed});
+// ── Header ────────────────────────────────────────────────────────────
 
-  final int earned;
-  final int redeemed;
+class _HeaderCard extends StatelessWidget {
+  const _HeaderCard({
+    required this.customer,
+    required this.vet,
+    required this.canEdit,
+    required this.canCreatePet,
+    required this.onMore,
+    required this.onAddPet,
+    required this.onAdvance,
+    required this.onEdit,
+  });
+
+  final Customer customer;
+  final bool vet;
+  final bool canEdit;
+  final bool canCreatePet;
+  final ValueChanged<String> onMore;
+  final VoidCallback onAddPet;
+  final VoidCallback onAdvance;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppTheme.warning.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.warning.withValues(alpha: 0.18)),
+    final c = customer;
+    final narrow = MediaQuery.sizeOf(context).width < AppTokens.bpTablet;
+    final parts = c.name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final initials = parts.isEmpty
+        ? '?'
+        : (parts.first[0] + (parts.length > 1 ? parts.last[0] : '')).toUpperCase();
+
+    final info = Row(children: [
+      Container(
+        width: narrow ? 56 : 72,
+        height: narrow ? 56 : 72,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(colors: [Color(0xFF2563EB), Color(0xFF0B5ED7)]),
+        ),
+        child: Text(initials,
+            style: TextStyle(color: Colors.white, fontSize: narrow ? 20 : 26, fontWeight: FontWeight.w700)),
       ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.stars_rounded,
-            size: 18,
-            color: AppTheme.warning.withValues(alpha: 0.95),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Points earned  $earned pts',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.warning,
-              ),
-            ),
-          ),
-          if (redeemed > 0)
-            Text(
-              'Redeemed $redeemed',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textSecondary,
-              ),
-            ),
+      const SizedBox(width: 16),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(spacing: 10, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            Text(c.name,
+                style: TextStyle(fontSize: narrow ? 20 : 24, fontWeight: FontWeight.w700, color: AppTokens.text1)),
+            c.isActive
+                ? const StatusPill('Active', tone: PillTone.green)
+                : const StatusPill('Inactive', tone: PillTone.red),
+          ]),
+          const SizedBox(height: 6),
+          Wrap(spacing: 16, runSpacing: 4, children: [
+            Text('Customer ID: ${c.customerCode ?? '#${c.id}'}',
+                style: const TextStyle(fontSize: 13, color: AppTokens.text2)),
+            if ((c.createdAt ?? '').isNotEmpty)
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.calendar_today_outlined, size: 15, color: AppTokens.text3),
+                const SizedBox(width: 6),
+                Text('Joined on ${formatDateIst(c.createdAt)}',
+                    style: const TextStyle(fontSize: 13, color: AppTokens.text2)),
+              ]),
+          ]),
+        ]),
+      ),
+    ]);
+
+    final actions = Wrap(spacing: 10, runSpacing: 10, alignment: WrapAlignment.end, children: [
+      PopupMenuButton<String>(
+        onSelected: onMore,
+        position: PopupMenuPosition.under,
+        itemBuilder: (_) => [
+          if (canEdit)
+            PopupMenuItem(value: 'toggle', child: Text(c.isActive ? 'Deactivate' : 'Activate')),
+          const PopupMenuItem(value: 'billing', child: Text('View Billing')),
         ],
+        child: IgnorePointer(
+          child: OutlinedButton(
+            onPressed: () {},
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('More'),
+              SizedBox(width: 4),
+              Icon(Icons.keyboard_arrow_down, size: 16),
+            ]),
+          ),
+        ),
       ),
+      if (vet && canCreatePet) FilledButton(onPressed: onAddPet, child: const Text('Add Pet')),
+      if (canEdit) FilledButton(onPressed: onAdvance, child: const Text('Add Advance Payment')),
+      if (canEdit)
+        FilledButton.icon(
+          style: FilledButton.styleFrom(backgroundColor: AppTokens.warning),
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_outlined, size: 18),
+          label: const Text('Edit Customer'),
+        ),
+    ]);
+
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+            colors: [Color(0xFFFFFFFF), Color(0xFFF0F6FF)], begin: Alignment.centerLeft, end: Alignment.centerRight),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTokens.border),
+        boxShadow: AppTokens.shadowCard,
+      ),
+      padding: EdgeInsets.all(narrow ? 16 : 22),
+      child: narrow
+          ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              info,
+              const SizedBox(height: 14),
+              actions,
+            ])
+          : Row(children: [Expanded(child: info), const SizedBox(width: 16), Flexible(child: actions)]),
     );
   }
 }
 
-class _EmptyBlock extends StatelessWidget {
-  const _EmptyBlock({
+// ── Sections ──────────────────────────────────────────────────────────
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
     required this.icon,
-    required this.message,
-    this.actionLabel,
-    this.onAction,
+    required this.iconColor,
+    required this.title,
+    required this.child,
+    this.trailing,
   });
 
   final IconData icon;
-  final String message;
-  final String? actionLabel;
-  final VoidCallback? onAction;
+  final Color iconColor;
+  final String title;
+  final Widget child;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 36, color: AppTheme.textSecondary),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppTheme.textSecondary),
+    return WebCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Icon(icon, size: 20, color: iconColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(title,
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppTokens.text1)),
           ),
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: 10),
-            OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
-          ],
-        ],
-      ),
+          if (trailing != null) trailing!,
+        ]),
+        const SizedBox(height: 16),
+        child,
+      ]),
     );
   }
 }
 
-class _StatChip extends StatelessWidget {
-  const _StatChip({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+class _ContactGrid extends StatelessWidget {
+  const _ContactGrid({required this.customer, required this.address});
 
-  final String label;
-  final String value;
-  final Color color;
+  final Customer customer;
+  final String address;
 
   @override
   Widget build(BuildContext context) {
+    final c = customer;
+    Widget item(IconData icon, Color bg, Color fg, String label, String? value, {VoidCallback? onTap}) {
+      final v = (value ?? '').trim();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, size: 18, color: fg),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: const TextStyle(fontSize: 12, color: AppTokens.text3)),
+              const SizedBox(height: 2),
+              GestureDetector(
+                onTap: v.isEmpty || v == '—' ? null : onTap,
+                child: Text(v.isEmpty ? '—' : v,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: v.isEmpty || v == '—'
+                            ? AppTokens.text3
+                            : onTap != null
+                                ? AppTokens.primary
+                                : AppTokens.text1)),
+              ),
+            ]),
+          ),
+        ]),
+      );
+    }
+
+    const blue = (Color(0xFFDBEAFE), Color(0xFF2563EB));
+    const purple = (Color(0xFFF3E8FF), Color(0xFF9333EA));
+    const red = (Color(0xFFFEE2E2), Color(0xFFDC2626));
+    const green = (Color(0xFFDCFCE7), Color(0xFF16A34A));
+
+    return FormGrid(columns: 3, gap: 16, children: [
+      Column(children: [
+        item(Icons.call_outlined, blue.$1, blue.$2, 'Phone', c.phone,
+            onTap: () => launchUrl(Uri.parse('tel:${c.phone}'))),
+        item(Icons.call_outlined, purple.$1, purple.$2, 'Alternate Phone', c.alternatePhone),
+      ]),
+      Column(children: [
+        item(Icons.mail_outline, red.$1, red.$2, 'Email', c.email,
+            onTap: () => launchUrl(Uri.parse('mailto:${c.email}'))),
+        item(Icons.description_outlined, green.$1, green.$2, 'GSTIN', c.gstin),
+      ]),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: item(Icons.location_on_outlined, blue.$1, blue.$2, 'Address', address)),
+        if (address != '—')
+          TableIconButton(
+            icon: Icons.location_on_outlined,
+            tooltip: 'Open in Maps',
+            onPressed: () => launchUrl(
+              Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}'),
+              mode: LaunchMode.externalApplication,
+            ),
+          ),
+      ]),
+    ]);
+  }
+}
+
+class _BalanceCard extends StatelessWidget {
+  const _BalanceCard({required this.label, required this.value, required this.icon, required this.tone});
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final KpiTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final (bg, fg) = switch (tone) {
+      KpiTone.green => (const Color(0xFFECFDF5), const Color(0xFF059669)),
+      KpiTone.purple => (const Color(0xFFF5F3FF), const Color(0xFF7C3AED)),
+      KpiTone.red => (const Color(0xFFFEF2F2), const Color(0xFFDC2626)),
+      _ => (const Color(0xFFEFF6FF), const Color(0xFF2563EB)),
+    };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: fg.withValues(alpha: 0.15)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.9))),
-          Text(value,
-              style: TextStyle(fontWeight: FontWeight.w700, color: color)),
-        ],
+      child: Row(children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(color: fg.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+          child: Icon(icon, color: fg, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AppTokens.text2)),
+            const SizedBox(height: 2),
+            Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: fg)),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+// ── Pets ──────────────────────────────────────────────────────────────
+
+const _petAccents = [Color(0xFF8B5CF6), Color(0xFF2563EB), Color(0xFF10B981), Color(0xFFF59E0B), Color(0xFFEC4899)];
+
+class _PetCard extends StatelessWidget {
+  const _PetCard({
+    required this.pet,
+    required this.index,
+    required this.vaxOpen,
+    required this.onToggleVax,
+    required this.onEdit,
+    required this.onVaccination,
+    required this.auth,
+  });
+
+  final Pet pet;
+  final int index;
+  final bool vaxOpen;
+  final VoidCallback onToggleVax;
+  final VoidCallback onEdit;
+  final VoidCallback onVaccination;
+  final AuthSession auth;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _petAccents[index % _petAccents.length];
+    final vax = pet.vaccinations ?? const <PetVaccination>[];
+    final female = pet.gender.toLowerCase() == 'female';
+    final genderLabel = pet.gender.isEmpty ? 'Unknown' : '${pet.gender[0].toUpperCase()}${pet.gender.substring(1)}';
+
+    Widget actionBtn(IconData? icon, String label, VoidCallback onTap, {bool green = false}) => OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 34),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            foregroundColor: green ? Colors.white : AppTokens.text2,
+            backgroundColor: green ? AppTokens.success : Colors.white,
+            side: BorderSide(color: green ? AppTokens.success : AppTokens.border),
+            textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          onPressed: onTap,
+          icon: icon == null ? const SizedBox.shrink() : Icon(icon, size: 15),
+          label: Text(label),
+        );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(color: accent, width: 4),
+          top: const BorderSide(color: AppTokens.border),
+          right: const BorderSide(color: AppTokens.border),
+          bottom: const BorderSide(color: AppTokens.border),
+        ),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          if ((pet.imageUrl ?? '').isNotEmpty)
+            CircleAvatar(radius: 30, backgroundImage: NetworkImage(pet.imageUrl!))
+          else
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: accent.withValues(alpha: 0.12),
+              child: Icon(Icons.pets_outlined, color: accent, size: 26),
+            ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Flexible(
+                  child: Text(pet.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppTokens.text1)),
+                ),
+                const SizedBox(width: 8),
+                StatusPill('${female ? '♀' : '♂'} $genderLabel',
+                    tone: female ? PillTone.purple : PillTone.blue),
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: 'Edit Pet',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                ),
+              ]),
+              Text(pet.breed ?? pet.species ?? 'Unknown',
+                  style: const TextStyle(fontSize: 13, color: AppTokens.text3)),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8)),
+          child: Row(children: [
+            Expanded(
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.calendar_today_outlined, size: 16, color: Color(0xFF8B5CF6)),
+                const SizedBox(width: 6),
+                Text(pet.age ?? '—', style: const TextStyle(fontSize: 13)),
+              ]),
+            ),
+            Container(width: 1, height: 18, color: AppTokens.border),
+            Expanded(
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.monitor_weight_outlined, size: 16, color: Color(0xFF8B5CF6)),
+                const SizedBox(width: 6),
+                Text(pet.weight != null ? '${pet.weight} kg' : '—', style: const TextStyle(fontSize: 13)),
+              ]),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 10),
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onToggleVax,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: Row(children: [
+              const Icon(Icons.verified_user_outlined, size: 17, color: AppTokens.success),
+              const SizedBox(width: 8),
+              Text('Vaccinations${vax.isNotEmpty ? ' (${vax.length})' : ''}',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              const Spacer(),
+              AnimatedRotation(
+                turns: vaxOpen ? 0.25 : 0,
+                duration: const Duration(milliseconds: 150),
+                child: const Icon(Icons.chevron_right, size: 18, color: AppTokens.text3),
+              ),
+            ]),
+          ),
+        ),
+        if (vaxOpen)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: vax.isEmpty
+                ? const Text('No vaccinations recorded', style: TextStyle(fontSize: 12, color: AppTokens.text3))
+                : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    for (final v in vax)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Container(
+                            margin: const EdgeInsets.only(top: 5),
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: switch (v.status) {
+                                'overdue' => AppTokens.error,
+                                'scheduled' || 'due' => AppTokens.warning,
+                                _ => AppTokens.success,
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(v.vaccineName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                              Text(
+                                '${formatDateIst(v.administeredDate)} → Next: ${(v.nextDueDate ?? '').isEmpty ? 'N/A' : formatDateIst(v.nextDueDate)}',
+                                style: const TextStyle(fontSize: 12, color: AppTokens.text3),
+                              ),
+                            ]),
+                          ),
+                        ]),
+                      ),
+                  ]),
+          ),
+        const Divider(height: 16),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          if (auth.hasPermission('emr.visits.view'))
+            actionBtn(Icons.description_outlined, 'Full Report', () => context.push('/emr/pets/${pet.id}/visit-summary')),
+          actionBtn(Icons.vaccines_outlined, 'Vaccination', onVaccination),
+          if (auth.hasPermission('emr.visits.create'))
+            actionBtn(null, 'New Visit', () => context.push('/emr/visits/new?pet_id=${pet.id}'), green: true),
+          if (auth.hasPermission('emr.visits.view'))
+            actionBtn(Icons.timeline_outlined, 'Timeline', () => context.push('/emr/pets/${pet.id}/timeline')),
+          if (auth.hasPermission('emr.lab_reports.view'))
+            actionBtn(Icons.biotech_outlined, 'Lab Reports', () => context.push('/emr/pets/${pet.id}/lab-reports')),
+          if (auth.hasPermission('emr.documents.view'))
+            actionBtn(Icons.folder_outlined, 'Documents', () => context.push('/emr/pets/${pet.id}/documents')),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _VaccinationDialog extends StatefulWidget {
+  const _VaccinationDialog({required this.pet});
+
+  final Pet pet;
+
+  @override
+  State<_VaccinationDialog> createState() => _VaccinationDialogState();
+}
+
+class _VaccinationDialogState extends State<_VaccinationDialog> {
+  final _name = TextEditingController();
+  final _brand = TextEditingController();
+  String? _given;
+  String? _next;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _brand.dispose();
+    super.dispose();
+  }
+
+  String _ymd(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pick(bool next) async {
+    final today = nowIst();
+    final base = DateTime(today.year, today.month, today.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.tryParse((next ? _next : _given) ?? '') ?? base,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(today.year + 5),
+    );
+    if (picked != null) setState(() => next ? _next = _ymd(picked) : _given = _ymd(picked));
+  }
+
+  Future<void> _save() async {
+    if (_name.text.trim().isEmpty || _given == null) {
+      AppMessenger.error(context, 'Please fill required fields');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await context.read<AppServices>().customers.addPetVaccination(widget.pet.id, {
+        'vaccine_name': _name.text.trim(),
+        'vaccine_brand': _brand.text.trim().isEmpty ? null : _brand.text.trim(),
+        'administered_date': _given,
+        'next_due_date': _next,
+        'status': 'completed',
+      });
+      if (!mounted) return;
+      AppMessenger.success(context, 'Vaccination recorded');
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) AppMessenger.error(context, 'Failed to save vaccination: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget dateField(String label, String? value, bool next, {bool required = false}) => FieldLabel(
+          label,
+          required: required,
+          child: InkWell(
+            onTap: () => _pick(next),
+            child: InputDecorator(
+              decoration: const InputDecoration(suffixIcon: Icon(Icons.calendar_today_outlined, size: 16)),
+              child: Text(value == null ? 'Select date' : formatDateIst(value),
+                  style: TextStyle(color: value == null ? AppTokens.placeholder : AppTokens.text1)),
+            ),
+          ),
+        );
+    return AlertDialog(
+      title: Text('Add Vaccination — ${widget.pet.name}'),
+      content: SizedBox(
+        width: 440,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          FieldLabel('Vaccine Name', required: true, child: TextField(controller: _name)),
+          const SizedBox(height: 12),
+          FieldLabel('Brand', child: TextField(controller: _brand)),
+          const SizedBox(height: 12),
+          dateField('Date Given', _given, false, required: true),
+          const SizedBox(height: 12),
+          dateField('Next Due Date', _next, true),
+        ]),
+      ),
+      actions: [
+        OutlinedButton(onPressed: _saving ? null : () => Navigator.pop(context, false), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Invoices ──────────────────────────────────────────────────────────
+
+class _InvoiceRow extends StatelessWidget {
+  const _InvoiceRow({required this.invoice, required this.money, required this.onTap, this.onCollect});
+
+  final Invoice invoice;
+  final String Function(double) money;
+  final VoidCallback onTap;
+  final VoidCallback? onCollect;
+
+  @override
+  Widget build(BuildContext context) {
+    final inv = invoice;
+    final tone = switch (inv.status.toLowerCase()) {
+      'paid' => PillTone.green,
+      'partial' || 'confirmed' => PillTone.amber,
+      'cancelled' => PillTone.red,
+      _ => PillTone.grey,
+    };
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEDF1F6)))),
+        child: Row(children: [
+          Expanded(
+            flex: 3,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(inv.invoiceNumber.isNotEmpty ? inv.invoiceNumber : 'Invoice #${inv.id}',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              Text(inv.displayDate.isNotEmpty ? inv.displayDate : '—',
+                  style: const TextStyle(fontSize: 12, color: AppTokens.text3)),
+            ]),
+          ),
+          Expanded(
+            flex: 2,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('₹${money(inv.totalAmount)}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+              if (inv.dueAmount > 0.009)
+                Text('Due ₹${money(inv.dueAmount)}',
+                    style: const TextStyle(fontSize: 12, color: AppTokens.warning, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+          const SizedBox(width: 12),
+          StatusPill(inv.status.isEmpty ? '—' : '${inv.status[0].toUpperCase()}${inv.status.substring(1)}', tone: tone),
+          if (onCollect != null) ...[
+            const SizedBox(width: 8),
+            TableIconButton(icon: Icons.payments_outlined, tooltip: 'Collect due', color: AppTokens.warning, onPressed: onCollect),
+          ],
+        ]),
       ),
     );
   }

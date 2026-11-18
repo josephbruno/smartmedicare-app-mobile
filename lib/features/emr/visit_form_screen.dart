@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -65,6 +66,22 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   List<DoctorLite> _doctors = [];
   List<PetSearchResult> _petResults = [];
   final List<_InvestigationRow> _investigations = [];
+
+  /// Default prices from EMR master data, keyed by lower-cased name.
+  Map<String, double?> _investigationPrices = {};
+
+  Future<void> _loadInvestigationPrices() async {
+    try {
+      final list = await context.read<AppServices>().emrMasterData.listInvestigations();
+      if (!mounted) return;
+      _investigationPrices = {
+        for (final r in list)
+          if (r.isActive && r.displayName.isNotEmpty) r.displayName.toLowerCase(): r.defaultPrice,
+      };
+    } catch (_) {
+      // Prices are a convenience; the field stays editable.
+    }
+  }
   final List<_TreatmentRow> _treatments = [];
   final List<_MedicineRow> _medicines = [];
   final List<_VaccinationRow> _vaccinations = [];
@@ -201,6 +218,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void initState() {
     super.initState();
     _sourceAppointmentId = widget.appointmentId;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadInvestigationPrices());
     _investigationFocus.addListener(() => _onChipFieldFocus(
           field: 'investigation',
           focus: _investigationFocus,
@@ -592,8 +610,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     _investigations
       ..clear()
       ..addAll(
-        VisitInvestigationItem.parse(visit.investigation)
-            .map(_InvestigationRow.fromItem),
+        // Structured items keep price + notes; falls back to legacy text.
+        visit.investigationItems.map(_InvestigationRow.fromItem),
       );
     _followUpNotes.text = visit.followUpNotes ?? '';
     if (visit.temperature != null) {
@@ -1396,6 +1414,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     setState(() {
       _investigations.add(_InvestigationRow(
         name: trimmed,
+        price: _investigationPrices[trimmed.toLowerCase()],
         productId: mapped?.id,
         investigationUnderCategory: mappedCategory,
       ));
@@ -2344,6 +2363,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         'investigation': VisitInvestigationItem.encode(
                 _investigations.map((e) => e.toItem())) ??
             '',
+      if (_isEdit || _investigations.isNotEmpty)
+        'investigation_items': _investigations.map((e) => e.toApi()).toList(),
       if (_followUpNotes.text.trim().isNotEmpty)
         'follow_up_notes': _followUpNotes.text.trim(),
       if (_temperatureF != null)
@@ -2504,13 +2525,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           )
         : const EdgeInsets.fromLTRB(14, 10, 14, 14);
 
-    // Desktop uses a global 1.35× text scale — cap this dense clinical form
-    // so fields and tabs fit like the screenshot layout.
+    // Keep this dense clinical form within a narrow scale band so fields
+    // and tabs fit, while still following the web's desktop zoom tiers.
     final media = MediaQuery.of(context);
     final baseScale = media.textScaler.scale(1);
-    final formScale = AppConfig.usesLargeUiScale
-        ? (baseScale / AppConfig.desktopTextScale).clamp(0.9, 1.0)
-        : baseScale.clamp(0.9, 1.05);
+    final formScale = baseScale.clamp(0.9, 1.1);
 
     final denseTheme = Theme.of(context).copyWith(
       visualDensity: VisualDensity.compact,
@@ -2574,7 +2593,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
         data: denseTheme,
         child: Scaffold(
           backgroundColor: AppTheme.background,
-          appBar: AppBar(
+          appBar: WebPageAppBar(
             automaticallyImplyLeading: false,
             titleSpacing: 12,
             title: Column(
@@ -2582,8 +2601,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               children: [
                 Text(
                   _isEdit
-                      ? 'Edit visit'
-                      : (_isCheckInOnly ? 'Check in visit' : 'New visit'),
+                      ? 'Edit Visit'
+                      : (_isCheckInOnly ? 'Check In Visit' : 'New Visit'),
                   style: const TextStyle(
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
@@ -3151,6 +3170,19 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 110,
+                        child: TextField(
+                          controller: row.priceCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(
+                            labelText: 'Price',
+                            prefixText: '₹ ',
+                            isDense: true,
                           ),
                         ),
                       ),
@@ -5346,25 +5378,47 @@ class _InvestigationRow {
   _InvestigationRow({
     required this.name,
     String notes = '',
+    double? price,
     this.productId,
     this.investigationUnderCategory,
-  }) : notesCtrl = TextEditingController(text: notes);
+  })  : notesCtrl = TextEditingController(text: notes),
+        priceCtrl = TextEditingController(
+            text: price == null || price <= 0 ? '' : price.toStringAsFixed(2));
 
-  factory _InvestigationRow.fromItem(VisitInvestigationItem item) =>
-      _InvestigationRow(name: item.name, notes: item.notes);
+  factory _InvestigationRow.fromItem(VisitInvestigationItem item) => _InvestigationRow(
+        name: item.name,
+        notes: item.notes,
+        price: item.unitPrice,
+        productId: item.productId,
+      );
 
   final String name;
   int? productId;
   String? investigationUnderCategory;
   final TextEditingController notesCtrl;
 
+  /// Billing price (prefilled from the investigation master's default price).
+  final TextEditingController priceCtrl;
+
+  double get price => double.tryParse(priceCtrl.text.trim()) ?? 0;
+
   VisitInvestigationItem toItem() => VisitInvestigationItem(
         name: name,
         notes: notesCtrl.text,
+        unitPrice: price,
+        productId: productId,
       );
+
+  /// Web `investigation_items` payload row.
+  Map<String, dynamic> toApi() => {
+        'investigation_name': name,
+        'unit_price': price,
+        'notes': notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
+      };
 
   void dispose() {
     notesCtrl.dispose();
+    priceCtrl.dispose();
   }
 }
 

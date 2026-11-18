@@ -3,7 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../../app_services.dart';
 import '../../core/messaging/app_messenger.dart';
-import '../../core/theme/app_theme.dart';
+import '../../core/theme/app_tokens.dart';
+import '../../core/utils/ist.dart';
+import '../../core/widgets/paginated_data_table.dart';
+import '../../core/widgets/table_column_def.dart';
+import '../../core/widgets/web_page.dart';
+import '../../data/models/api_response.dart';
 import '../../data/models/emr.dart';
 import '../../data/models/ipd.dart';
 
@@ -101,48 +106,158 @@ class _IpdAdmissionsScreenState extends State<IpdAdmissionsScreen> {
     }
   }
 
+  Future<void> _createWard() async {
+    final created = await showDialog<bool>(context: context, builder: (_) => const _WardDialog());
+    if (created == true && mounted) {
+      AppMessenger.success(context, 'Ward and beds created');
+      await _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _admit,
-        icon: const Icon(Icons.add),
-        label: const Text('Admit Patient'),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: _admissions.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final admission = _admissions[index];
-                  return Card(
-                    child: ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.local_hospital_outlined),
-                      ),
-                      title: Text(
-                        admission.patient?.name ?? admission.admissionNumber,
-                      ),
-                      subtitle: Text(
-                        '${admission.ward?.name ?? 'Ward'} / Bed ${admission.bed?.bedNumber ?? '—'}\n${admission.admissionNumber}',
-                      ),
-                      isThreeLine: true,
-                      trailing: admission.status == 'admitted'
-                          ? TextButton(
-                              onPressed: () => _discharge(admission),
-                              child: const Text('Discharge'),
-                            )
-                          : Text(admission.status),
-                    ),
-                  );
+      backgroundColor: AppTokens.bgSecondary,
+      body: WebPageScaffold(
+        title: 'Inpatient Admissions',
+        subtitle: 'Manage wards, beds, active admissions, nursing care, and discharge.',
+        icon: Icons.local_hospital_outlined,
+        breadcrumbs: const [Crumb('Medical Records'), Crumb('IPD Admissions')],
+        actions: [
+          OutlinedButton(onPressed: _createWard, child: const Text('Create Ward')),
+          FilledButton(onPressed: _admit, child: const Text('Admit Patient')),
+        ],
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : AppPaginatedTable<IpdAdmission>(
+                key: ValueKey(_admissions.length.toString() + _admissions.map((a) => a.status).join()),
+                perPage: 20,
+                emptyMessage: 'No admissions yet',
+                loadPage: ({required page, required perPage}) async {
+                  final r = paginateList(_admissions, page: page, perPage: perPage);
+                  return (items: r.items, meta: r.meta as PaginationMeta?);
                 },
+                columns: [
+                  TableColumnDef(
+                    label: 'Admission #',
+                    flex: 1.2,
+                    minWidth: 130,
+                    cellBuilder: (_, a) =>
+                        Text(a.admissionNumber, style: const TextStyle(color: AppTokens.primary, fontWeight: FontWeight.w600)),
+                  ),
+                  TableColumnDef(label: 'Patient', flex: 1.6, minWidth: 160, cellBuilder: (_, a) => Text(a.patient?.name ?? '—')),
+                  TableColumnDef(
+                    label: 'Ward / Bed',
+                    flex: 1.4,
+                    minWidth: 140,
+                    cellBuilder: (_, a) => Text('${a.ward?.name ?? '—'} / ${a.bed?.bedNumber ?? '—'}'),
+                  ),
+                  TableColumnDef(label: 'Admitted', flex: 1.4, minWidth: 150, cellBuilder: (_, a) => Text(formatDateTimeIst(a.admittedAt))),
+                  TableColumnDef(
+                    label: 'Status',
+                    flex: 1,
+                    minWidth: 100,
+                    cellBuilder: (_, a) => StatusPill(a.status, tone: a.status == 'admitted' ? PillTone.green : PillTone.grey),
+                  ),
+                  TableColumnDef(
+                    label: 'Action',
+                    flex: 1,
+                    minWidth: 110,
+                    cellBuilder: (_, a) => a.status == 'admitted'
+                        ? OutlinedButton(
+                            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34)),
+                            onPressed: () => _discharge(a),
+                            child: const Text('Discharge'),
+                          )
+                        : const Text('—', style: TextStyle(color: AppTokens.text3)),
+                  ),
+                ],
               ),
+      ),
+    );
+  }
+}
+
+class _WardDialog extends StatefulWidget {
+  const _WardDialog();
+
+  @override
+  State<_WardDialog> createState() => _WardDialogState();
+}
+
+class _WardDialogState extends State<_WardDialog> {
+  final _name = TextEditingController();
+  final _code = TextEditingController();
+  final _beds = TextEditingController();
+  final _rate = TextEditingController(text: '0');
+  String _type = 'general';
+  bool _saving = false;
+
+  static const _types = ['general', 'icu', 'emergency', 'maternity', 'pediatric', 'private', 'other'];
+
+  @override
+  void dispose() {
+    for (final c in [_name, _code, _beds, _rate]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final beds = _beds.text.split(',').map((b) => b.trim()).where((b) => b.isNotEmpty).toList();
+    if (_name.text.trim().isEmpty || _code.text.trim().isEmpty || beds.isEmpty) {
+      AppMessenger.error(context, 'Ward name, code, and at least one bed are required');
+      return;
+    }
+    final rate = double.tryParse(_rate.text.trim()) ?? 0;
+    setState(() => _saving = true);
+    try {
+      await context.read<AppServices>().ipd.createWard({
+        'name': _name.text.trim(),
+        'code': _code.text.trim().toUpperCase(),
+        'type': _type,
+        'beds': [for (final b in beds) {'bed_number': b, 'daily_rate': rate}],
+      });
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) AppMessenger.error(context, 'Failed to create ward: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Create Ward & Beds'),
+      content: SizedBox(
+        width: 520,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          FieldLabel('Ward Name', child: TextField(controller: _name)),
+          const SizedBox(height: 12),
+          FieldLabel('Ward Code', child: TextField(controller: _code, textCapitalization: TextCapitalization.characters)),
+          const SizedBox(height: 12),
+          FieldLabel(
+            'Ward Type',
+            child: FilterSelect<String>(
+              hint: 'Ward type',
+              options: {for (final t in _types) t: t.toUpperCase()},
+              value: _type,
+              onChanged: (v) => setState(() => _type = v ?? 'general'),
             ),
+          ),
+          const SizedBox(height: 12),
+          FieldLabel('Bed Numbers (comma separated)',
+              child: TextField(controller: _beds, decoration: const InputDecoration(hintText: 'G-01, G-02, G-03'))),
+          const SizedBox(height: 12),
+          FieldLabel('Daily Bed Rate',
+              child: TextField(controller: _rate, keyboardType: const TextInputType.numberWithOptions(decimal: true))),
+        ]),
+      ),
+      actions: [
+        OutlinedButton(onPressed: _saving ? null : () => Navigator.pop(context, false), child: const Text('Cancel')),
+        FilledButton(onPressed: _saving ? null : _save, child: const Text('Create Ward')),
+      ],
     );
   }
 }

@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -315,7 +316,7 @@ class _SaleReturnFormScreenState extends State<SaleReturnFormScreen> {
     }
     if (_error != null || _invoice == null) {
       return Scaffold(
-        appBar: AppBar(
+        appBar: WebPageAppBar(
           automaticallyImplyLeading: false,
           title: const Text('Sale Return'),
         ),
@@ -337,7 +338,7 @@ class _SaleReturnFormScreenState extends State<SaleReturnFormScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         automaticallyImplyLeading: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

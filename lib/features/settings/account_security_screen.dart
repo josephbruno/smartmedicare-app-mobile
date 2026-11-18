@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -34,8 +35,15 @@ class AccountSecurityScreen extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1100),
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
               children: [
+                if (MediaQuery.sizeOf(context).width >= 768)
+                  const PageBreadcrumbs(items: [Crumb('Account'), Crumb('Account Security')]),
+                const PageHeader(
+                  title: 'Account Security',
+                  subtitle: 'Change your password and PIN.',
+                  icon: Icons.shield_outlined,
+                ),
                 _SecurityBanner(hasPin: hasPin),
                 const SizedBox(height: 20),
                 if (sideBySide)

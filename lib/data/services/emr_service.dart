@@ -88,6 +88,8 @@ class EmrService {
     String? species,
     String? gender,
     bool? isActive,
+    Map<String, dynamic> filters = const {},
+    bool withStats = false,
   }) async {
     try {
       final res = await _client.get('/patients', queryParameters: {
@@ -97,6 +99,9 @@ class EmrService {
         if (species != null && species.isNotEmpty) 'species': species,
         if (gender != null && gender.isNotEmpty) 'gender': gender,
         if (isActive != null) 'is_active': isActive,
+        for (final e in filters.entries)
+          if (e.value != null && e.value.toString().isNotEmpty) e.key: e.value,
+        if (withStats) 'with_stats': 1,
       });
       return parseEnvelopeList(res, PetSearchResult.fromJson);
     } on DioException catch (e) {
@@ -146,11 +151,16 @@ class EmrService {
     String? search,
     String? dateFrom,
     String? dateTo,
+    Map<String, dynamic> filters = const {},
+    bool withStats = false,
   }) async {
     try {
       final res = await _client.get('/clinical-appointments', queryParameters: {
         'page': page,
         'per_page': perPage,
+        for (final e in filters.entries)
+          if (e.value != null && e.value.toString().isNotEmpty) e.key: e.value,
+        if (withStats) 'with_stats': 1,
         if (status != null && status.isNotEmpty) 'status': status,
         if (search != null && search.isNotEmpty) 'search': search,
         if (dateFrom != null && dateFrom.isNotEmpty) 'date_from': dateFrom,
@@ -240,11 +250,16 @@ class EmrService {
     String? status,
     String? search,
     int? petId,
+    Map<String, dynamic> filters = const {},
+    bool withStats = false,
   }) async {
     try {
       final res = await _client.get('/clinical-visits', queryParameters: {
         'page': page,
         'per_page': perPage,
+        for (final e in filters.entries)
+          if (e.value != null && e.value.toString().isNotEmpty) e.key: e.value,
+        if (withStats) 'with_stats': 1,
         if (status != null && status.isNotEmpty && status != 'all')
           'status': status,
         if (search != null && search.isNotEmpty) 'search': search,
@@ -761,9 +776,25 @@ class EmrService {
     }
   }
 
-  Future<void> sendReminderNow(int id) async {
+  /// Sends the visit record (PDF + public link) on WhatsApp — 1 point.
+  /// Returns the response data (`{balance}`).
+  Future<Object?> sendVisitWhatsApp(int id, {String? phone}) async {
     try {
-      await _client.post('/reminders/$id/send-now');
+      final res = await _client.post('/visits/$id/send-whatsapp', data: {if (phone != null) 'phone': phone});
+      final body = res.data;
+      return body is Map ? body['data'] : null;
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  /// Sends the reminder on WhatsApp (1 point). Returns the response data
+  /// (`{balance}`) so the wallet balance can be updated.
+  Future<Object?> sendReminderNow(int id) async {
+    try {
+      final res = await _client.post('/reminders/$id/send-now');
+      final body = res.data;
+      return body is Map ? body['data'] : null;
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }

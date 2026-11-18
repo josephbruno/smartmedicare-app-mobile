@@ -164,8 +164,12 @@ class AppPaginatedTable<T> extends StatefulWidget {
     this.emptyBuilder,
     this.header,
     this.showPerPageSelector = true,
-    this.headerFontSize = 9,
-    this.cellFontSize = 12,
+    this.headerFontSize = 12,
+    this.cellFontSize = 13,
+    this.onLoaded,
+    this.sortKey,
+    this.sortAsc = true,
+    this.onSort,
   });
 
   final PaginatedLoad<T> loadPage;
@@ -181,10 +185,20 @@ class AppPaginatedTable<T> extends StatefulWidget {
   final WidgetBuilder? emptyBuilder;
   final Widget? header;
   final bool showPerPageSelector;
-  /// Header label size (default 9 — matches invoice list).
+  /// Header label size (default 12 — matches the web `cl-table th`).
   final double headerFontSize;
-  /// Desktop cell text size via [DefaultTextStyle] (default 12 — matches invoice list).
+  /// Desktop cell text size via [DefaultTextStyle] (default 13 — web `td`).
   final double? cellFontSize;
+
+  /// Called after each successful page load (e.g. to read `meta.stats`).
+  final ValueChanged<PaginationMeta?>? onLoaded;
+
+  /// Currently sorted column key and direction (web `cl-sort` headers).
+  final String? sortKey;
+  final bool sortAsc;
+
+  /// Tapped a sortable header ([TableColumnDef.sortKey]).
+  final ValueChanged<String>? onSort;
 
   @override
   State<AppPaginatedTable<T>> createState() => AppPaginatedTableState<T>();
@@ -223,6 +237,7 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
         _meta = result.meta;
         _loading = false;
       });
+      widget.onLoaded?.call(result.meta);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -503,6 +518,58 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
     );
   }
 
+  Widget _headerCell(TableColumnDef<T> c) {
+    final label = Text(
+      c.label,
+      textAlign: c.align,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: widget.headerFontSize,
+        fontWeight: FontWeight.w600,
+        color: const Color(0xFF0F172A),
+      ),
+    );
+    Widget child = label;
+    if (c.sortKey != null && widget.onSort != null) {
+      final active = widget.sortKey == c.sortKey;
+      child = MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () => widget.onSort!(c.sortKey!),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(child: label),
+              const SizedBox(width: 4),
+              Icon(
+                !active
+                    ? Icons.swap_vert_rounded
+                    : widget.sortAsc
+                        ? Icons.arrow_drop_up_rounded
+                        : Icons.arrow_drop_down_rounded,
+                size: active ? 18 : 14,
+                color: const Color(0xFF64748B),
+              ),
+            ],
+          ),
+        ),
+      );
+      child = Align(
+        alignment: c.align == TextAlign.right
+            ? Alignment.centerRight
+            : c.align == TextAlign.center
+                ? Alignment.center
+                : Alignment.centerLeft,
+        child: child,
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      child: child,
+    );
+  }
+
   Widget _buildTable(BuildContext context, double tableWidth) {
     return SizedBox(
       width: tableWidth,
@@ -511,31 +578,21 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
           for (var i = 0; i < widget.columns.length; i++)
             i: FlexColumnWidth(widget.columns[i].flex),
         },
+        // Web table: no vertical rules, light row separators only.
         border: const TableBorder(
-          horizontalInside: BorderSide(color: Color(0xFFE2E8F0)),
-          verticalInside: BorderSide(color: Color(0xFFE2E8F0)),
-          top: BorderSide(color: Color(0xFFE2E8F0)),
-          bottom: BorderSide(color: Color(0xFFE2E8F0)),
+          horizontalInside: BorderSide(color: Color(0xFFEDF1F6)),
+          bottom: BorderSide(color: Color(0xFFEDF1F6)),
         ),
         defaultVerticalAlignment: TableCellVerticalAlignment.middle,
         children: [
           TableRow(
-            decoration: BoxDecoration(color: Colors.grey.shade50),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F7FB),
+              borderRadius: BorderRadius.circular(8),
+            ),
             children: widget.columns
                 .map(
-                  (c) => Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    child: Text(
-                      c.label.toUpperCase(),
-                      textAlign: c.align,
-                      style: TextStyle(
-                        fontSize: widget.headerFontSize,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.textSecondary,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ),
+                  (c) => _headerCell(c),
                 )
                 .toList(),
           ),
@@ -544,7 +601,7 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
             return TableRow(
               decoration: BoxDecoration(
                 color: selected
-                    ? AppTheme.primary.withValues(alpha: 0.1)
+                    ? const Color(0xFFEAF2FF)
                     : Colors.white,
                 border: selected
                     ? const Border(
@@ -557,12 +614,12 @@ class AppPaginatedTableState<T> extends State<AppPaginatedTable<T>> {
                 final cellSize = widget.cellFontSize;
                 if (cellSize != null) {
                   body = DefaultTextStyle.merge(
-                    style: TextStyle(fontSize: cellSize, color: AppTheme.textPrimary),
+                    style: TextStyle(fontSize: cellSize, color: const Color(0xFF0F172A)),
                     child: body,
                   );
                 }
                 final cell = Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: Align(
                     alignment: c.align == TextAlign.right
                         ? Alignment.centerRight

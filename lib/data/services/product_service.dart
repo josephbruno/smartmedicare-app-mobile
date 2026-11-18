@@ -70,11 +70,14 @@ class ProductService {
     String? treatmentUnderCategory,
     String? prescriptionUnderCategory,
     String? investigationUnderCategory,
+    Map<String, dynamic> filters = const {},
   }) async {
     try {
       final res = await _client.get('/products', queryParameters: {
         'page': page,
         'per_page': perPage,
+        for (final e in filters.entries)
+          if (e.value != null && e.value.toString().isNotEmpty) e.key: e.value,
         if (search != null && search.isNotEmpty) 'search': search,
         if (type != null && type.isNotEmpty) 'type': type,
         if (categoryId != null) 'category_id': categoryId,
@@ -129,6 +132,61 @@ class ProductService {
         'since': since,
       });
       return parseEnvelopeData(res, (data) => listFromData(data, Product.fromJson));
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  /// Catalogue-wide stock counts for the Products KPI cards.
+  Future<Map<String, int>> stats() async {
+    try {
+      final res = await _client.get('/products/stats');
+      return parseEnvelopeData(res, (data) {
+        final m = data is Map ? data : const {};
+        return {
+          for (final k in ['total', 'in_stock', 'low_stock', 'out_of_stock'])
+            k: (m[k] as num?)?.toInt() ?? 0,
+        };
+      });
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  Future<void> delete(int id) async {
+    try {
+      await _client.delete('/products/$id');
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  /// Sample import sheet (xlsx bytes).
+  Future<List<int>> importTemplateBytes() async {
+    try {
+      final res = await _client.get<List<int>>(
+        '/products/import/template',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return res.data ?? const [];
+    } on DioException catch (e) {
+      ApiClient.throwFromDio(e);
+    }
+  }
+
+  /// Imports products from an Excel/CSV file. Returns
+  /// `{created, updated, failed, total, errors}`.
+  Future<Map<String, dynamic>> importFile({
+    required String fileName,
+    String? path,
+    List<int>? bytes,
+  }) async {
+    try {
+      final file = bytes != null
+          ? MultipartFile.fromBytes(bytes, filename: fileName)
+          : await MultipartFile.fromFile(path!, filename: fileName);
+      final res = await _client.post('/products/import', data: FormData.fromMap({'file': file}));
+      return parseEnvelopeData(res, (data) => Map<String, dynamic>.from(data as Map));
     } on DioException catch (e) {
       ApiClient.throwFromDio(e);
     }

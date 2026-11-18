@@ -1,3 +1,4 @@
+import '../../core/widgets/web_page_app_bar.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -161,9 +162,9 @@ class _LabReportsScreenState extends State<LabReportsScreen> {
     final canUpload = context.watch<AuthSession>().hasPermission(AppPermissions.emrLabReportsUpload);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: WebPageAppBar(
         automaticallyImplyLeading: false,
-        title: const Text('Lab reports'),
+        title: const Text('Lab Reports'),
         actions: [
           if (canUpload)
             IconButton(
