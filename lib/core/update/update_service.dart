@@ -172,7 +172,7 @@ class UpdateService {
     final workerCmd = File(p.join(tempDir, 'maran_update_worker_$stamp.cmd'));
     final bootstrapCmd = File(p.join(tempDir, 'maran_update_boot_$stamp.cmd'));
 
-    // Worker: run Update.ps1 with fully quoted paths (handles "Maran Billing").
+    // Worker: run Update.ps1 with fully quoted paths (install dirs may contain spaces).
     await workerCmd.writeAsString(
       [
         '@echo off',

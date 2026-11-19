@@ -1,9 +1,9 @@
-; Inno Setup script for Maran Billing (Flutter Windows).
+; Inno Setup script for SmartMedicare (Flutter Windows).
 ; Prefer building via: scripts\build-windows-installer.ps1
 ; Version/defines can be overridden: ISCC /DMyAppVersion=1.0.0 ...
 
 #ifndef MyAppName
-  #define MyAppName "Maran Billing"
+  #define MyAppName "SmartMedicare"
 #endif
 #ifndef MyAppVersion
   #define MyAppVersion "1.0.0"

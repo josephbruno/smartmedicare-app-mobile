@@ -1,4 +1,4 @@
-package com.maranbilling.mobile
+package com.smartmedicare.mobile
 
 import androidx.core.content.FileProvider
 

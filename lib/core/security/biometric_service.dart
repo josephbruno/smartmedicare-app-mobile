@@ -46,7 +46,7 @@ class BiometricService {
   }
 
   Future<bool> authenticate({
-    String reason = 'Unlock Maran Billing',
+    String reason = 'Unlock SmartMedicare',
   }) async {
     if (!isSupportedPlatform) return false;
     try {

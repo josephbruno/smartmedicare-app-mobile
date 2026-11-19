@@ -155,7 +155,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen> {
       }
 
       final ok = await _biometrics.authenticate(
-        reason: 'Unlock Maran Billing',
+        reason: 'Unlock SmartMedicare',
       );
       if (!ok) {
         // User cancelled or failed — fall back to PIN keypad silently.

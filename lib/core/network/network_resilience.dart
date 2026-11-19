@@ -101,13 +101,13 @@ String humanizeNetworkError(DioException e) {
       raw.contains('no address associated')) {
     final hostHint = _apiHostHint();
     if (Platform.isWindows) {
-      return 'Cannot reach the Maran server (DNS lookup failed for '
+      return 'Cannot reach the SmartMedicare server (DNS lookup failed for '
           '$hostHint).\n\n'
-          'Check your internet connection, then allow Maran Billing through '
+          'Check your internet connection, then allow SmartMedicare through '
           'antivirus/firewall (Total Security, Windows Defender). '
           'Try again in a few seconds.';
     }
-    return 'Cannot reach the Maran server (DNS lookup failed for '
+    return 'Cannot reach the SmartMedicare server (DNS lookup failed for '
         '$hostHint).\n\n'
         'Check Wi‑Fi/mobile data, then try again. If this keeps happening, '
         'reinstall the latest app build.';
@@ -116,7 +116,7 @@ String humanizeNetworkError(DioException e) {
       e.type == DioExceptionType.receiveTimeout ||
       e.type == DioExceptionType.sendTimeout ||
       raw.contains('timed out')) {
-    return 'Connection timed out while reaching the Maran server. '
+    return 'Connection timed out while reaching the SmartMedicare server. '
         'Check your internet connection and try again.';
   }
   if (e.type == DioExceptionType.connectionError ||
@@ -124,10 +124,10 @@ String humanizeNetworkError(DioException e) {
       raw.contains('network is unreachable') ||
       raw.contains('socketexception')) {
     if (Platform.isWindows) {
-      return 'No network connection to the Maran server. '
+      return 'No network connection to the SmartMedicare server. '
           'Check Wi‑Fi/Ethernet and antivirus network protection, then retry.';
     }
-    return 'No network connection to the Maran server. '
+    return 'No network connection to the SmartMedicare server. '
         'Check Wi‑Fi/mobile data, then retry.';
   }
   return e.message ?? 'Network error';

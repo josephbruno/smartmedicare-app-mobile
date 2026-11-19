@@ -11,7 +11,7 @@ param(
   [string]$PfxPassword = $env:MARAN_SIGN_PFX_PASSWORD,
   [string]$TimestampUrl = $env:MARAN_SIGN_TIMESTAMP_URL,
   [string]$SignToolPath = $env:MARAN_SIGNTOOL_PATH,
-  [string]$Description = 'Maran Billing'
+  [string]$Description = 'SmartMedicare'
 )
 
 $ErrorActionPreference = 'Stop'

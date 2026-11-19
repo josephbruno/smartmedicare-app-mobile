@@ -5,8 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-APP_ID="com.maranbilling.mobile"
-APP_NAME="Maran Billing"
+APP_ID="com.smartmedicare.mobile"
+APP_NAME="SmartMedicare"
 PACKAGE_NAME="maran-billing"
 INSTALL_DIR="/opt/maran-billing"
 BINARY_NAME="mobile"

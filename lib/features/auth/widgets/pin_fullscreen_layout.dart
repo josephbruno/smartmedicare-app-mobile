@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/app_config.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_logo.dart';
 import '../../../core/widgets/powered_by_footer.dart';
 
@@ -237,7 +238,7 @@ class _PinBrand extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.w800)),
                 TextSpan(
                     text: 'MediCare',
-                    style: TextStyle(color: Color(0xFF1463D8)))
+                    style: TextStyle(color: AppTokens.primary))
               ])),
           SizedBox(height: 7),
           Text('SMARTER CLINICS  •  HEALTHIER LIVES',
@@ -256,7 +257,7 @@ class _PinEyebrow extends StatelessWidget {
   Widget build(BuildContext context) =>
       const Row(mainAxisSize: MainAxisSize.min, children: [
         SizedBox(
-            width: 34, child: Divider(color: Color(0xFF1463D8), thickness: 3)),
+            width: 34, child: Divider(color: AppTokens.primary, thickness: 3)),
         SizedBox(width: 14),
         Text('SECURE ACCESS',
             style: TextStyle(

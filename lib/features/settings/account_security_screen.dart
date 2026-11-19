@@ -220,7 +220,7 @@ class _BiometricUnlockCardState extends State<_BiometricUnlockCard> {
     setState(() => _toggling = true);
     try {
       final ok = await _biometrics.authenticate(
-        reason: 'Confirm biometrics for Maran Billing',
+        reason: 'Confirm biometrics for SmartMedicare',
       );
       if (!ok) {
         if (mounted) {

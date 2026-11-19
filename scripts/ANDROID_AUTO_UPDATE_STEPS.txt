@@ -78,7 +78,7 @@ C. First-time APK (new tablets)
 4. Install on the tablet:
    - Copy APK (USB / Drive)
    - Open it and allow Install unknown apps for Files if Android asks
-   - Keep the same applicationId: com.maranbilling.mobile
+   - Keep the same applicationId: com.smartmedicare.mobile
 
 
 D. Publish a new APK (existing installs)

@@ -7,7 +7,7 @@ project(runner LANGUAGES CXX)
 set(BINARY_NAME "mobile")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "com.maranbilling.mobile")
+set(APPLICATION_ID "com.smartmedicare.mobile")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -133,7 +133,7 @@ endif()
 # This creates the /usr/lib/.../libsqlite3.so symlink that sqflite needs.
 
 # Desktop launcher icon and .desktop entry for Linux desktop environments.
-set(LINUX_APP_ID "com.maranbilling.mobile")
+set(LINUX_APP_ID "com.smartmedicare.mobile")
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/${LINUX_APP_ID}.desktop"
   DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications"
   COMPONENT Runtime)

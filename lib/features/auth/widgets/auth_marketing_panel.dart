@@ -76,14 +76,6 @@ class AuthMarketingPanel extends StatelessWidget {
                 ),
               ),
             ),
-            // ── Hero photo ─────────────────────────────────────────────────
-            Positioned(
-              right: 0,
-              width: 900,
-              bottom: isShort ? 60 : 80,
-              top: isShort ? 120 : 160,
-              child: _HeroPhoto(),
-            ),
             // ── Content (clipped to panel bounds) ──────────────────────────
             // SingleChildScrollView with NeverScrollableScrollPhysics silences
             // RenderFlex overflow: the Column can be its natural (tall) size;
@@ -185,40 +177,6 @@ class AuthMarketingPanel extends StatelessWidget {
     ); // SizedBox
 
     return panel;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Hero photo — uses the pet-hero asset; falls back gracefully if missing.
-// ---------------------------------------------------------------------------
-class _HeroPhoto extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    const assetPath = 'assets/branding/clinic-hero-transparent.png';
-    return ShaderMask(
-      shaderCallback: (rect) => const LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [Color(0xFF031B52), Colors.transparent],
-        stops: [0.0, 0.35],
-      ).createShader(rect),
-      blendMode: BlendMode.dstOut,
-      child: ShaderMask(
-        shaderCallback: (rect) => const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.transparent, Color(0xFF00143F)],
-          stops: [0.55, 1.0],
-        ).createShader(rect),
-        blendMode: BlendMode.dstOut,
-        child: Image.asset(
-          assetPath,
-          fit: BoxFit.contain,
-          alignment: Alignment.bottomRight,
-          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-        ),
-      ),
-    );
   }
 }
 

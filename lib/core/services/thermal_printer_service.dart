@@ -412,7 +412,7 @@ class ThermalPrinterService {
       crossAxisAlignment: pw.CrossAxisAlignment.center,
       children: [
         pw.Text(
-          shopName ?? 'Maran Billing',
+          shopName ?? 'SmartMedicare',
           style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
         ),
         if (shopPhone != null)

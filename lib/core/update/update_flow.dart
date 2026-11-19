@@ -85,10 +85,10 @@ Future<void> runAppUpdateFlow(BuildContext context) async {
 Future<bool?> _showOptionalDialog(BuildContext context, UpdateCheckResult check) {
   final notes = check.releaseNotes?.trim().isNotEmpty == true
       ? check.releaseNotes!
-      : 'A new version of Maran Billing is available.';
+      : 'A new version of SmartMedicare is available.';
   final extra = Platform.isAndroid
       ? 'The Android installer will open after the download. '
-          'If asked, allow Maran Billing to install unknown apps.'
+          'If asked, allow SmartMedicare to install unknown apps.'
       : 'If the app is installed under Program Files, Windows may ask for '
           'permission (UAC) — click Yes.\n'
           'If installed under AppData (recommended), no admin permission is needed.';
@@ -122,7 +122,7 @@ Future<bool?> _showMandatoryDialog(BuildContext context, UpdateCheckResult check
         content: Text(
           check.releaseNotes?.trim().isNotEmpty == true
               ? check.releaseNotes!
-              : 'You must install this update to continue using Maran Billing.',
+              : 'You must install this update to continue using SmartMedicare.',
         ),
         actions: [
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Update now')),
@@ -268,7 +268,7 @@ Future<bool> _ensureAndroidInstallPermission(BuildContext context, bool mandator
       child: AlertDialog(
         title: const Text('Allow app installs'),
         content: const Text(
-          'Android must allow Maran Billing to install updates. '
+          'Android must allow SmartMedicare to install updates. '
           'On the next screen, enable “Allow from this source”, then return here.',
         ),
         actions: [
@@ -297,7 +297,7 @@ Future<bool> _ensureAndroidInstallPermission(BuildContext context, bool mandator
     builder: (ctx) => AlertDialog(
       title: const Text('Install not allowed'),
       content: const Text(
-        'Maran Billing is not allowed to install updates yet. '
+        'SmartMedicare is not allowed to install updates yet. '
         'Enable “Allow from this source” and try again.',
       ),
       actions: [

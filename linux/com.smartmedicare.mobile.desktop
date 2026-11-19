@@ -1,8 +1,8 @@
 [Desktop Entry]
-Name=Maran Billing
+Name=SmartMedicare
 Comment=Pet shop billing and EMR
 Exec=mobile
-Icon=com.maranbilling.mobile
+Icon=com.smartmedicare.mobile
 Terminal=false
 Type=Application
 Categories=Office;Finance;

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.maranbilling.mobile"
+    namespace = "com.smartmedicare.mobile"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.maranbilling.mobile"
+        applicationId = "com.smartmedicare.mobile"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

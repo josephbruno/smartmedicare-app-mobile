@@ -43,7 +43,7 @@ class DefaultFirebaseOptions {
     appId: 'REPLACE_ME',
     messagingSenderId: 'REPLACE_ME',
     projectId: 'maran-billing',
-    iosBundleId: 'com.maranbilling.mobile',
+    iosBundleId: 'com.smartmedicare.mobile',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
     appId: 'REPLACE_ME',
     messagingSenderId: 'REPLACE_ME',
     projectId: 'maran-billing',
-    iosBundleId: 'com.maranbilling.mobile',
+    iosBundleId: 'com.smartmedicare.mobile',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

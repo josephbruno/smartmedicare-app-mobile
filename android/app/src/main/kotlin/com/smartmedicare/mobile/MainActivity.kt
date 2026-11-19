@@ -1,4 +1,4 @@
-package com.maranbilling.mobile
+package com.smartmedicare.mobile
 
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -13,7 +13,7 @@ import java.io.File
 
 /// [FlutterFragmentActivity] is required by local_auth for BiometricPrompt.
 class MainActivity : FlutterFragmentActivity() {
-    private val updateChannel = "com.maranbilling.mobile/apk_update"
+    private val updateChannel = "com.smartmedicare.mobile/apk_update"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

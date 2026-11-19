@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $Root
 
-$AppName = 'Maran Billing'
+$AppName = 'SmartMedicare'
 $BinaryName = 'mobile.exe'
 $SkipBuild = $false
 $RequireSign = $false
@@ -202,7 +202,7 @@ if (-not (Test-Path -LiteralPath $Installer)) {
 
 if ($HasPfx) {
   Write-Host '==> Signing setup EXE...'
-  & $SignScript -FilesOnly -AdditionalFiles @($Installer) -Description 'Maran Billing Setup'
+  & $SignScript -FilesOnly -AdditionalFiles @($Installer) -Description 'SmartMedicare Setup'
   if ($LASTEXITCODE -ne 0) { throw 'Installer code signing failed' }
 }
 

@@ -33,7 +33,7 @@ class CashierDesktopOnlyScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Cashier accounts work only on the Maran Billing Windows or Linux desktop app. '
+                  'Cashier accounts work only on the SmartMedicare Windows or Linux desktop app. '
                   'Install the desktop build on your billing counter PC to receive visit alerts and use POS.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppTheme.textSecondary, height: 1.5),

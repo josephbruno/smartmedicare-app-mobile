@@ -210,7 +210,7 @@ class _MaranBillingAppState extends State<MaranBillingApp> {
         Provider.value(value: _pushService),
       ],
       child: MaterialApp.router(
-        title: 'Maran Billing',
+        title: 'SmartMedicare',
         scaffoldMessengerKey: AppMessenger.rootKey,
         theme: AppTheme.light(desktop: AppConfig.usesLargeUiScale),
         routerConfig: _router,

@@ -5,7 +5,7 @@ class AndroidApkInstaller {
   AndroidApkInstaller._();
 
   static const MethodChannel _channel = MethodChannel(
-    'com.maranbilling.mobile/apk_update',
+    'com.smartmedicare.mobile/apk_update',
   );
 
   static Future<bool> canInstallPackages() async {
