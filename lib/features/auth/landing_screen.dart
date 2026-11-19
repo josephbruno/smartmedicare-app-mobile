@@ -152,13 +152,24 @@ class _MobileAuthLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AuthMarketingPanel(),
-        SizedBox(height: 28),
-        AuthLoginCard(),
-      ],
+    // Form first so email/password are on the first screen; the compact
+    // marketing panel follows (same order as the /login phone layout).
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0x4794A3B8)),
+        ),
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AuthLoginCard(),
+            AuthMarketingPanel(compact: true),
+          ],
+        ),
+      ),
     );
   }
 }

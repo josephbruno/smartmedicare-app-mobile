@@ -17,6 +17,7 @@ import '../../data/models/dashboard_data.dart';
 import 'dashboard_view_model.dart';
 import 'widgets/dashboard_widgets.dart';
 import 'widgets/branch_manager_dashboard.dart';
+import 'widgets/mobile_dashboard.dart';
 import 'widgets/role_dashboard_sections.dart';
 import '../subscription/plan_guard.dart';
 
@@ -185,6 +186,9 @@ class _ManagerDashboardContent extends StatelessWidget {
         final w = constraints.maxWidth;
         if (w >= 900) {
           return _ReferenceDesktopDashboard(data: d, auth: auth);
+        }
+        if (w < 600) {
+          return MobileDashboard(data: d);
         }
         final mobile = w < 600;
         final spacing = mobile ? 10.0 : 16.0;
@@ -506,7 +510,8 @@ class _ReferenceDesktopDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthSession>();
-    final firstName = (auth.user?.name ?? '').trim().split(RegExp(r'\s+')).first;
+    final firstName =
+        (auth.user?.name ?? '').trim().split(RegExp(r'\s+')).first;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         Container(
@@ -520,10 +525,14 @@ class _ReferenceDesktopDashboard extends StatelessWidget {
         const SizedBox(width: 12),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Dashboard',
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: AppTokens.text1)),
+              style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: AppTokens.text1)),
           const SizedBox(height: 2),
           Text('👋 Welcome back, ${firstName.isEmpty ? 'there' : firstName}!',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              style:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           const Text("Here’s what’s happening with your clinic today.",
               style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
@@ -560,8 +569,8 @@ class _ReferenceDesktopDashboard extends StatelessWidget {
             !auth.canViewAllBranches
                 ? 'Showing stats for the current branch'
                 : data.branches != null && data.branches!.isNotEmpty
-                ? 'Combined totals + per-branch chart (${data.branches!.length} branches)'
-                : 'Combined totals + per-branch chart',
+                    ? 'Combined totals + per-branch chart (${data.branches!.length} branches)'
+                    : 'Combined totals + per-branch chart',
             style: const TextStyle(color: Color(0xFF1D4ED8), fontSize: 13)),
       ]),
       const SizedBox(height: 16),
