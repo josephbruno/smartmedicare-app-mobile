@@ -94,7 +94,7 @@ for /f "tokens=1,2 delims=+" %%A in ("%VERSION_LINE%") do (
 if "%BUILD_NUM%"=="" set "BUILD_NUM=1"
 if "%NOTES%"=="" set "NOTES=Release %VERSION%+%BUILD_NUM%"
 
-set "APK_SRC=build\app\outputs\flutter-apk\app-release.apk"
+set "APK_SRC=build\app\outputs\flutter-apk\app-direct-release.apk"
 set "OUT_DIR=dist\android"
 set "APK_NAME=MaranBilling-%VERSION%+%BUILD_NUM%.apk"
 set "APK_PATH=%OUT_DIR%\%APK_NAME%"
@@ -111,7 +111,7 @@ echo.
 if "%SKIP_BUILD%"=="1" goto copy_apk
 
 echo ==> Building Flutter Android release APK...
-call flutter build apk --release --dart-define=API_BASE_URL=%MARAN_API_BASE%
+call flutter build apk --release --flavor direct --dart-define=API_BASE_URL=%MARAN_API_BASE%
 if errorlevel 1 (
   echo ERROR: flutter build apk failed
   exit /b 1

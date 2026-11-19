@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Google Play build: Play policy forbids self-updating, so drop the APK
+     installer permission and the update FileProvider from the merged manifest. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission
+        android:name="android.permission.REQUEST_INSTALL_PACKAGES"
+        tools:node="remove" />
+    <application>
+        <provider
+            android:name=".UpdateFileProvider"
+            android:authorities="${applicationId}.update.fileprovider"
+            tools:node="remove" />
+    </application>
+</manifest>

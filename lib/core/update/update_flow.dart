@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show appFlavor;
 
 import '../app_config.dart';
 import '../messaging/app_messenger.dart';
@@ -17,6 +18,8 @@ import 'windows_update_gate.dart';
 bool shouldRunAppUpdateFlow() {
   if (kIsWeb) return false;
   if (kDebugMode) return false;
+  // Google Play builds: Play delivers updates; self-updating breaks policy.
+  if (appFlavor == 'store') return false;
   if (Platform.isWindows && AppConfig.enableWindowsAutoUpdate) {
     return UpdateService().isSupported;
   }

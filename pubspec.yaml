@@ -2,7 +2,7 @@ name: maran
 description: SmartMedicare — Flutter client (MVVM) for Android, iOS, Windows, macOS.
 publish_to: 'none'
 
-version: 1.0.45+46
+version: 1.0.0+1
 
 environment:
   sdk: ^3.5.0
@@ -44,6 +44,8 @@ dev_dependencies:
   flutter_lints: ^5.0.0
 
 flutter:
+  # Android flavors: direct (sideload APK, auto-update) | store (Google Play).
+  default-flavor: direct
   uses-material-design: true
   assets:
     - assets/branding/logo.png
